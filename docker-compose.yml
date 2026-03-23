@@ -1,0 +1,37 @@
+# MERN PMS: MongoDB + API server. Run client separately or build with VITE_API_URL for production.
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: pms-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - pms_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: pms-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGO_URI: mongodb://mongodb:27017/PMS
+      CORS_ORIGIN: http://localhost:5173,http://localhost:3000
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  pms_mongo_data:

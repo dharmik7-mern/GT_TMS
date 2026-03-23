@@ -1,0 +1,51 @@
+import mongoose from 'mongoose';
+
+const projectSchema = new mongoose.Schema(
+  {
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true, index: true },
+    workspaceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace', required: true, index: true },
+    name: { type: String, required: true, trim: true, maxlength: 200 },
+    description: { type: String, trim: true, maxlength: 4000 },
+    color: { type: String, required: true, trim: true, maxlength: 32 },
+    status: { type: String, enum: ['active', 'on_hold', 'completed', 'archived'], default: 'active', index: true },
+    department: { type: String, trim: true, maxlength: 120, default: 'General' },
+    teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team', default: null },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
+    startDate: { type: Date, default: null },
+    endDate: { type: Date, default: null },
+    progress: { type: Number, default: 0, min: 0, max: 100 },
+    tasksCount: { type: Number, default: 0, min: 0 },
+    completedTasksCount: { type: Number, default: 0, min: 0 },
+  },
+  { timestamps: true }
+);
+
+projectSchema.index({ workspaceId: 1, status: 1 });
+projectSchema.index({ workspaceId: 1, department: 1 });
+projectSchema.index({ workspaceId: 1, name: 'text' });
+
+projectSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    ret.id = String(ret._id);
+    ret.workspaceId = String(ret.workspaceId);
+    ret.ownerId = String(ret.ownerId);
+    ret.teamId = ret.teamId ? String(ret.teamId) : undefined;
+    ret.members = Array.isArray(ret.members) ? ret.members.map((m) => String(m)) : [];
+    ret.createdAt = ret.createdAt?.toISOString?.() || ret.createdAt;
+    ret.updatedAt = ret.updatedAt?.toISOString?.() || ret.updatedAt;
+    ret.startDate = ret.startDate ? new Date(ret.startDate).toISOString().split('T')[0] : undefined;
+    ret.endDate = ret.endDate ? new Date(ret.endDate).toISOString().split('T')[0] : undefined;
+    delete ret._id;
+    delete ret.__v;
+    delete ret.tenantId;
+    return ret;
+  },
+});
+
+export function getProjectModel(conn) {
+  return conn.models.Project || conn.model('Project', projectSchema);
+}
+
+export { projectSchema };
+

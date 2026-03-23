@@ -1,0 +1,188 @@
+import fs from 'fs';
+import path from 'path';
+import mongoose from 'mongoose';
+import SystemSetting from '../models/SystemSetting.js';
+import Company from '../models/Company.js';
+import { getTenantModels } from '../config/tenantDb.js';
+
+const SETTINGS_KEY = 'system';
+const DEFAULT_SECURITY_SETTINGS = {
+  openRegistration: true,
+  confirmEmail: true,
+  extraLoginSecurity: false,
+  strongPasswords: true,
+};
+
+function deepMerge(target, source) {
+  const output = { ...target };
+  for (const [key, value] of Object.entries(source || {})) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      output[key] = deepMerge(output[key] || {}, value);
+    } else {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+
+async function ensureSystemSettings() {
+  let item = await SystemSetting.findOne({ key: SETTINGS_KEY });
+  if (!item) {
+    item = await SystemSetting.create({ key: SETTINGS_KEY });
+  }
+  return item;
+}
+
+function getSecuritySettingsFromDoc(settingsDoc) {
+  return {
+    ...DEFAULT_SECURITY_SETTINGS,
+    ...(settingsDoc?.security?.toObject?.() || settingsDoc?.security || {}),
+  };
+}
+
+function formatRelativeTime(fromDate) {
+  if (!fromDate) return 'Never';
+  const diffMs = Date.now() - new Date(fromDate).getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
+
+function getUploadsDirectorySizeMb() {
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadsDir)) return 0;
+
+  let totalBytes = 0;
+  const stack = [uploadsDir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      } else {
+        totalBytes += fs.statSync(fullPath).size;
+      }
+    }
+  }
+  return Math.round(totalBytes / (1024 * 1024));
+}
+
+async function buildSystemStats(settings) {
+  const { User } = getTenantModels();
+  const [companiesCount, usersCount, onlineUsers] = await Promise.all([
+    Company.countDocuments(),
+    User.countDocuments(),
+    User.countDocuments({ isActive: true }),
+  ]);
+
+  const storageUsedMb = getUploadsDirectorySizeMb();
+  const storageLimitMb = settings.infrastructure?.storageLimitMb || 512000;
+
+  return {
+    lastBackupAt: settings.infrastructure?.lastBackupAt || null,
+    lastBackupText: formatRelativeTime(settings.infrastructure?.lastBackupAt),
+    storageUsedMb,
+    storageLimitMb,
+    storageUsedText: `${storageUsedMb}MB / ${Math.round(storageLimitMb / 1024)}GB`,
+    onlineUsers,
+    companiesCount,
+    usersCount,
+    dbStatus: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    maintenanceMode: Boolean(settings.infrastructure?.maintenanceMode),
+  };
+}
+
+export async function getSystemSettings() {
+  const settings = await ensureSystemSettings();
+  const stats = await buildSystemStats(settings.toJSON());
+  return {
+    ...settings.toJSON(),
+    stats,
+  };
+}
+
+export async function updateSystemSettings({ updates, userId }) {
+  const current = await ensureSystemSettings();
+  const merged = {
+    general: deepMerge(current.general?.toObject?.() || current.general || {}, updates.general || {}),
+    security: deepMerge(current.security?.toObject?.() || current.security || {}, updates.security || {}),
+    email: deepMerge(current.email?.toObject?.() || current.email || {}, updates.email || {}),
+    infrastructure: deepMerge(current.infrastructure?.toObject?.() || current.infrastructure || {}, updates.infrastructure || {}),
+  };
+
+  current.general = merged.general;
+  current.security = merged.security;
+  current.email = merged.email;
+  current.infrastructure = merged.infrastructure;
+  current.updatedBy = userId || null;
+  await current.save();
+
+  return getSystemSettings();
+}
+
+export async function getSecuritySettings() {
+  const settings = await ensureSystemSettings();
+  return getSecuritySettingsFromDoc(settings);
+}
+
+export async function getInfrastructureSettings() {
+  const settings = await ensureSystemSettings();
+  return settings.infrastructure?.toObject?.() || settings.infrastructure || {};
+}
+
+export function assertPasswordMatchesPolicy(password, securitySettings = DEFAULT_SECURITY_SETTINGS) {
+  const trimmedPassword = String(password || '');
+  if (trimmedPassword.length < 8) {
+    const err = new Error('Password must be at least 8 characters long');
+    err.statusCode = 400;
+    err.code = 'WEAK_PASSWORD';
+    throw err;
+  }
+
+  if (!securitySettings.strongPasswords) return;
+
+  const hasUpper = /[A-Z]/.test(trimmedPassword);
+  const hasLower = /[a-z]/.test(trimmedPassword);
+  const hasDigit = /\d/.test(trimmedPassword);
+  const hasSpecial = /[^A-Za-z0-9]/.test(trimmedPassword);
+
+  if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+    const err = new Error('Strong password policy requires uppercase, lowercase, number, and special character');
+    err.statusCode = 400;
+    err.code = 'WEAK_PASSWORD';
+    throw err;
+  }
+}
+
+export async function assertPasswordAllowed(password) {
+  const security = await getSecuritySettings();
+  assertPasswordMatchesPolicy(password, security);
+}
+
+export async function clearCache() {
+  return {
+    ok: true,
+    clearedAt: new Date().toISOString(),
+  };
+}
+
+export async function refreshSystemData() {
+  return getSystemSettings();
+}
+
+export async function testEmailSettings({ email }) {
+  const hasMinimumConfig = Boolean(email?.smtpHost && email?.smtpPort && email?.username);
+  return {
+    ok: hasMinimumConfig,
+    message: hasMinimumConfig
+      ? 'SMTP settings look valid. No live email was sent from this test endpoint.'
+      : 'SMTP host, port, and username are required.',
+  };
+}
