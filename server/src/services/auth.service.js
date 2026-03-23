@@ -5,7 +5,20 @@ import { getTenantModels } from '../config/tenantDb.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import { sha256 } from '../utils/crypto.js';
-import { assertPasswordAllowed, getInfrastructureSettings, getSecuritySettings } from './settings.service.js';
+import { assertPasswordAllowed, formatGeneratedId, getCompanyIdConfig, getInfrastructureSettings, getSecuritySettings } from './settings.service.js';
+
+async function reserveOrganizationId() {
+  const config = await getCompanyIdConfig();
+  let nextSequence = config.nextSequence;
+  let organizationId = formatGeneratedId(config, nextSequence);
+
+  while (await Company.exists({ organizationId })) {
+    nextSequence += 1;
+    organizationId = formatGeneratedId(config, nextSequence);
+  }
+
+  return organizationId;
+}
 
 function nowPlusDays(days) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -66,7 +79,9 @@ export async function register({ name, email, password, workspaceName }) {
   // For multi-tenant: each self-signup creates a Company + Workspace.
   // In real enterprise SaaS you might restrict this to super_admin onboarding,
   // but your UI includes signup -> create workspace.
+  const organizationId = await reserveOrganizationId();
   const company = await Company.create({
+    organizationId,
     name: workspaceName || `${name}'s Company`,
     email: email.toLowerCase(),
     status: 'trial',

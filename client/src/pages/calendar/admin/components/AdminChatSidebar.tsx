@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { cn } from '../../../../utils/helpers.ts';
 import { useAppStore } from '../../../../context/appStore.ts';
 import api from '../../../../services/api';
+import type { User } from '../../../../app/types';
 
 const participantId = (participant?: { _id?: string; id?: string } | null) => String(participant?._id || participant?.id || '');
 const messageSenderId = (sender?: string | { _id?: string; id?: string } | null) =>
@@ -14,6 +15,7 @@ const messageSenderId = (sender?: string | { _id?: string; id?: string } | null)
 const entityId = (value?: string | { _id?: string; id?: string } | null) =>
     typeof value === 'string' ? String(value) : String(value?._id || value?.id || '');
 const sameId = (a?: string | null, b?: string | null) => String(a || '') === String(b || '');
+const asUsersArray = (value: unknown): User[] => (Array.isArray(value) ? value as User[] : []);
 const isGroupConversation = (conversation?: Conversation | null) =>
     Boolean(conversation?.isGroup || conversation?.groupType === 'project' || conversation?.groupType === 'team' || entityId(conversation?.projectId as string | undefined));
 const getOtherParticipant = (convo: Conversation, currentUserId: string) =>
@@ -91,8 +93,9 @@ const CreateGroupView = ({ onCancel, onCreate }: { onCancel: () => void, onCreat
     const [selected, setSelected] = useState<string[]>([]);
     const [search, setSearch] = useState('');
     const { users } = useAppStore();
+    const userList = asUsersArray(users);
 
-    const filteredUsers = users.filter(u =>
+    const filteredUsers = userList.filter(u =>
         u.name.toLowerCase().includes(search.toLowerCase())
     );
 
@@ -258,8 +261,9 @@ const StartDirectView = ({ onCancel, onSelect }: { onCancel: () => void, onSelec
     const [search, setSearch] = useState('');
     const { users } = useAppStore();
     const { user } = useAuthStore();
+    const userList = asUsersArray(users);
 
-    const filteredUsers = users.filter((item) =>
+    const filteredUsers = userList.filter((item) =>
         item.id !== user?.id &&
         item.isActive &&
         `${item.name} ${item.email} ${item.role}`.toLowerCase().includes(search.toLowerCase())
@@ -318,6 +322,7 @@ export const AdminChatSidebar = () => {
     const { isOpen, setOpen, activeConversationId, setActiveConversation, conversations, fetchConversations, messages, sendMessage, createGroup, startConversation, loading } = useAdminChatStore();
     const { user } = useAuthStore();
     const { users } = useAppStore();
+    const userList = asUsersArray(users);
     const [projects, setProjects] = useState<any[]>([]);
     const [search, setSearch] = useState('');
     const [input, setInput] = useState('');
@@ -463,7 +468,7 @@ export const AdminChatSidebar = () => {
         ? activeConvo?.groupName 
         : (activeConvo ? getOtherParticipant(activeConvo, user?.id || '')?.name : undefined) || 'Chat Session';
 
-    const availableDirectUsers = users.filter((item) =>
+    const availableDirectUsers = userList.filter((item) =>
         item.id !== user?.id &&
         item.isActive &&
         `${item.name} ${item.email} ${item.role}`.toLowerCase().includes(search.toLowerCase())
