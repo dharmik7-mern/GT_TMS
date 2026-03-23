@@ -45,6 +45,7 @@ export const ProjectDetailPage: React.FC = () => {
   const project = projects.find(p => p.id === id);
   const projectTasks = tasks.filter(t => t.projectId === id);
   const members = users.filter(u => project?.members.includes(u.id));
+  const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
 
   const { register, handleSubmit, reset } = useForm<TaskFormData>({
     defaultValues: { priority: 'medium', status: defaultStatus }
@@ -297,6 +298,23 @@ export const ProjectDetailPage: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+
+            <div className="card p-5">
+              <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Reporting Persons</h3>
+              <div className="space-y-3">
+                {reportingPersons.length > 0 ? reportingPersons.map(person => (
+                  <div key={person.id} className="flex items-center gap-3">
+                    <UserAvatar name={person.name} color={person.color} size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{person.name}</p>
+                      <p className="text-xs text-surface-400 truncate">{person.jobTitle || person.role.replace(/_/g, ' ')}</p>
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-sm text-surface-400">No reporting persons assigned.</p>
+                )}
               </div>
             </div>
 

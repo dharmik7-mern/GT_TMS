@@ -147,12 +147,12 @@ export const Topbar: React.FC = () => {
         {darkMode ? <Sun size={17} /> : <Moon size={17} />}
       </button>
 
-      {/* Admin Chat Toggle */}
-      {user?.role === 'admin' && (
+      {/* Messenger Toggle */}
+      {user && (
         <button
           onClick={() => useAdminChatStore.getState().toggleSidebar()}
           className="btn-ghost btn-sm w-9 h-9 rounded-xl flex-shrink-0 relative group"
-          title="Quick Messages"
+          title="Messenger"
         >
           <MessageCircle size={17} className="group-hover:text-brand-500 transition-colors" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full ring-2 ring-white dark:ring-surface-900 animate-pulse" />

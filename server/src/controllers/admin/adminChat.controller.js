@@ -1,11 +1,34 @@
 import AdminConversation from '../../models/admin/AdminConversation.model.js';
 import AdminMessage from '../../models/admin/AdminMessage.model.js';
 import User from '../../models/user.model.js';
+import mongoose from 'mongoose';
+import { getProjectModel } from '../../models/Project.js';
+
+const getCurrentUser = (req) => ({
+    id: req.auth?.sub || req.user?.id,
+    name: req.auth?.name || req.user?.name || 'User',
+    role: req.auth?.role || req.user?.role,
+});
+
+const isParticipant = (conversation, userId) =>
+    Array.isArray(conversation?.participants) &&
+    conversation.participants.some((participant) => String(participant) === String(userId));
+
+const Project = getProjectModel(mongoose.connection);
+
+const findDirectConversation = (senderId, participantId) =>
+    AdminConversation.findOne({
+        isGroup: false,
+        participants: { $all: [senderId, participantId] },
+        'participants.0': { $exists: true },
+        'participants.1': { $exists: true },
+        'participants.2': { $exists: false },
+    });
 
 // Get list of conversations for current user
 export const getConversations = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const { id: userId } = getCurrentUser(req);
         const conversations = await AdminConversation.find({
             participants: userId
         })
@@ -21,7 +44,14 @@ export const getConversations = async (req, res) => {
 // Get messages for a specific conversation
 export const getMessages = async (req, res) => {
     try {
+        const { id: userId } = getCurrentUser(req);
         const { conversationId } = req.params;
+        const conversation = await AdminConversation.findById(conversationId);
+        if (!conversation) return res.status(404).json({ message: 'Conversation not found.' });
+        if (!isParticipant(conversation, userId)) {
+            return res.status(403).json({ message: 'You are not a participant in this conversation.' });
+        }
+
         const messages = await AdminMessage.find({ conversationId })
             .sort({ createdAt: 1 })
             .populate('senderId', 'name avatar');
@@ -36,8 +66,7 @@ export const getMessages = async (req, res) => {
 export const sendMessage = async (req, res) => {
     try {
         const { conversationId, text, attachments } = req.body;
-        const senderId = req.user.id;
-        const senderName = req.user.name;
+        const { id: senderId, name: senderName } = getCurrentUser(req);
 
         // If conversationId is provided, use it, else create new conversation
         let conversation;
@@ -45,11 +74,11 @@ export const sendMessage = async (req, res) => {
             conversation = await AdminConversation.findById(conversationId);
         } else {
             const { participantId } = req.body;
+            if (!participantId || String(participantId) === String(senderId)) {
+                return res.status(400).json({ message: 'A valid participant is required.' });
+            }
             // Check if conversation already exists between these users
-            conversation = await AdminConversation.findOne({
-                participants: { $all: [senderId, participantId] },
-                isGroup: false
-            });
+            conversation = await findDirectConversation(senderId, participantId);
 
             if (!conversation) {
                 conversation = new AdminConversation({
@@ -60,12 +89,18 @@ export const sendMessage = async (req, res) => {
         }
 
         if (!conversation) return res.status(404).json({ message: "Conversation not found." });
+        if (!isParticipant(conversation, senderId)) {
+            return res.status(403).json({ message: 'You are not a participant in this conversation.' });
+        }
+        if (!String(text || '').trim()) {
+            return res.status(400).json({ message: 'Message text is required.' });
+        }
 
         const newMessage = new AdminMessage({
             conversationId: conversation._id,
             senderId,
             senderName,
-            text,
+            text: String(text).trim(),
             attachments: attachments || []
         });
 
@@ -89,13 +124,29 @@ export const sendMessage = async (req, res) => {
 export const createGroup = async (req, res) => {
     try {
         const { groupName, participantIds, projectId, groupType, department } = req.body;
-        const senderId = req.user.id;
+        const { id: senderId } = getCurrentUser(req);
 
         if (!groupName || !participantIds) {
             return res.status(400).json({ message: "Group name and participants are required" });
         }
 
         const allParticipants = [...new Set([...participantIds, senderId])];
+
+        if (projectId) {
+            const project = await Project.findById(projectId).select('members ownerId');
+            if (!project) {
+                return res.status(404).json({ message: 'Project not found.' });
+            }
+
+            const allowedIds = new Set([
+                ...((project.members || []).map((memberId) => String(memberId))),
+                String(project.ownerId),
+            ]);
+            const hasUnauthorizedMember = allParticipants.some((participantId) => !allowedIds.has(String(participantId)));
+            if (hasUnauthorizedMember) {
+                return res.status(400).json({ message: 'Project chat participants must belong to the project.' });
+            }
+        }
 
         const conversation = new AdminConversation({
             participants: allParticipants,
@@ -125,12 +176,19 @@ export const createGroup = async (req, res) => {
 export const startConversation = async (req, res) => {
     try {
         const { participantId } = req.body;
-        const senderId = req.user.id;
+        const { id: senderId } = getCurrentUser(req);
 
-        let conversation = await AdminConversation.findOne({
-            participants: { $all: [senderId, participantId] },
-            isGroup: false
-        }).populate('participants', 'name email avatar role');
+        if (!participantId || String(participantId) === String(senderId)) {
+            return res.status(400).json({ message: 'A valid participant is required.' });
+        }
+
+        const otherUser = await User.findById(participantId).select('_id');
+        if (!otherUser) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        let conversation = await findDirectConversation(senderId, participantId)
+            .populate('participants', 'name email avatar role');
 
         if (!conversation) {
             conversation = new AdminConversation({

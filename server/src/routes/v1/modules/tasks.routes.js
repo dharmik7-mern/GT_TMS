@@ -66,11 +66,17 @@ const taskUpdateSchema = z
     order: z.number().optional(),
     labels: z.array(z.string()).optional(),
     subtasks: z.array(subtaskInputSchema).optional(),
+    completionRemark: z.string().trim().max(5000).optional(),
   })
   .strict();
 
 const moveStatusSchema = z.object({
   status: statusEnum,
+});
+
+const reviewTaskSchema = z.object({
+  action: z.enum(['approve', 'changes_requested']),
+  reviewRemark: z.string().trim().max(5000).optional(),
 });
 
 const addSubtaskSchema = z.object({
@@ -89,6 +95,7 @@ router.post('/', validateBody(taskCreateSchema), TasksController.create);
 router.put('/:id', validateBody(taskUpdateSchema), TasksController.update);
 router.delete('/:id', TasksController.remove);
 router.patch('/:id/status', validateBody(moveStatusSchema), TasksController.moveStatus);
+router.post('/:id/review', validateBody(reviewTaskSchema), TasksController.reviewCompletion);
 
 router.post('/:id/subtasks', validateBody(addSubtaskSchema), TasksController.addSubtask);
 router.patch('/:id/subtasks/:subtaskId', validateBody(patchSubtaskSchema), TasksController.patchSubtask);

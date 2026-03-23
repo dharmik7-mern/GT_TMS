@@ -36,10 +36,16 @@ const createSchema = z.object({
   // Backwards compat: allow single assigneeId, service converts to assigneeIds[]
   assigneeId: z.string().optional().nullable(),
   dueDate: z.string().optional(),
+  completionRemark: z.string().trim().max(5000).optional(),
 });
 
 const addCommentSchema = z.object({
   content: z.string().trim().min(1).max(8000),
+});
+
+const reviewQuickTaskSchema = z.object({
+  action: z.enum(['approve', 'changes_requested']),
+  reviewRemark: z.string().trim().max(5000).optional(),
 });
 
 router.get('/', QuickTasksController.list);
@@ -48,6 +54,7 @@ router.put('/:id', validateBody(createSchema.partial()), QuickTasksController.up
 router.delete('/:id', QuickTasksController.remove);
 
 router.post('/:id/comments', validateBody(addCommentSchema), QuickTasksController.addComment);
+router.post('/:id/review', validateBody(reviewQuickTaskSchema), QuickTasksController.review);
 
 router.post('/:id/attachments', upload.array('files', 10), QuickTasksController.uploadAttachments);
 

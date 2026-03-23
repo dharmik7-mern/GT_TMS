@@ -182,6 +182,7 @@ export const ProjectsPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [selectedReportingPersons, setSelectedReportingPersons] = useState<string[]>([]);
   const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ProjectFormData>();
 
@@ -190,6 +191,13 @@ export const ProjectsPage: React.FC = () => {
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const closeCreateModal = () => {
+    setShowModal(false);
+    setSelectedMembers([]);
+    setSelectedReportingPersons([]);
+    reset();
+  };
 
   const onCreateProject = async (data: ProjectFormData) => {
     try {
@@ -201,6 +209,7 @@ export const ProjectsPage: React.FC = () => {
         status: 'active' as const,
         department: data.department || 'General',
         members: selectedMembers.length > 0 ? selectedMembers : fallbackMembers,
+        reportingPersonIds: selectedReportingPersons,
         startDate: data.startDate || new Date().toISOString().split('T')[0],
         endDate: data.endDate || undefined,
       };
@@ -211,6 +220,7 @@ export const ProjectsPage: React.FC = () => {
       addProject(created);
       setShowModal(false);
       setSelectedMembers([]);
+      setSelectedReportingPersons([]);
       reset();
       emitSuccessToast('Project created successfully.');
       navigate(`/projects/${created.id}`);
@@ -379,7 +389,7 @@ export const ProjectsPage: React.FC = () => {
       )}
 
       {/* Create Project Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="New Project" description="Create a new project for your team">
+      <Modal open={showModal} onClose={closeCreateModal} title="New Project" description="Create a new project for your team">
         <form onSubmit={handleSubmit(onCreateProject)} className="p-6 space-y-5">
           <div>
             <label className="label">Project name *</label>
@@ -466,8 +476,35 @@ export const ProjectsPage: React.FC = () => {
             </div>
           </div>
 
+          <div>
+            <label className="label">Reporting Persons</label>
+            <div className="max-h-40 overflow-y-auto border border-surface-100 dark:border-surface-800 rounded-xl p-2 space-y-1">
+              {users.map(u => (
+                <label key={`reporting-${u.id}`} className="flex items-center gap-3 p-2 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+                    checked={selectedReportingPersons.includes(u.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedReportingPersons([...selectedReportingPersons, u.id]);
+                      } else {
+                        setSelectedReportingPersons(selectedReportingPersons.filter(id => id !== u.id));
+                      }
+                    }}
+                  />
+                  <UserAvatar name={u.name} color={u.color} size="xs" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{u.name}</p>
+                    <p className="text-[10px] text-surface-400 truncate">{u.jobTitle}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary btn-md flex-1">Cancel</button>
+            <button type="button" onClick={closeCreateModal} className="btn-secondary btn-md flex-1">Cancel</button>
             <button type="submit" className="btn-primary btn-md flex-1">Create Project</button>
           </div>
         </form>

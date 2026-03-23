@@ -90,6 +90,25 @@ export async function addComment(req, res, next) {
   }
 }
 
+export async function review(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const qt = await QuickTaskService.reviewQuickTask({
+      companyId,
+      workspaceId,
+      userId,
+      role,
+      id: req.params.id,
+      action: req.body.action,
+      reviewRemark: req.body.reviewRemark,
+    });
+    if (!qt) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Quick task not found' } });
+    return res.status(200).json({ success: true, data: qt });
+  } catch (e) {
+    return next(e);
+  }
+}
+
 export async function uploadAttachments(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;

@@ -43,6 +43,86 @@ function taskModifyRoles(role, task, userId) {
   return false;
 }
 
+function mapIdList(values) {
+  return Array.isArray(values) ? values.map((value) => strId(value)).filter(Boolean) : [];
+}
+
+function defaultCompletionReview() {
+  return {
+    completedAt: null,
+    completedBy: null,
+    completionRemark: '',
+    reviewStatus: 'pending',
+    reviewRemark: '',
+    reviewedAt: null,
+    reviewedBy: null,
+  };
+}
+
+function buildCompletionState({ existingReview, existingStatus, nextStatus, updates, userId }) {
+  const review = {
+    ...defaultCompletionReview(),
+    ...(existingReview || {}),
+  };
+
+  if (updates.completionRemark !== undefined) {
+    review.completionRemark = updates.completionRemark || '';
+  }
+
+  const movedToDone = existingStatus !== 'done' && nextStatus === 'done';
+  const movedAwayFromDone = existingStatus === 'done' && nextStatus !== 'done';
+
+  if (movedToDone) {
+    review.completedAt = new Date();
+    review.completedBy = userId;
+    review.reviewStatus = 'pending';
+    review.reviewRemark = '';
+    review.reviewedAt = null;
+    review.reviewedBy = null;
+  }
+
+  if (movedAwayFromDone) {
+    return defaultCompletionReview();
+  }
+
+  return review;
+}
+
+async function getTaskReviewUsers({ tenantId, workspaceId, projectId, task, fallbackReporterId }) {
+  const { Project } = getTenantModels();
+  const project = await Project.findOne({ _id: projectId, tenantId, workspaceId }).lean();
+  return Array.from(
+    new Set([
+      strId(task?.reporterId || fallbackReporterId),
+      ...(mapIdList(project?.reportingPersonIds)),
+    ])
+  ).filter(Boolean);
+}
+
+async function notifyUsers({ tenantId, workspaceId, userIds, type, title, message, relatedId }) {
+  const { Notification } = getTenantModels();
+  if (!userIds.length) return;
+  await Notification.insertMany(
+    userIds.map((userId) => ({
+      tenantId,
+      workspaceId,
+      userId,
+      type,
+      title,
+      message,
+      isRead: false,
+      relatedId: String(relatedId),
+    }))
+  );
+}
+
+function canReviewProjectTask({ role, userId, task, reviewerIds }) {
+  if (isAdminRole(role) || ['manager', 'team_leader'].includes(role)) return true;
+  const uid = strId(userId);
+  if (strId(task.reporterId) === uid) return true;
+  return reviewerIds.includes(uid);
+}
+
 export async function assertProjectAccess({ tenantId, workspaceId, userId, role, projectId }) {
   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
   if (allowed === null) return true;
@@ -195,11 +275,21 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     throw err;
   }
 
-  const { subtasks, dueDate, startDate, ...rest } = updates;
+  const { subtasks, dueDate, startDate, completionRemark, ...rest } = updates;
+  const nextStatus = rest.status ?? existing.status;
   const $set = { ...rest };
   if (dueDate !== undefined) $set.dueDate = dueDate ? new Date(dueDate) : null;
   if (startDate !== undefined) $set.startDate = startDate ? new Date(startDate) : null;
   if (subtasks !== undefined) $set.subtasks = subtasks;
+  if (completionRemark !== undefined || rest.status !== undefined) {
+    $set.completionReview = buildCompletionState({
+      existingReview: existing.completionReview,
+      existingStatus: existing.status,
+      nextStatus,
+      updates: { completionRemark },
+      userId,
+    });
+  }
 
   const task = await Task.findOneAndUpdate({ _id: taskId, tenantId, workspaceId }, { $set }, { new: true });
   if (!task) return null;
@@ -215,11 +305,115 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     metadata: { projectId: task.projectId },
   });
 
+  if (existing.status !== 'done' && task.status === 'done') {
+    const reviewerIds = (await getTaskReviewUsers({
+      tenantId,
+      workspaceId,
+      projectId: task.projectId,
+      task,
+      fallbackReporterId: existing.reporterId,
+    })).filter((id) => id !== strId(userId));
+
+    await notifyUsers({
+      tenantId,
+      workspaceId,
+      userIds: reviewerIds,
+      type: 'project_update',
+      title: 'Task completed and awaiting review',
+      message: `"${task.title}" was marked complete and needs review.`,
+      relatedId: task._id,
+    });
+  }
+
   return task;
 }
 
 export async function moveTaskStatus({ companyId, workspaceId, userId, role, taskId, status }) {
   return updateTask({ companyId, workspaceId, userId, role, taskId, updates: { status } });
+}
+
+export async function reviewTaskCompletion({ companyId, workspaceId, userId, role, taskId, action, reviewRemark }) {
+  const tenantId = companyId;
+  const { Task, ActivityLog } = getTenantModels();
+  const task = await Task.findOne({
+    _id: taskId,
+    tenantId,
+    workspaceId,
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+  });
+  if (!task) return null;
+
+  const reviewerIds = await getTaskReviewUsers({
+    tenantId,
+    workspaceId,
+    projectId: task.projectId,
+    task,
+    fallbackReporterId: task.reporterId,
+  });
+
+  if (!canReviewProjectTask({ role, userId, task, reviewerIds })) {
+    const err = new Error('Forbidden');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  if (task.status !== 'done') {
+    const err = new Error('Only completed tasks can be reviewed');
+    err.statusCode = 400;
+    err.code = 'INVALID_STATE';
+    throw err;
+  }
+
+  const nextReviewStatus = action === 'approve' ? 'approved' : 'changes_requested';
+  task.completionReview = {
+    ...defaultCompletionReview(),
+    ...(task.completionReview?.toObject?.() || task.completionReview || {}),
+    reviewStatus: nextReviewStatus,
+    reviewRemark: reviewRemark || '',
+    reviewedAt: new Date(),
+    reviewedBy: userId,
+  };
+
+  if (action === 'changes_requested') {
+    task.status = 'in_review';
+  }
+
+  await task.save();
+
+  await ActivityLog.create({
+    tenantId,
+    workspaceId,
+    userId,
+    type: action === 'approve' ? 'task_review_approved' : 'task_review_changes_requested',
+    description:
+      action === 'approve'
+        ? `Approved completed task "${task.title}"`
+        : `Requested changes for completed task "${task.title}"`,
+    entityType: 'task',
+    entityId: task._id,
+    metadata: { projectId: task.projectId },
+  });
+
+  const notifyIds = Array.from(new Set([
+    ...mapIdList(task.assigneeIds),
+    strId(task.reporterId),
+  ])).filter((id) => id && id !== strId(userId));
+
+  await notifyUsers({
+    tenantId,
+    workspaceId,
+    userIds: notifyIds,
+    type: 'project_update',
+    title: action === 'approve' ? 'Task review approved' : 'Task changes requested',
+    message:
+      action === 'approve'
+        ? `Review approved for "${task.title}".`
+        : `Changes were requested for "${task.title}".`,
+    relatedId: task._id,
+  });
+
+  return task;
 }
 
 export async function deleteTask({ companyId, workspaceId, userId, role, taskId }) {

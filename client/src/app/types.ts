@@ -21,6 +21,17 @@ export interface TaskSubtask {
 }
 export type QuickTaskStatus = 'todo' | 'in_progress' | 'done';
 export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived';
+export type CompletionReviewStatus = 'pending' | 'approved' | 'changes_requested';
+
+export interface CompletionReview {
+  completedAt?: string;
+  completedBy?: string;
+  completionRemark: string;
+  reviewStatus: CompletionReviewStatus;
+  reviewRemark: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
 
 export interface User {
   id: string;
@@ -89,6 +100,8 @@ export interface Project {
   teamId?: string;
   ownerId: string;
   members: string[];
+  reportingPersonIds: string[];
+  chatId?: string;
   startDate?: string;
   endDate?: string;
   progress: number;
@@ -120,6 +133,7 @@ export interface Task {
   trackedHours?: number;
   comments?: Comment[];
   attachments?: Attachment[];
+  completionReview?: CompletionReview;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -136,6 +150,7 @@ export interface QuickTask {
   dueDate?: string;
   attachments?: Attachment[];
   comments?: Comment[];
+  completionReview?: CompletionReview;
   createdAt: string;
   updatedAt: string;
 }

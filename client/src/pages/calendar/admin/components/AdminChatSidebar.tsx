@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Send, Paperclip, ChevronLeft, MessageCircle, Users, Plus, ChevronDown } from 'lucide-react';
+import { X, Search, Send, Paperclip, ChevronLeft, MessageCircle, Users, Plus, ChevronDown, Info, UserRound } from 'lucide-react';
 import { useAdminChatStore, Conversation, Message } from '../store/useAdminChatStore.ts';
 import { useAuthStore } from '../../../../context/authStore.ts';
 import { format } from 'date-fns';
@@ -8,11 +8,23 @@ import { cn } from '../../../../utils/helpers.ts';
 import { useAppStore } from '../../../../context/appStore.ts';
 import api from '../../../../services/api';
 
-const MessageBubble = ({ message, isMe }: { message: Message, isMe: boolean }) => (
+const sameId = (a?: string | null, b?: string | null) => String(a || '') === String(b || '');
+const getOtherParticipant = (convo: Conversation, currentUserId: string) =>
+    convo.participants.find((p) => !sameId(p._id, currentUserId));
+
+const MessageBubble = ({ message, isMe, showSender }: { message: Message, isMe: boolean, showSender: boolean }) => (
     <div className={cn(
         "flex flex-col mb-4 max-w-full",
         isMe ? "items-end" : "items-start"
     )}>
+        {showSender && (
+            <span className={cn(
+                "mb-1 px-1 text-[11px] font-semibold",
+                isMe ? "text-brand-500" : "text-surface-500"
+            )}>
+                {isMe ? 'You' : (message.senderName || 'Unknown')}
+            </span>
+        )}
         <div className={cn(
             "max-w-[85%] px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm break-words",
             isMe
@@ -29,7 +41,7 @@ const MessageBubble = ({ message, isMe }: { message: Message, isMe: boolean }) =
 
 const ConversationItem = ({ convo, isActive, onClick, currentUserId }: { convo: Conversation, isActive: boolean, onClick: () => void, currentUserId: string }) => {
     // For direct chat, the participant is the other guy (not me)
-    const otherParticipant = convo.isGroup ? null : convo.participants.find(p => p._id !== currentUserId) || convo.participants[0];
+    const otherParticipant = convo.isGroup ? null : getOtherParticipant(convo, currentUserId);
     const displayName = convo.isGroup ? (convo.groupName || 'Group Chat') : (otherParticipant?.name || 'Inquiry Session');
     const avatar = convo.isGroup ? <Users size={20} className="text-brand-600" /> : (otherParticipant?.avatar ? <img src={otherParticipant.avatar} alt="avatar" className="w-full h-full object-cover" /> : <span className="text-brand-600 font-semibold">{(displayName || 'U')[0]}</span>);
 
@@ -148,14 +160,163 @@ const CreateGroupView = ({ onCancel, onCreate }: { onCancel: () => void, onCreat
     );
 };
 
-export const AdminChatSidebar = () => {
-    const { isOpen, setOpen, activeConversationId, setActiveConversation, conversations, fetchConversations, messages, sendMessage, createGroup, loading } = useAdminChatStore();
+const GroupOverviewPanel = ({
+    conversation,
+    currentUserId,
+    onClose,
+}: {
+    conversation: Conversation;
+    currentUserId: string;
+    onClose: () => void;
+}) => {
+    const members = conversation.participants || [];
+    const otherMembers = members.filter((member) => !sameId(member._id, currentUserId));
+
+    return (
+        <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'tween', duration: 0.25 }}
+            className="absolute inset-y-0 right-0 w-full bg-white border-l border-surface-200 z-10 flex flex-col"
+        >
+            <div className="px-6 py-5 border-b border-surface-100 flex items-center gap-3">
+                <button onClick={onClose} className="p-1 hover:bg-surface-50 rounded-lg text-surface-400">
+                    <ChevronLeft size={20} />
+                </button>
+                <div className="min-w-0">
+                    <h2 className="text-[18px] font-semibold text-surface-900 truncate">{conversation.groupName || 'Group Overview'}</h2>
+                    <p className="text-[12px] text-surface-400 truncate">{members.length} members</p>
+                </div>
+            </div>
+
+            <div className="p-5 space-y-5 overflow-y-auto">
+                <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-2xl bg-white border border-surface-200 flex items-center justify-center text-brand-600 shadow-sm">
+                            <Users size={24} />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-base font-semibold text-surface-900 truncate">{conversation.groupName || 'Project Group'}</p>
+                            <p className="text-xs text-surface-500 capitalize">
+                                {conversation.groupType || 'group'} {conversation.department ? `• ${conversation.department}` : ''}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-[12px] font-bold text-surface-400 uppercase tracking-wider mb-3">Members</h3>
+                    <div className="space-y-2">
+                        {members.map((member) => (
+                            <div key={member._id} className="flex items-center gap-3 rounded-xl border border-surface-100 px-3 py-3">
+                                <div className="w-10 h-10 rounded-full bg-surface-100 flex items-center justify-center text-xs font-semibold text-brand-600">
+                                    {member.name?.[0] || 'U'}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-surface-900 truncate">
+                                        {member.name}
+                                        {sameId(member._id, currentUserId) ? ' (You)' : ''}
+                                    </p>
+                                    <p className="text-[11px] text-surface-400 truncate">{member.email}</p>
+                                </div>
+                                <span className="text-[10px] uppercase tracking-wide text-surface-400">
+                                    {member.role?.replace(/_/g, ' ')}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {otherMembers.length > 0 && (
+                    <div>
+                        <h3 className="text-[12px] font-bold text-surface-400 uppercase tracking-wider mb-3">Quick Contacts</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            {otherMembers.map((member) => (
+                                <div key={`quick-${member._id}`} className="rounded-xl border border-surface-100 px-3 py-3 bg-white">
+                                    <p className="text-sm font-medium text-surface-900 truncate">{member.name}</p>
+                                    <p className="text-[11px] text-surface-400 truncate">{member.role?.replace(/_/g, ' ')}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </motion.div>
+    );
+};
+
+const StartDirectView = ({ onCancel, onSelect }: { onCancel: () => void, onSelect: (userId: string) => void }) => {
+    const [search, setSearch] = useState('');
+    const { users } = useAppStore();
     const { user } = useAuthStore();
+
+    const filteredUsers = users.filter((item) =>
+        item.id !== user?.id &&
+        item.isActive &&
+        `${item.name} ${item.email} ${item.role}`.toLowerCase().includes(search.toLowerCase())
+    );
+
+    return (
+        <div className="flex flex-col h-full bg-white">
+            <div className="px-6 py-5 border-b border-surface-100 flex items-center gap-3">
+                <button onClick={onCancel} className="p-1 hover:bg-surface-50 rounded-lg text-surface-400">
+                    <ChevronLeft size={20} />
+                </button>
+                <h1 className="text-[18px] font-semibold text-surface-900">New Message</h1>
+            </div>
+
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+                <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+                    <input
+                        type="text"
+                        placeholder="Search people..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full bg-surface-50 border border-surface-200 rounded-xl pl-9 pr-4 py-2 text-[13px] outline-none focus:border-brand-500 transition-all"
+                    />
+                </div>
+
+                <div className="space-y-1">
+                    {filteredUsers.map((item) => (
+                        <button
+                            key={item.id}
+                            onClick={() => onSelect(item.id)}
+                            className="w-full flex items-center gap-3 p-3 hover:bg-surface-50 rounded-xl text-left transition-colors"
+                        >
+                            <div className="w-9 h-9 rounded-full bg-surface-100 flex items-center justify-center text-xs font-semibold text-brand-600">
+                                {item.name[0]}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-surface-900 truncate">{item.name}</p>
+                                <p className="text-[11px] text-surface-400 truncate">{item.email}</p>
+                            </div>
+                            <span className="text-[10px] uppercase tracking-wide text-surface-400">
+                                {item.role.replace(/_/g, ' ')}
+                            </span>
+                        </button>
+                    ))}
+                    {filteredUsers.length === 0 && (
+                        <p className="text-sm text-surface-400 text-center py-8">No matching users found.</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export const AdminChatSidebar = () => {
+    const { isOpen, setOpen, activeConversationId, setActiveConversation, conversations, fetchConversations, messages, sendMessage, createGroup, startConversation, loading } = useAdminChatStore();
+    const { user } = useAuthStore();
+    const { users } = useAppStore();
     const [projects, setProjects] = useState<any[]>([]);
     const [search, setSearch] = useState('');
     const [input, setInput] = useState('');
     const [activeTab, setActiveTab] = useState<'direct' | 'projects'>('direct');
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+    const [isStartingDirect, setIsStartingDirect] = useState(false);
+    const [showGroupOverview, setShowGroupOverview] = useState(false);
     const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -183,11 +344,15 @@ export const AdminChatSidebar = () => {
 
     const activeConvo = conversations.find(c => c._id === activeConversationId);
     
-    // Role-based isMe logic
-    const isMeCheck = (senderId: string) => senderId === user?.id || senderId === 'admin'; 
+    const isMeCheck = (senderId: string) => String(senderId) === String(user?.id); 
+
+    const visibleProjects = projects.filter((project) => {
+        const members = Array.isArray(project.members) ? project.members : [];
+        return members.some((memberId: string) => String(memberId) === String(user?.id));
+    });
 
     // Merged view of Projects and Conversations for the "Project Teams" tab
-    const projectList = projects.map(project => {
+    const projectList = visibleProjects.map(project => {
         const convo = conversations.find(c => c.projectId === project._id || c.projectId === project.id || (c.isGroup && c.groupName === `${project.name} (Project)`));
         return {
             ...project,
@@ -207,7 +372,12 @@ export const AdminChatSidebar = () => {
     }, {} as Record<string, any[]>);
 
     // Filter conversations for the "Direct" tab
-    const directConversations = conversations.filter(c => !c.isGroup && c.participants.some(p => p.name.toLowerCase().includes(search.toLowerCase())));
+    const directConversations = conversations.filter((c) => {
+        if (c.isGroup) return false;
+        const other = getOtherParticipant(c, user?.id || '');
+        if (!other) return false;
+        return `${other?.name || ''} ${other?.email || ''}`.toLowerCase().includes(search.toLowerCase());
+    });
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -220,6 +390,14 @@ export const AdminChatSidebar = () => {
         const res = await createGroup(name, members);
         if (res) {
             setIsCreatingGroup(false);
+            setActiveConversation(res._id);
+        }
+    };
+
+    const handleStartDirect = async (participantId: string) => {
+        const res = await startConversation(participantId);
+        if (res) {
+            setIsStartingDirect(false);
             setActiveConversation(res._id);
         }
     };
@@ -244,7 +422,13 @@ export const AdminChatSidebar = () => {
 
     const currentRecipient = activeConvo?.isGroup 
         ? activeConvo.groupName 
-        : activeConvo?.participants.find(p => p._id !== user?.id)?.name || 'Chat Session';
+        : (activeConvo ? getOtherParticipant(activeConvo, user?.id || '')?.name : undefined) || 'Chat Session';
+
+    const availableDirectUsers = users.filter((item) =>
+        item.id !== user?.id &&
+        item.isActive &&
+        `${item.name} ${item.email} ${item.role}`.toLowerCase().includes(search.toLowerCase())
+    );
 
     return (
         <AnimatePresence>
@@ -263,17 +447,31 @@ export const AdminChatSidebar = () => {
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'tween', duration: 0.3 }}
-                        className="fixed inset-y-0 right-0 w-full xs:w-[340px] sm:w-[380px] bg-white shadow-xl z-[110] flex flex-col border-l border-surface-200 text-surface-900 font-sans"
+                        className="fixed inset-y-0 right-0 w-full xs:w-[340px] sm:w-[380px] bg-white shadow-xl z-[110] flex flex-col border-l border-surface-200 text-surface-900 font-sans overflow-hidden"
                     >
                         {isCreatingGroup ? (
                             <CreateGroupView 
                                 onCancel={() => setIsCreatingGroup(false)} 
                                 onCreate={handleCreateGroup} 
                             />
+                        ) : isStartingDirect ? (
+                            <StartDirectView
+                                onCancel={() => setIsStartingDirect(false)}
+                                onSelect={handleStartDirect}
+                            />
                         ) : !activeConversationId ? (
                             <>
                                 <div className="px-6 py-5 border-b border-surface-100 flex items-center justify-between bg-white sticky top-0 z-20">
-                                    <h1 className="text-[18px] font-semibold text-surface-900">Messages</h1>
+                                    <div className="flex items-center gap-2">
+                                        <h1 className="text-[18px] font-semibold text-surface-900">Messages</h1>
+                                        <button
+                                            onClick={() => setIsStartingDirect(true)}
+                                            className="p-1.5 hover:bg-surface-50 text-surface-400 hover:text-brand-600 rounded-lg transition-all"
+                                            title="New direct message"
+                                        >
+                                            <Plus size={18} />
+                                        </button>
+                                    </div>
                                     <button onClick={() => setOpen(false)} className="p-1.5 hover:bg-surface-50 text-surface-400 hover:text-surface-900 rounded-lg transition-all">
                                         <X size={20} />
                                     </button>
@@ -383,25 +581,50 @@ export const AdminChatSidebar = () => {
                                                     </div>
                                                 )
                                             ) : (
-                                                directConversations.length > 0 ? directConversations.map(convo => (
-                                                    <ConversationItem 
-                                                        key={convo._id} 
-                                                        convo={convo} 
-                                                        isActive={activeConversationId === convo._id}
-                                                        onClick={() => setActiveConversation(convo._id)}
-                                                        currentUserId={user?.id || ''}
-                                                    />
-                                                )) : (
-                                                    <div className="flex flex-col items-center justify-center p-12 text-center text-surface-400">
-                                                        <MessageCircle size={32} className="mb-2 opacity-20" />
-                                                        <p className="text-sm">No direct messages</p>
+                                                <>
+                                                    {directConversations.length > 0 && directConversations.map(convo => (
+                                                        <ConversationItem 
+                                                            key={convo._id} 
+                                                            convo={convo} 
+                                                            isActive={activeConversationId === convo._id}
+                                                            onClick={() => setActiveConversation(convo._id)}
+                                                            currentUserId={user?.id || ''}
+                                                        />
+                                                    ))}
+
+                                                    <div className="px-5 py-3 border-t border-surface-100 bg-surface-50/60">
+                                                        <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest mb-2">All Employees</p>
+                                                        <div className="space-y-1 max-h-64 overflow-y-auto">
+                                                            {availableDirectUsers.map((item) => (
+                                                                <button
+                                                                    key={`employee-${item.id}`}
+                                                                    onClick={() => handleStartDirect(item.id)}
+                                                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white transition-colors text-left"
+                                                                >
+                                                                    <div className="w-9 h-9 rounded-full bg-surface-100 flex items-center justify-center text-xs font-semibold text-brand-600">
+                                                                        {item.name[0]}
+                                                                    </div>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="text-sm font-medium text-surface-900 truncate">{item.name}</p>
+                                                                        <p className="text-[11px] text-surface-400 truncate">{item.email}</p>
+                                                                    </div>
+                                                                    <UserRound size={14} className="text-surface-300 flex-shrink-0" />
+                                                                </button>
+                                                            ))}
+                                                            {availableDirectUsers.length === 0 && directConversations.length === 0 && (
+                                                                <div className="flex flex-col items-center justify-center p-8 text-center text-surface-400">
+                                                                    <MessageCircle size={32} className="mb-2 opacity-20" />
+                                                                    <p className="text-sm">No employees found</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                )
+                                                </>
                                             )}
                                         </div>
                                     )}
                                 </div>
-                                {activeTab === 'projects' && ['admin', 'manager', 'team-leader'].includes(user?.role || '') && (
+                                {activeTab === 'projects' && ['admin', 'manager', 'team_leader'].includes(user?.role || '') && (
                                     <div className="p-4 border-t border-surface-100 bg-surface-50/50">
                                         <button 
                                             onClick={() => setIsCreatingGroup(true)}
@@ -435,17 +658,37 @@ export const AdminChatSidebar = () => {
                                               </span>
                                          </div>
                                      </div>
-                                     <button className="hidden sm:flex p-2 text-surface-400 hover:text-surface-900 rounded-lg" onClick={() => setActiveConversation(null)}>
-                                         <X size={18} />
-                                     </button>
+                                     <div className="flex items-center gap-1">
+                                         {activeConvo?.isGroup && (
+                                             <button
+                                                 className="p-2 text-surface-400 hover:text-brand-600 rounded-lg"
+                                                 onClick={() => setShowGroupOverview(true)}
+                                                 title="Group overview"
+                                             >
+                                                 <Info size={18} />
+                                             </button>
+                                         )}
+                                         <button className="hidden sm:flex p-2 text-surface-400 hover:text-surface-900 rounded-lg" onClick={() => setActiveConversation(null)}>
+                                             <X size={18} />
+                                         </button>
+                                     </div>
                                 </div>
 
                                 <div ref={scrollRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-surface-50/80 to-white px-4 py-5 sm:px-5">
                                     {messages.length > 0 ? (
                                         <div className="space-y-1">
-                                            {messages.map(msg => (
-                                                <MessageBubble key={msg._id} message={msg} isMe={isMeCheck(msg.senderId)} />
-                                            ))}
+                                            {messages.map((msg, index) => {
+                                                const previous = messages[index - 1];
+                                                const showSender = !previous || String(previous.senderId) !== String(msg.senderId);
+                                                return (
+                                                    <MessageBubble
+                                                        key={msg._id}
+                                                        message={msg}
+                                                        isMe={isMeCheck(msg.senderId)}
+                                                        showSender={showSender || Boolean(activeConvo?.isGroup)}
+                                                    />
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <div className="h-full min-h-[240px] flex flex-col items-center justify-center text-center text-surface-400 px-6">
@@ -479,7 +722,28 @@ export const AdminChatSidebar = () => {
                                         </button>
                                     </form>
                                 </div>
+
+                                <AnimatePresence>
+                                    {showGroupOverview && activeConvo?.isGroup && (
+                                        <GroupOverviewPanel
+                                            conversation={activeConvo}
+                                            currentUserId={user?.id || ''}
+                                            onClose={() => setShowGroupOverview(false)}
+                                        />
+                                    )}
+                                </AnimatePresence>
                             </>
+                        )}
+
+                        {!isCreatingGroup && !isStartingDirect && !activeConversationId && (
+                            <button
+                                type="button"
+                                onClick={() => setIsStartingDirect(true)}
+                                className="absolute right-5 bottom-5 w-14 h-14 rounded-full bg-brand-500 text-white shadow-[0_18px_40px_rgba(51,102,255,0.35)] flex items-center justify-center hover:bg-brand-600 transition-all z-20"
+                                title="New chat"
+                            >
+                                <Plus size={24} />
+                            </button>
                         )}
                     </motion.div>
                 </>

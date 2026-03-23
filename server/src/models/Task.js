@@ -11,6 +11,7 @@ const subtaskSchema = new mongoose.Schema(
 
 const taskStatuses = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'];
 const taskTypes = ['operational', 'design', 'important'];
+const reviewStatuses = ['pending', 'approved', 'changes_requested'];
 
 const taskSchema = new mongoose.Schema(
   {
@@ -62,6 +63,15 @@ const taskSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
+    completionReview: {
+      completedAt: { type: Date, default: null },
+      completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      completionRemark: { type: String, trim: true, maxlength: 5000, default: '' },
+      reviewStatus: { type: String, enum: reviewStatuses, default: 'pending' },
+      reviewRemark: { type: String, trim: true, maxlength: 5000, default: '' },
+      reviewedAt: { type: Date, default: null },
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    },
   },
   { timestamps: true }
 );
@@ -127,6 +137,21 @@ taskSchema.set('toJSON', {
           createdAt: new Date(a.createdAt).toISOString(),
         }))
       : [];
+    ret.completionReview = ret.completionReview
+      ? {
+          completedAt: ret.completionReview.completedAt ? new Date(ret.completionReview.completedAt).toISOString() : undefined,
+          completedBy: ret.completionReview.completedBy ? String(ret.completionReview.completedBy) : undefined,
+          completionRemark: ret.completionReview.completionRemark || '',
+          reviewStatus: ret.completionReview.reviewStatus || 'pending',
+          reviewRemark: ret.completionReview.reviewRemark || '',
+          reviewedAt: ret.completionReview.reviewedAt ? new Date(ret.completionReview.reviewedAt).toISOString() : undefined,
+          reviewedBy: ret.completionReview.reviewedBy ? String(ret.completionReview.reviewedBy) : undefined,
+        }
+      : {
+          reviewStatus: 'pending',
+          completionRemark: '',
+          reviewRemark: '',
+        };
     delete ret._id;
     delete ret.__v;
     delete ret.tenantId;

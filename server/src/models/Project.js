@@ -12,6 +12,8 @@ const projectSchema = new mongoose.Schema(
     teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team', default: null },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
+    reportingPersonIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
+    chatId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminConversation', default: null },
     startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
     progress: { type: Number, default: 0, min: 0, max: 100 },
@@ -32,6 +34,8 @@ projectSchema.set('toJSON', {
     ret.ownerId = String(ret.ownerId);
     ret.teamId = ret.teamId ? String(ret.teamId) : undefined;
     ret.members = Array.isArray(ret.members) ? ret.members.map((m) => String(m)) : [];
+    ret.reportingPersonIds = Array.isArray(ret.reportingPersonIds) ? ret.reportingPersonIds.map((m) => String(m)) : [];
+    ret.chatId = ret.chatId ? String(ret.chatId) : undefined;
     ret.createdAt = ret.createdAt?.toISOString?.() || ret.createdAt;
     ret.updatedAt = ret.updatedAt?.toISOString?.() || ret.updatedAt;
     ret.startDate = ret.startDate ? new Date(ret.startDate).toISOString().split('T')[0] : undefined;

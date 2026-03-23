@@ -68,6 +68,8 @@ export const tasksService = {
   update: (id: string, data: unknown) => api.put(`/tasks/${id}`, data),
   delete: (id: string) => api.delete(`/tasks/${id}`),
   move: (id: string, status: string) => api.patch(`/tasks/${id}/status`, { status }),
+  review: (id: string, body: { action: 'approve' | 'changes_requested'; reviewRemark?: string }) =>
+    api.post(`/tasks/${id}/review`, body),
   addSubtask: (taskId: string, body: { title: string }) => api.post(`/tasks/${taskId}/subtasks`, body),
   patchSubtask: (taskId: string, subtaskId: string, body: unknown) =>
     api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, body),
@@ -124,6 +126,8 @@ export const quickTasksService = {
   create: (data: unknown) => api.post('/quick-tasks', data),
   update: (id: string, data: unknown) => api.put(`/quick-tasks/${id}`, data),
   delete: (id: string) => api.delete(`/quick-tasks/${id}`),
+  review: (id: string, body: { action: 'approve' | 'changes_requested'; reviewRemark?: string }) =>
+    api.post(`/quick-tasks/${id}/review`, body),
   addComment: (taskId: string, body: { content: string }) => api.post(`/quick-tasks/${taskId}/comments`, body),
   uploadAttachments: (taskId: string, files: File[]) => {
     const fd = new FormData();

@@ -29,6 +29,7 @@ export interface Message {
     _id: string;
     conversationId: string;
     senderId: string;
+    senderName: string;
     text: string;
     createdAt: string;
 }
@@ -44,6 +45,7 @@ interface AdminChatState {
     fetchConversations: () => Promise<void>;
     fetchMessages: (conversationId: string) => Promise<void>;
     sendMessage: (text: string, conversationId?: string) => Promise<void>;
+    startConversation: (participantId: string) => Promise<Conversation | undefined>;
     createGroup: (name: string, members: string[], metadata?: { projectId?: string, groupType?: string, department?: string }) => Promise<any>;
     setActiveConversation: (id: string | null) => void;
 }
@@ -81,6 +83,27 @@ export const useAdminChatStore = create<AdminChatState>((set, get) => ({
             set({ messages: res.data });
         } catch (error) {
             console.error('Failed to fetch messages', error);
+        }
+    },
+
+    startConversation: async (participantId: string) => {
+        set({ loading: true });
+        try {
+            const res = await API.post('/admin/chat/conversations/start', { participantId });
+            const conversation = res.data as Conversation;
+            set((state) => {
+                const existing = state.conversations.find((item) => item._id === conversation._id);
+                return {
+                    conversations: existing
+                        ? state.conversations.map((item) => item._id === conversation._id ? conversation : item)
+                        : [conversation, ...state.conversations],
+                    loading: false,
+                };
+            });
+            return conversation;
+        } catch (error) {
+            console.error('Failed to start conversation', error);
+            set({ loading: false });
         }
     },
 

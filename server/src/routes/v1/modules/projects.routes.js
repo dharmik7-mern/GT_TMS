@@ -16,6 +16,7 @@ const projectCreateSchema = z.object({
   status: z.enum(['active', 'on_hold', 'completed', 'archived']).optional(),
   department: z.string().trim().max(120).optional(),
   members: z.array(z.string()).optional(),
+  reportingPersonIds: z.array(z.string()).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });

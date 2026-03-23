@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
 import { logger } from '../utils/logger.js';
+import AdminConversation from '../models/admin/AdminConversation.model.js';
 
 const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-e243b9.log');
 function fileAgentLog(payload) {
@@ -42,7 +43,16 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
   const { Project, ActivityLog } = getTenantModels();
   const incomingMembers = Array.isArray(data.members) ? data.members.filter(Boolean) : [];
   const validMembers = incomingMembers.filter((memberId) => mongoose.Types.ObjectId.isValid(memberId));
-  const members = validMembers.length > 0 ? validMembers : [userId];
+  const members = Array.from(new Set([
+    ...validMembers.map(String),
+    String(userId),
+  ]));
+  const incomingReportingPersons = Array.isArray(data.reportingPersonIds) ? data.reportingPersonIds.filter(Boolean) : [];
+  const reportingPersonIds = Array.from(new Set(
+    incomingReportingPersons
+      .filter((personId) => mongoose.Types.ObjectId.isValid(personId))
+      .map(String)
+  ));
   const teamId = data.teamId && mongoose.Types.ObjectId.isValid(data.teamId) ? data.teamId : null;
 
   const project = await Project.create({
@@ -56,12 +66,33 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
     teamId,
     ownerId: userId,
     members,
+    reportingPersonIds,
     startDate: data.startDate ? new Date(data.startDate) : null,
     endDate: data.endDate ? new Date(data.endDate) : null,
     progress: 0,
     tasksCount: 0,
     completedTasksCount: 0,
   });
+
+  try {
+    const conversation = await AdminConversation.create({
+      participants: members,
+      isGroup: true,
+      groupName: `${project.name} (Project)`,
+      projectId: project._id,
+      groupType: 'project',
+      department: project.department || 'General',
+    });
+
+    project.chatId = conversation._id;
+    await project.save();
+  } catch (error) {
+    logger.error('project_chat_create_failed', {
+      projectId: String(project._id),
+      userId: String(userId),
+      message: error?.message,
+    });
+  }
 
   // #region agent log
   fileAgentLog({ sessionId: 'e243b9', runId: 'pre-fix', hypothesisId: 'H3', location: 'server/src/services/project.service.js:createProject', message: 'Project created in DB', data: { tenantId: String(tenantId), workspaceId: String(workspaceId), ownerId: String(userId), projectId: String(project?._id), membersCount: Array.isArray(project?.members) ? project.members.length : undefined }, timestamp: Date.now() });
@@ -92,11 +123,29 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
 export async function updateProject({ companyId, workspaceId, userId, projectId, updates }) {
   const tenantId = companyId;
   const { Project, ActivityLog } = getTenantModels();
+  const normalizedUpdates = { ...updates };
+
+  if (Array.isArray(updates.members)) {
+    normalizedUpdates.members = Array.from(new Set(
+      updates.members
+        .filter((memberId) => mongoose.Types.ObjectId.isValid(memberId))
+        .map(String)
+    ));
+  }
+
+  if (Array.isArray(updates.reportingPersonIds)) {
+    normalizedUpdates.reportingPersonIds = Array.from(new Set(
+      updates.reportingPersonIds
+        .filter((personId) => mongoose.Types.ObjectId.isValid(personId))
+        .map(String)
+    ));
+  }
+
   const project = await Project.findOneAndUpdate(
     { _id: projectId, tenantId, workspaceId },
     {
       $set: {
-        ...updates,
+        ...normalizedUpdates,
         ...(updates.startDate ? { startDate: new Date(updates.startDate) } : {}),
         ...(updates.endDate ? { endDate: new Date(updates.endDate) } : {}),
       },
@@ -104,6 +153,37 @@ export async function updateProject({ companyId, workspaceId, userId, projectId,
     { new: true }
   );
   if (!project) return null;
+
+  try {
+    const chatPayload = {};
+    if (normalizedUpdates.name) chatPayload.groupName = `${normalizedUpdates.name} (Project)`;
+    if (normalizedUpdates.department) chatPayload.department = normalizedUpdates.department;
+    if (Array.isArray(normalizedUpdates.members)) chatPayload.participants = normalizedUpdates.members;
+
+    if (project.chatId) {
+      if (Object.keys(chatPayload).length > 0) {
+        await AdminConversation.findByIdAndUpdate(project.chatId, { $set: chatPayload });
+      }
+    } else {
+      const conversation = await AdminConversation.create({
+        participants: project.members,
+        isGroup: true,
+        groupName: `${project.name} (Project)`,
+        projectId: project._id,
+        groupType: 'project',
+        department: project.department || 'General',
+      });
+
+      project.chatId = conversation._id;
+      await project.save();
+    }
+  } catch (error) {
+    logger.error('project_chat_sync_failed', {
+      projectId: String(project._id),
+      userId: String(userId),
+      message: error?.message,
+    });
+  }
 
   await ActivityLog.create({
     tenantId,
@@ -124,6 +204,18 @@ export async function deleteProject({ companyId, workspaceId, userId, projectId 
   const { Project, ActivityLog } = getTenantModels();
   const project = await Project.findOneAndDelete({ _id: projectId, tenantId, workspaceId });
   if (!project) return null;
+
+  if (project.chatId) {
+    try {
+      await AdminConversation.findByIdAndDelete(project.chatId);
+    } catch (error) {
+      logger.error('project_chat_delete_failed', {
+        projectId: String(project._id),
+        userId: String(userId),
+        message: error?.message,
+      });
+    }
+  }
 
   await ActivityLog.create({
     tenantId,

@@ -89,6 +89,9 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
         ? [updates.assigneeId]
         : undefined;
 
+  const previousStatus = existing.status;
+  const nextStatus = updates.status ?? existing.status;
+
   const $set = {
     ...updates,
     ...(updates.dueDate !== undefined ? { dueDate: updates.dueDate ? new Date(updates.dueDate) : null } : {}),
@@ -97,6 +100,34 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
   if (assigneeIds !== undefined) {
     $set.assigneeIds = assigneeIds;
     delete $set.assigneeId;
+  }
+
+  if (updates.completionRemark !== undefined || updates.status !== undefined) {
+    const current = existing.completionReview || {};
+    const movedToDone = previousStatus !== 'done' && nextStatus === 'done';
+    const movedAwayFromDone = previousStatus === 'done' && nextStatus !== 'done';
+
+    if (movedAwayFromDone) {
+      $set.completionReview = {
+        completedAt: null,
+        completedBy: null,
+        completionRemark: '',
+        reviewStatus: 'pending',
+        reviewRemark: '',
+        reviewedAt: null,
+        reviewedBy: null,
+      };
+    } else {
+      $set.completionReview = {
+        completedAt: movedToDone ? new Date() : (current.completedAt || null),
+        completedBy: movedToDone ? userId : (current.completedBy || null),
+        completionRemark: updates.completionRemark !== undefined ? (updates.completionRemark || '') : (current.completionRemark || ''),
+        reviewStatus: movedToDone ? 'pending' : (current.reviewStatus || 'pending'),
+        reviewRemark: movedToDone ? '' : (current.reviewRemark || ''),
+        reviewedAt: movedToDone ? null : (current.reviewedAt || null),
+        reviewedBy: movedToDone ? null : (current.reviewedBy || null),
+      };
+    }
   }
 
   const qt = await QuickTask.findOneAndUpdate({ _id: id, tenantId, workspaceId }, { $set }, { new: true });
@@ -129,6 +160,111 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
         }))
       );
     }
+  }
+
+  if (previousStatus !== 'done' && qt.status === 'done') {
+    const reviewerIds = Array.from(new Set([
+      String(qt.reporterId),
+    ])).filter((reviewerId) => reviewerId !== String(userId));
+
+    if (reviewerIds.length) {
+      await Notification.insertMany(
+        reviewerIds.map((reviewerId) => ({
+          tenantId,
+          workspaceId,
+          userId: reviewerId,
+          type: 'project_update',
+          title: 'Quick task completed and awaiting review',
+          message: `"${qt.title}" was marked complete and needs review.`,
+          isRead: false,
+          relatedId: String(qt._id),
+        }))
+      );
+    }
+  }
+
+  return qt;
+}
+
+export async function reviewQuickTask({ companyId, workspaceId, userId, role, id, action, reviewRemark }) {
+  const tenantId = companyId;
+  const { QuickTask, ActivityLog, Notification } = getTenantModels();
+  const qt = await QuickTask.findOne({ _id: id, tenantId, workspaceId });
+  if (!qt) return null;
+
+  const uid = String(userId || '');
+  const canReview =
+    String(qt.reporterId) === uid ||
+    role === 'super_admin' ||
+    role === 'admin' ||
+    role === 'manager' ||
+    role === 'team_leader';
+
+  if (!canReview) {
+    const err = new Error('Forbidden');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  if (qt.status !== 'done') {
+    const err = new Error('Only completed quick tasks can be reviewed');
+    err.statusCode = 400;
+    err.code = 'INVALID_STATE';
+    throw err;
+  }
+
+  qt.completionReview = {
+    ...(qt.completionReview?.toObject?.() || qt.completionReview || {}),
+    reviewStatus: action === 'approve' ? 'approved' : 'changes_requested',
+    reviewRemark: reviewRemark || '',
+    reviewedAt: new Date(),
+    reviewedBy: userId,
+  };
+
+  if (action === 'changes_requested') {
+    qt.status = 'in_progress';
+  }
+
+  await qt.save();
+
+  await ActivityLog.create({
+    tenantId,
+    workspaceId,
+    userId,
+    type: action === 'approve' ? 'quick_task_review_approved' : 'quick_task_review_changes_requested',
+    description:
+      action === 'approve'
+        ? `Approved completed quick task "${qt.title}"`
+        : `Requested changes for completed quick task "${qt.title}"`,
+    entityType: 'quick_task',
+    entityId: qt._id,
+    metadata: {},
+  });
+
+  const notifyUserIds = Array.from(
+    new Set([
+      ...((qt.assigneeIds || []).map((a) => String(a)) || []),
+      String(qt.reporterId || ''),
+    ])
+  ).filter((notifyId) => notifyId && notifyId !== uid);
+
+  if (notifyUserIds.length) {
+    await Notification.insertMany(
+      notifyUserIds.map((notifyUserId) => ({
+        tenantId,
+        workspaceId,
+        userId: notifyUserId,
+        type: 'project_update',
+        title: action === 'approve' ? 'Quick task review approved' : 'Quick task changes requested',
+        message:
+          action === 'approve'
+            ? `Review approved for "${qt.title}".`
+            : `Changes were requested for "${qt.title}".`,
+        isRead: false,
+        relatedId: String(qt._id),
+      }))
+    );
   }
 
   return qt;

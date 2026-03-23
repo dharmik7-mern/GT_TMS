@@ -34,6 +34,15 @@ const quickTaskSchema = new mongoose.Schema(
         updatedAt: { type: Date, default: Date.now },
       },
     ],
+    completionReview: {
+      completedAt: { type: Date, default: null },
+      completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      completionRemark: { type: String, trim: true, maxlength: 5000, default: '' },
+      reviewStatus: { type: String, enum: ['pending', 'approved', 'changes_requested'], default: 'pending' },
+      reviewRemark: { type: String, trim: true, maxlength: 5000, default: '' },
+      reviewedAt: { type: Date, default: null },
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    },
   },
   { timestamps: true }
 );
@@ -71,6 +80,21 @@ quickTaskSchema.set('toJSON', {
           updatedAt: new Date(c.updatedAt).toISOString(),
         }))
       : [];
+    ret.completionReview = ret.completionReview
+      ? {
+          completedAt: ret.completionReview.completedAt ? new Date(ret.completionReview.completedAt).toISOString() : undefined,
+          completedBy: ret.completionReview.completedBy ? String(ret.completionReview.completedBy) : undefined,
+          completionRemark: ret.completionReview.completionRemark || '',
+          reviewStatus: ret.completionReview.reviewStatus || 'pending',
+          reviewRemark: ret.completionReview.reviewRemark || '',
+          reviewedAt: ret.completionReview.reviewedAt ? new Date(ret.completionReview.reviewedAt).toISOString() : undefined,
+          reviewedBy: ret.completionReview.reviewedBy ? String(ret.completionReview.reviewedBy) : undefined,
+        }
+      : {
+          reviewStatus: 'pending',
+          completionRemark: '',
+          reviewRemark: '',
+        };
 
     delete ret._id;
     delete ret.__v;
