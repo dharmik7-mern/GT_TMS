@@ -239,7 +239,7 @@ export async function createUser({ companyId, workspaceId, actorRole, input }) {
     throw err;
   }
 
-  await assertPasswordAllowed(input.password);
+  await assertPasswordAllowed(input.password, { companyId: tenantId, workspaceId: targetWorkspaceId });
 
   const workspace = await Workspace.findOne({ _id: targetWorkspaceId, tenantId });
   if (!workspace) {
@@ -508,7 +508,7 @@ export async function updateMyPassword({ companyId, userId, currentPassword, new
     throw err;
   }
 
-  await assertPasswordAllowed(newPassword);
+  await assertPasswordAllowed(newPassword, { companyId: tenantId, workspaceId });
   user.passwordHash = await hashPassword(newPassword);
   await user.save();
   return true;

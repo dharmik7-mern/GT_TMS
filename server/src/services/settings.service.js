@@ -173,6 +173,25 @@ export async function getCompanyIdConfig() {
   return normalizeIdConfig(settings.idGeneration?.company, DEFAULT_COMPANY_ID_CONFIG);
 }
 
+export async function getEffectiveSecuritySettings({ companyId = null, workspaceId = null } = {}) {
+  const globalSettings = await getSecuritySettings();
+
+  if (!companyId || !workspaceId) {
+    return globalSettings;
+  }
+
+  const { Workspace } = getTenantModels();
+  const workspace = await Workspace.findOne({ _id: workspaceId, tenantId: companyId }).select('settings.security');
+  if (!workspace) {
+    return globalSettings;
+  }
+
+  return {
+    ...globalSettings,
+    ...(workspace.settings?.security?.toObject?.() || workspace.settings?.security || {}),
+  };
+}
+
 export function assertPasswordMatchesPolicy(password, securitySettings = DEFAULT_SECURITY_SETTINGS) {
   const trimmedPassword = String(password || '');
   if (trimmedPassword.length < 8) {
@@ -197,8 +216,8 @@ export function assertPasswordMatchesPolicy(password, securitySettings = DEFAULT
   }
 }
 
-export async function assertPasswordAllowed(password) {
-  const security = await getSecuritySettings();
+export async function assertPasswordAllowed(password, context = {}) {
+  const security = await getEffectiveSecuritySettings(context);
   assertPasswordMatchesPolicy(password, security);
 }
 
