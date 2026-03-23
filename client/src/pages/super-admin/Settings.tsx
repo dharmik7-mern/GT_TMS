@@ -200,6 +200,46 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const persistStrongPasswordPolicy = async (nextValue: boolean) => {
+    setSettings((prev) => ({
+      ...prev,
+      security: {
+        ...prev.security,
+        strongPasswords: nextValue,
+      },
+    }));
+    setSaving(true);
+    setMessage('');
+    try {
+      const res = await systemSettingsService.update({
+        security: {
+          strongPasswords: nextValue,
+        },
+      });
+      const data = res.data?.data;
+      if (data) {
+        setSettings((prev) => ({
+          ...prev,
+          ...data,
+          security: { ...prev.security, ...(data.security || {}) },
+          stats: data.stats || prev.stats,
+        }));
+      }
+      setMessage('Strong password policy updated successfully.');
+    } catch (error: any) {
+      setSettings((prev) => ({
+        ...prev,
+        security: {
+          ...prev.security,
+          strongPasswords: !nextValue,
+        },
+      }));
+      setMessage(error?.response?.data?.error?.message || 'Failed to update strong password policy.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const clearCache = async () => {
     setMessage('');
     try {
@@ -316,7 +356,14 @@ export const SettingsPage: React.FC = () => {
                   <ToggleRow label="Open Registration" description="Allow anyone to join without invite" checked={settings.security.openRegistration} onChange={() => setSettings((prev) => ({ ...prev, security: { ...prev.security, openRegistration: !prev.security.openRegistration } }))} />
                   <ToggleRow label="Confirm Email" description="Require email check for new users" checked={settings.security.confirmEmail} onChange={() => setSettings((prev) => ({ ...prev, security: { ...prev.security, confirmEmail: !prev.security.confirmEmail } }))} />
                   <ToggleRow label="Extra Login Security" description="Add extra login verification for admins" checked={settings.security.extraLoginSecurity} onChange={() => setSettings((prev) => ({ ...prev, security: { ...prev.security, extraLoginSecurity: !prev.security.extraLoginSecurity } }))} />
-                  <ToggleRow label="Strong Passwords" description="Require difficult passwords for safety" checked={settings.security.strongPasswords} onChange={() => setSettings((prev) => ({ ...prev, security: { ...prev.security, strongPasswords: !prev.security.strongPasswords } }))} />
+                  <ToggleRow
+                    label="Strong Passwords"
+                    description="Require difficult passwords for safety"
+                    checked={settings.security.strongPasswords}
+                    onChange={() => {
+                      void persistStrongPasswordPolicy(!settings.security.strongPasswords);
+                    }}
+                  />
                 </div>
               </div>
 

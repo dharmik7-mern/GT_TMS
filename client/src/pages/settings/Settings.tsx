@@ -79,6 +79,10 @@ type EmployeeIdSettings = {
   nextSequence: number;
 };
 
+type WorkspaceSecuritySettings = {
+  strongPasswords: boolean;
+};
+
 const DEFAULT_EMPLOYEE_ID_SETTINGS: EmployeeIdSettings = {
   prefix: 'EMP',
   separator: '-',
@@ -115,6 +119,7 @@ export const SettingsPage: React.FC = () => {
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
   const [employeeIdSettings, setEmployeeIdSettings] = useState<EmployeeIdSettings>(DEFAULT_EMPLOYEE_ID_SETTINGS);
+  const [workspaceSecurity, setWorkspaceSecurity] = useState<WorkspaceSecuritySettings>({ strongPasswords: true });
   const [message, setMessage] = useState('');
   const [performance, setPerformance] = useState<UserPerformance | null>(null);
   const [loadingPerformance, setLoadingPerformance] = useState(false);
@@ -159,6 +164,9 @@ export const SettingsPage: React.FC = () => {
       separator: workspace?.settings?.employeeIdConfig?.separator || DEFAULT_EMPLOYEE_ID_SETTINGS.separator,
       digits: workspace?.settings?.employeeIdConfig?.digits || DEFAULT_EMPLOYEE_ID_SETTINGS.digits,
       nextSequence: workspace?.settings?.employeeIdConfig?.nextSequence || DEFAULT_EMPLOYEE_ID_SETTINGS.nextSequence,
+    });
+    setWorkspaceSecurity({
+      strongPasswords: workspace?.settings?.security?.strongPasswords ?? true,
     });
   }, [workspace]);
 
@@ -309,6 +317,7 @@ export const SettingsPage: React.FC = () => {
           dateFormat: appearanceSettings.dateFormat,
           weekStartsOn: appearanceSettings.weekStartsOn,
           employeeIdConfig: employeeIdSettings,
+          security: workspaceSecurity,
         },
       });
       await bootstrap();
@@ -326,6 +335,28 @@ export const SettingsPage: React.FC = () => {
       setMessage('Workspace settings saved successfully.');
     } catch (error: any) {
       setMessage(error?.response?.data?.error?.message || 'Failed to save workspace settings.');
+    } finally {
+      setSavingWorkspace(false);
+    }
+  };
+
+  const persistWorkspaceStrongPasswordPolicy = async (nextValue: boolean) => {
+    setWorkspaceSecurity({ strongPasswords: nextValue });
+    setSavingWorkspace(true);
+    setMessage('');
+    try {
+      await workspacesService.update(workspace.id, {
+        settings: {
+          security: {
+            strongPasswords: nextValue,
+          },
+        },
+      });
+      await bootstrap();
+      setMessage('Organization password policy updated successfully.');
+    } catch (error: any) {
+      setWorkspaceSecurity({ strongPasswords: !nextValue });
+      setMessage(error?.response?.data?.error?.message || 'Failed to update organization password policy.');
     } finally {
       setSavingWorkspace(false);
     }
@@ -676,6 +707,35 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div className="space-y-4">
+              <div className="card p-5">
+                <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Organization Password Policy</h3>
+                <SettingRow
+                  label="Strong Passwords"
+                  description="Apply strong password rules only for users in this organization."
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void persistWorkspaceStrongPasswordPolicy(!workspaceSecurity.strongPasswords);
+                    }}
+                    className={cn(
+                      'relative h-6 w-10 rounded-full transition-colors',
+                      workspaceSecurity.strongPasswords ? 'bg-brand-600' : 'bg-surface-200 dark:bg-surface-700'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+                        workspaceSecurity.strongPasswords ? 'left-5' : 'left-1'
+                      )}
+                    />
+                  </button>
+                </SettingRow>
+                <p className="mt-3 text-xs text-surface-400">
+                  When off, users in this organization still need at least 8 characters, but uppercase, number, and special-character requirements are removed.
+                </p>
+              </div>
+
               <div className="card p-5">
                 <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Two-Factor Authentication</h3>
                 <div className="mb-4 flex items-center justify-between">

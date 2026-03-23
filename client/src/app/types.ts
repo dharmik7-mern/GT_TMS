@@ -161,6 +161,9 @@ export interface Workspace {
       digits?: number;
       nextSequence?: number;
     };
+    security?: {
+      strongPasswords?: boolean;
+    };
     permissions?: Record<string, Partial<Record<Role, boolean>>>;
   };
 }

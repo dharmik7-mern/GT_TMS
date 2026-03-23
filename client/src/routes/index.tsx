@@ -22,6 +22,7 @@ import QuickTasksPage from '../pages/quicktasks/QuickTasks';
 import QuickTaskDetailPage from '../pages/quicktasks/QuickTaskDetail';
 import MyTasksPage from '../pages/tasks/MyTasks';
 import NotificationsPage from '../pages/notifications/Notifications';
+import UserSettingsPage from '../pages/settings/Settings';
 
 // Admin pages
 import {
@@ -59,6 +60,14 @@ const RequireRole: React.FC<{ roles: Role[]; children: React.ReactNode }> = ({ r
   const { user } = useAuthStore();
   if (!user || !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
+};
+
+const SettingsRoute: React.FC = () => {
+  const { user } = useAuthStore();
+  if (user?.role === 'super_admin') {
+    return <SASettings />;
+  }
+  return <UserSettingsPage />;
 };
 
 export const router = createBrowserRouter([
@@ -110,7 +119,7 @@ export const router = createBrowserRouter([
       { path: 'companies/:id', element: <SACompanies /> },
       { path: 'users', element: <SAUsers /> },
       { path: 'roles-permissions', element: <SARoles /> },
-      { path: 'settings', element: <SASettings /> },
+      { path: 'settings', element: <SettingsRoute /> },
       {
         path: 'logs',
         element: (
