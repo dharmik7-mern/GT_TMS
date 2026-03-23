@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { 
     getTasks, createTask, updateTask, deleteTask, 
-    addComment, uploadAttachment, getWaitingListTasks
+    addComment, uploadAttachment, getWaitingListTasks, getDueReminders
 } from '../../controllers/admin/adminCalendar.controller.js';
 import { verifyToken } from '../../middleware/auth.middleware.js';
 
@@ -18,21 +18,18 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + '-' + path.extname(file.originalname));
-    }
+    destination: function (req, file, cb) { cb(null, 'uploads/'); },
+    filename:    function (req, file, cb) { cb(null, Date.now() + '-' + path.extname(file.originalname)); }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
-router.get('/tasks', getTasks);
-router.get('/waiting-list', getWaitingListTasks);
-router.post('/tasks', createTask);
-router.put('/tasks/:id', updateTask);
-router.delete('/tasks/:id', deleteTask);
-router.post('/tasks/:id/comments', addComment);
+router.get('/tasks',          getTasks);
+router.get('/waiting-list',   getWaitingListTasks);
+router.get('/due-reminders',  getDueReminders);
+router.post('/tasks',         createTask);
+router.put('/tasks/:id',      updateTask);
+router.delete('/tasks/:id',   deleteTask);
+router.post('/tasks/:id/comments',               addComment);
 router.post('/tasks/:id/attachments', upload.single('file'), uploadAttachment);
 
 export default router;

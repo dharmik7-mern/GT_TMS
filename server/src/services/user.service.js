@@ -10,10 +10,15 @@ export async function getMe({ companyId, userId }) {
   return user;
 }
 
-export async function listUsers({ companyId }) {
-  const tenantId = companyId;
+export async function listUsers({ companyId, actorRole }) {
   const { User } = getTenantModels();
-  const users = await User.find({ tenantId }).sort({ createdAt: -1 });
+  let filter = { tenantId: companyId };
+
+  if (actorRole === 'super_admin') {
+    filter = {}; // super_admin can see everyone
+  }
+
+  const users = await User.find(filter).sort({ createdAt: -1 });
   return users;
 }
 

@@ -13,8 +13,8 @@ export async function me(req, res, next) {
 
 export async function list(req, res, next) {
   try {
-    const { companyId } = req.auth;
-    const users = await UserService.listUsers({ companyId });
+    const { companyId, role } = req.auth;
+    const users = await UserService.listUsers({ companyId, actorRole: role });
     return res.status(200).json({ success: true, data: users });
   } catch (e) {
     return next(e);

@@ -1,24 +1,75 @@
 import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { AdminTask } from '../store/useAdminCalendarStore.ts';
-import { format } from 'date-fns';
+import { differenceInCalendarDays, differenceInMinutes } from 'date-fns';
 import { cn } from '../../../../utils/helpers.ts';
-import { Clock, MessageCircle, Paperclip } from 'lucide-react';
+import { userColor } from './BordioCalendar/BordioCalendar.tsx';
 
-const priorityColors: Record<AdminTask['priority'], string> = {
-    red: 'bg-[linear-gradient(135deg,#ffc7bc_0%,#ffe0d7_100%)] text-[#81443a]',
-    green: 'bg-[linear-gradient(135deg,#bdeff1_0%,#d7fbff_100%)] text-[#255f69]',
-    blue: 'bg-[linear-gradient(135deg,#b7dafc_0%,#d9e9ff_100%)] text-[#294f79]',
-    yellow: 'bg-[linear-gradient(135deg,#ffdcae_0%,#ffedd0_100%)] text-[#8f5f1e]',
-    none: 'bg-[linear-gradient(135deg,#edf4ff_0%,#fbfdff_100%)] text-surface-800 border border-[#dce7f7]',
+// ── Per-user avatar color (matches BordioTaskCard palette) ─────────────────
+const AVATAR_PALETTE = [
+    '#F87171', '#FB923C', '#FBBF24', '#4ADE80',
+    '#34D399', '#22D3EE', '#60A5FA', '#A78BFA',
+    '#F472B6', '#E879F9', '#2DD4BF', '#F97316',
+];
+function avatarColor(name?: string): string {
+    if (!name) return '#94A3B8';
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+// Card color is derived from priority OR task.assignedUser via userColor()
+const getCardBg = (task: AdminTask) => {
+    if (task.priority === 'high')   return '#FEE2E2';
+    if (task.priority === 'medium') return '#FEF3C7';
+    if (task.priority === 'low')    return '#D1FAE5';
+    return userColor(task.assignedUser);
 };
 
-const statusPillClasses: Record<AdminTask['status'], string> = {
-    Pending: 'bg-white/45 text-[#3f6ea8]',
-    'In Progress': 'bg-white/50 text-[#8b4a40]',
-    Done: 'bg-white/55 text-[#21684e]',
-};
+// ── Strip backend noise from tags ───────────────────────────────────────────
+function cleanTags(tags?: string[]): string[] {
+    if (!tags) return [];
+    return tags.filter((t) => {
+        const u = t.toUpperCase();
+        if (u.startsWith('CREATE IN:'))    return false;
+        if (u.startsWith('TYPE:'))         return false;
+        if (u.startsWith('PROVIDER:'))     return false;
+        if (u.startsWith('PARTICIPANTS:')) return false;
+        if (u.startsWith('PROJECT:'))      return false;
+        if (t.length > 24)                 return false;
+        return true;
+    });
+}
 
+const TAG_STYLES: Record<string, { bg: string; text: string }> = {
+    feedback: { bg: '#D1FAE5', text: '#065F46' },
+    blocked:  { bg: '#FEE2E2', text: '#991B1B' },
+    bug:      { bg: '#FEE2E2', text: '#991B1B' },
+    review:   { bg: '#EDE9FE', text: '#5B21B6' },
+    urgent:   { bg: '#FEF3C7', text: '#92400E' },
+    default:  { bg: 'rgba(255,255,255,0.65)', text: '#374151' },
+};
+function tagStyle(tag: string) {
+    return TAG_STYLES[tag.toLowerCase().replace(/\s+/g, '')] ?? TAG_STYLES.default;
+}
+
+function fmtDuration(mins: number): string {
+    if (mins <= 0) return '0:30h';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}:${m < 10 ? '0' : ''}${m}h`;
+}
+
+function dueBadge(endDateTime?: string | null): string {
+    if (!endDateTime) return 'Due today';
+    const diff = differenceInCalendarDays(new Date(endDateTime), new Date());
+    if (diff < 0)  return 'Overdue';
+    if (diff === 0) return 'Due today';
+    if (diff === 1) return 'Due tomorrow';
+    return `${diff} days left`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export const AdminTaskCard = ({
     task,
     isOverlay = false,
@@ -31,108 +82,96 @@ export const AdminTaskCard = ({
     isMonthView?: boolean;
 }) => {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task._id, data: task });
-    const hasTime = Boolean(task.startDateTime) && Boolean(task.endDateTime);
-    const start = hasTime ? new Date(task.startDateTime as any) : null;
-    const end = hasTime ? new Date(task.endDateTime as any) : null;
-    const assigneeInitial = task.assignedUser?.trim()?.charAt(0)?.toUpperCase() || 'U';
-    const commentCount = task.comments?.length ?? 0;
-    const attachmentCount = task.attachments?.length ?? 0;
 
-    let durationText = 'Waiting';
-    if (hasTime && start && end) {
-        const durationMinutes = (end.getTime() - start.getTime()) / 60000;
-        if (durationMinutes >= 60) {
-            const hours = Math.floor(durationMinutes / 60);
-            const minutes = Math.floor(durationMinutes % 60);
-            durationText = `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`;
-        } else {
-            durationText = `${durationMinutes}m`;
-        }
-    }
+    const initials  = (task.assignedUser?.trim()?.charAt(0) ?? 'U').toUpperCase();
+    const avColor   = avatarColor(task.assignedUser);
+    const dueText   = dueBadge(task.endDateTime);
+    const visibleTags = cleanTags(task.tags);
 
+    const durationMins =
+        task.duration != null
+            ? task.duration
+            : task.startDateTime && task.endDateTime
+                ? Math.max(0, differenceInMinutes(new Date(task.endDateTime), new Date(task.startDateTime)))
+                : 60;
+
+    const durationLabel = fmtDuration(durationMins);
+
+    // ── Month-strip view ────────────────────────────────────────────────────
     if (isMonthView) {
         return (
             <div
                 ref={setNodeRef}
                 {...listeners}
                 {...attributes}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onClick?.();
+                onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+                className="mx-1 mb-1 truncate rounded px-2 py-0.5 text-[11px] font-bold cursor-grab transition-all hover:brightness-95"
+                style={{
+                    opacity: isDragging ? 0.4 : 1,
+                    backgroundColor: getCardBg(task),
+                    color: '#1C2434',
                 }}
-                className={cn(
-                    'mx-1 mb-1 truncate rounded-md px-2 py-1 text-[10px] font-medium shadow-sm cursor-grab active:cursor-grabbing',
-                    priorityColors[task.priority]
-                )}
-                style={{ opacity: isDragging ? 0.4 : 1 }}
             >
-                {hasTime ? `${format(new Date(task.startDateTime as any), 'HH:mm')} ` : ''}
                 {task.title}
             </div>
         );
     }
 
+    // ── Full card view ──────────────────────────────────────────────────────
     return (
         <div
             ref={setNodeRef}
             {...listeners}
             {...attributes}
-            onClick={(e) => {
-                e.stopPropagation();
-                onClick?.();
-            }}
+            onClick={(e) => { e.stopPropagation(); onClick?.(); }}
             className={cn(
-                'group relative flex w-full cursor-grab flex-col gap-2 overflow-hidden rounded-[18px] border border-white/50 px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.08)] transition-all hover:shadow-[0_18px_38px_rgba(15,23,42,0.12)]',
-                priorityColors[task.priority],
-                isOverlay && 'rotate-1'
+                'group relative w-full cursor-grab rounded-[12px] transition-all',
+                'hover:shadow-md hover:brightness-[0.97] active:scale-[0.99]',
+                isOverlay && 'rotate-1 z-50 shadow-xl',
             )}
-            style={{ opacity: isDragging ? 0.5 : 1 }}
+            style={{
+                opacity: isDragging ? 0.45 : 1,
+                backgroundColor: getCardBg(task),
+                padding: '10px 12px',
+            }}
         >
-            <div className="flex items-start justify-between gap-3 pointer-events-none">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-[11px] font-bold text-surface-800 shadow-sm">
-                    {assigneeInitial}
+            {/* Avatar + title */}
+            <div className="flex items-start gap-2.5">
+                <div
+                    className="shrink-0 mt-[1px] h-[26px] w-[26px] rounded-full border-[2px] border-white flex items-center justify-center text-[11px] font-black text-white shadow-sm"
+                    style={{ backgroundColor: avColor }}
+                >
+                    {initials}
                 </div>
-                <span className={cn('rounded-full px-2 py-1 text-[10px] font-semibold tracking-wide', statusPillClasses[task.status])}>
-                    {task.status}
-                </span>
+                <p className="flex-1 text-[13px] font-extrabold leading-[1.35] tracking-[-0.01em] text-[#1C2434] line-clamp-2">
+                    {task.title}
+                </p>
             </div>
 
-            <p className="pointer-events-none text-[15px] font-semibold leading-[1.2]">
-                {task.title}
-            </p>
-
-            {task.description && (
-                <p className="pointer-events-none line-clamp-2 text-[11px] opacity-75">
-                    {task.description}
-                </p>
+            {/* Tag badges */}
+            {visibleTags.length > 0 && (
+                <div className="mt-[7px] flex flex-wrap gap-1">
+                    {visibleTags.slice(0, 2).map((tag) => {
+                        const s = tagStyle(tag);
+                        return (
+                            <span
+                                key={tag}
+                                className="rounded-[5px] px-[7px] py-[2px] text-[9px] font-black uppercase tracking-[0.07em]"
+                                style={{ backgroundColor: s.bg, color: s.text }}
+                            >
+                                {tag}
+                            </span>
+                        );
+                    })}
+                </div>
             )}
 
-            <div className="pointer-events-none flex items-center gap-1.5 text-[12px] font-medium opacity-85">
-                <Clock size={12} />
-                <span>
-                    {hasTime && start ? format(start, 'H:mm') : 'Waiting'} | {durationText}
-                </span>
+            {/* Duration | due badge */}
+            <div className="mt-[8px] flex items-center gap-1">
+                <span className="text-[10.5px] font-bold text-[#374151]/70">{durationLabel}</span>
+                <span className="text-[9.5px] text-[#374151]/35 font-bold">|</span>
+                <span className="text-[10px] font-medium text-[#374151]/60">{dueText}</span>
             </div>
-
-            <div className="pointer-events-none flex items-center justify-between text-[11px] opacity-80">
-                <div className="flex items-center gap-2">
-                    {attachmentCount > 0 && (
-                        <span className="flex items-center gap-1">
-                            <Paperclip size={11} />
-                            {attachmentCount}
-                        </span>
-                    )}
-                    {commentCount > 0 && (
-                        <span className="flex items-center gap-1">
-                            <MessageCircle size={11} />
-                            {commentCount}
-                        </span>
-                    )}
-                </div>
-                <div className="h-1.5 w-14 rounded-full bg-white/55" />
-            </div>
-
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-[radial-gradient(circle_at_bottom,rgba(255,255,255,0.24),transparent_70%)]" />
         </div>
     );
 };

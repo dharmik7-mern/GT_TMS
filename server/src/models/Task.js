@@ -32,6 +32,12 @@ const taskSchema = new mongoose.Schema(
     labels: [{ type: String, trim: true, maxlength: 40 }],
     startDate: { type: Date, default: null },
     dueDate: { type: Date, default: null, index: true },
+    startTime: { type: Date, default: null },
+    endTime: { type: Date, default: null },
+    duration: { type: Number, default: null }, // in minutes
+    color: { type: String, trim: true, maxlength: 32 },
+    isRecurring: { type: Boolean, default: false },
+    recurrenceRule: { type: Object, default: null }, // { frequency: 'daily' | 'weekly' | 'monthly', interval: number }
     estimatedHours: { type: Number, default: null, min: 0 },
     trackedHours: { type: Number, default: null, min: 0 },
     order: { type: Number, default: 0, index: true },
@@ -98,6 +104,8 @@ taskSchema.set('toJSON', {
     ret.updatedAt = ret.updatedAt?.toISOString?.() || ret.updatedAt;
     ret.startDate = ret.startDate ? new Date(ret.startDate).toISOString().split('T')[0] : undefined;
     ret.dueDate = ret.dueDate ? new Date(ret.dueDate).toISOString().split('T')[0] : undefined;
+    ret.startTime = ret.startTime?.toISOString?.() || ret.startTime;
+    ret.endTime = ret.endTime?.toISOString?.() || ret.endTime;
     ret.comments = Array.isArray(ret.comments)
       ? ret.comments.map((c) => ({
           id: String(c._id),

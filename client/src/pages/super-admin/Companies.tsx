@@ -94,7 +94,10 @@ export const CompaniesPage: React.FC = () => {
   }, [showModal, selectedCompany, reset]);
 
   const filtered = companies.filter(c => {
-    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase());
+    const name = c.name || '';
+    const email = c.email || '';
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || 
+                      email.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -187,8 +190,8 @@ export const CompaniesPage: React.FC = () => {
               render: (c: Company) => (
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-                    style={{ backgroundColor: c.color }}>
-                    {c.name[0]}
+                    style={{ backgroundColor: c.color || '#3366ff' }}>
+                    {c.name?.[0] || '?'}
                   </div>
                   <div>
                     <p className="font-medium text-surface-900 dark:text-white text-sm">{c.name}</p>
@@ -202,7 +205,8 @@ export const CompaniesPage: React.FC = () => {
             {
               key: 'status', header: 'Status',
               render: (c: Company) => {
-                const badge = COMPANY_STATUS_BADGES[c.status];
+                const status = c.status || 'active';
+                const badge = COMPANY_STATUS_BADGES[status] || COMPANY_STATUS_BADGES.active;
                 return <span className={cn('badge text-[10px]', badge.className)}>{badge.label}</span>;
               }
             },

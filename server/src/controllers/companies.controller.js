@@ -5,7 +5,8 @@ export async function list(req, res, next) {
     const items = await CompanyService.listCompanies();
     return res.status(200).json({ success: true, data: items });
   } catch (e) {
-    return next(e);
+    console.error(`[Companies:${req.method}:${req.path}] Error:`, e);
+    return res.status(e.statusCode || 500).json({ success: false, error: { message: e.message } });
   }
 }
 
@@ -20,7 +21,8 @@ export async function create(req, res, next) {
     const created = await CompanyService.createCompanyWithAdmin({ name, adminName, adminEmail, adminPassword, initialUserLimit, status });
     return res.status(201).json({ success: true, data: created });
   } catch (e) {
-    return next(e);
+    console.error(`[Companies:${req.method}:${req.path}] Error:`, e);
+    return res.status(e.statusCode || 500).json({ success: false, error: { message: e.message } });
   }
 }
 
@@ -36,7 +38,8 @@ export async function update(req, res, next) {
 
     return res.status(200).json({ success: true, data: updated });
   } catch (e) {
-    return next(e);
+    console.error(`[Companies:${req.method}:${req.path}] Error:`, e);
+    return res.status(e.statusCode || 500).json({ success: false, error: { message: e.message, stack: e.stack } });
   }
 }
 

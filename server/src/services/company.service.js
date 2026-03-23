@@ -35,26 +35,36 @@ export async function listCompanies() {
   // lightweight counts (can be optimized with aggregation later)
   const uMap = new Map();
   const pMap = new Map();
+  const { User, Project } = getTenantModels();
+
   await Promise.all(companies.map(async (c) => {
-    const { User, Project } = getTenantModels();
-    const [uc, pc] = await Promise.all([
-      User.countDocuments({ tenantId: c._id }),
-      Project.countDocuments({ tenantId: c._id }),
-    ]);
-    uMap.set(c.id, uc);
-    pMap.set(c.id, pc);
+    try {
+      const [uc, pc] = await Promise.all([
+        User.countDocuments({ tenantId: c._id }),
+        Project.countDocuments({ tenantId: c._id }),
+      ]);
+      uMap.set(c._id.toString(), uc);
+      pMap.set(c._id.toString(), pc);
+    } catch (e) {
+      console.error(`Error fetching counts for company ${c._id}:`, e);
+      uMap.set(c._id.toString(), 0);
+      pMap.set(c._id.toString(), 0);
+    }
   }));
 
-  return companies.map((c) => ({
-    id: c.id,
-    name: c.name,
-    email: c.email,
-    usersCount: uMap.get(c.id) || 0,
-    projectsCount: pMap.get(c.id) || 0,
-    status: c.status,
-    createdAt: c.createdAt.toISOString(),
-    color: c.color || '#3366ff',
-  }));
+  return companies.map((c) => {
+    const cid = c._id.toString();
+    return {
+      id: cid,
+      name: c.name || 'Unknown',
+      email: c.email || '',
+      usersCount: uMap.get(cid) || 0,
+      projectsCount: pMap.get(cid) || 0,
+      status: c.status || 'active',
+      createdAt: c.createdAt ? (c.createdAt.toISOString ? c.createdAt.toISOString() : new Date(c.createdAt).toISOString()) : new Date().toISOString(),
+      color: c.color || '#3366ff',
+    };
+  });
 }
 
 export async function createCompanyWithAdmin({ name, adminName, adminEmail, adminPassword, initialUserLimit, status }) {

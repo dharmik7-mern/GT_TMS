@@ -28,3 +28,11 @@ export function emitErrorToast(message: string, title = 'Something went wrong') 
 export function emitSuccessToast(message: string, title = 'Success') {
   emitToast({ type: 'success', title, message });
 }
+
+export function emitInfoToast(message: string, title = 'Reminder') {
+  emitToast({ type: 'info', title, message });
+}
+
+export function emitWarningToast(message: string, title = 'Warning') {
+  emitToast({ type: 'warning', title, message });
+}

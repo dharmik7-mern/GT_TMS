@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { addDays, addMonths, endOfDay, endOfMonth, endOfWeek, format, startOfDay, startOfMonth, startOfWeek, subDays, subMonths } from 'date-fns';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, FolderKanban, LayoutGrid, Plus, Search, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, LayoutGrid, Filter, ChevronDown, Flag, Info } from 'lucide-react';
 import { cn } from '../../../utils/helpers';
 import { useAdminCalendarStore } from './store/useAdminCalendarStore';
 import { AdminCalendarBoard } from './components/AdminCalendarBoard.tsx';
-import { AdminTaskModal } from './components/AdminTaskModal.tsx';
+import AdminTaskModal from './components/AdminTaskModal.tsx';
+import ReminderPoller from './hooks/useReminderPoller.tsx';
 import { useAuthStore } from '../../../context/authStore';
 import { useAppStore } from '../../../context/appStore';
 
@@ -14,12 +15,19 @@ const WEEK_STARTS_ON = 1;
 const getWeekRangeStart = (date: Date) => startOfWeek(date, { weekStartsOn: WEEK_STARTS_ON });
 
 export const AdminCalendarPage: React.FC = () => {
-    const { view, setView, currentDate, setCurrentDate, fetchTasks, fetchWaitingList, setSelectedTask } = useAdminCalendarStore();
+    const {
+        view, setView, groupBy, setGroupBy,
+        currentDate, setCurrentDate,
+        fetchTasks, fetchWaitingList, setSelectedTask,
+        priorityFilter, setPriorityFilter,
+        statusFilter, setStatusFilter
+    } = useAdminCalendarStore();
     const { user } = useAuthStore();
     const { projects, users } = useAppStore();
     const canCreate = ['admin', 'super_admin', 'manager', 'team_leader'].includes(user?.role || '');
     const [searchQuery, setSearchQuery] = useState('');
-    const [isToolsRailCollapsed, setIsToolsRailCollapsed] = useState(false);
+    const [showGroupMenu, setShowGroupMenu] = useState(false);
+    const [showFilterMenu, setShowFilterMenu] = useState(false);
 
     useEffect(() => {
         let start;
@@ -30,7 +38,7 @@ export const AdminCalendarPage: React.FC = () => {
             end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: WEEK_STARTS_ON });
         } else if (view === 'week') {
             start = startOfDay(currentDate);
-            end = addDays(start, WEEK_VISIBLE_DAYS - 1);
+            end = addDays(start, 3);
         } else {
             start = startOfDay(currentDate);
             end = endOfDay(currentDate);
@@ -69,220 +77,175 @@ export const AdminCalendarPage: React.FC = () => {
     const activeUsers = useMemo(() => users.filter((member) => member.isActive), [users]);
 
     return (
-        <div className="-m-6 flex min-h-[calc(100vh-60px)] w-[calc(100%+3rem)] flex-col bg-[linear-gradient(180deg,#f4f8ff_0%,#eef4ff_100%)] max-md:-m-4 max-md:mb-0 max-md:w-[calc(100%+2rem)]">
-            <div className="relative flex min-h-0 flex-1 overflow-hidden border-y border-[#dce6f5] bg-[linear-gradient(180deg,#f6f9ff_0%,#eef4ff_100%)]">
-                <div
-                    className={cn(
-                        'hidden border-r border-[#e4ecf8] bg-white text-surface-700 lg:absolute lg:bottom-0 lg:left-0 lg:top-0 lg:z-10 lg:flex lg:flex-col lg:overflow-hidden',
-                        isToolsRailCollapsed ? 'w-[76px]' : 'w-[248px]'
-                    )}
-                >
-                    <div className={cn('flex items-center border-b border-[#edf2fb] px-4 py-4', isToolsRailCollapsed ? 'justify-center' : 'justify-between gap-3')}>
-                        {!isToolsRailCollapsed && (
-                            <div className="min-w-0">
-                                <p className="text-sm font-semibold text-surface-900">Calendar Workspace</p>
-                                <p className="text-xs text-surface-400">Tools and project lanes</p>
-                            </div>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => setIsToolsRailCollapsed((value) => !value)}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5edf9] bg-white text-surface-500 transition hover:bg-surface-50 hover:text-surface-800"
-                        >
-                            {isToolsRailCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-3 py-4">
-                        <div className="space-y-2">
-                            {[
-                                { key: 'board', label: 'Board', icon: LayoutGrid, active: true },
-                                { key: 'people', label: 'People', icon: Users, active: false },
-                                { key: 'filters', label: 'Filters', icon: Filter, active: false },
-                            ].map((item) => {
-                                const Icon = item.icon;
-                                return (
-                                    <button
-                                        key={item.key}
-                                        type="button"
-                                        className={cn(
-                                            'flex w-full items-center rounded-2xl px-3 py-3 text-sm font-medium transition-all',
-                                            item.active ? 'bg-brand-50 text-brand-700 shadow-[0_10px_26px_rgba(37,99,235,0.10)]' : 'text-surface-500 hover:bg-surface-50 hover:text-surface-900',
-                                            isToolsRailCollapsed ? 'justify-center px-0' : 'gap-3'
-                                        )}
-                                    >
-                                        <Icon size={18} />
-                                        {!isToolsRailCollapsed && <span>{item.label}</span>}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        {!isToolsRailCollapsed && (
-                            <>
-                                <div className="mt-6">
-                                    <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-surface-400">Team</p>
-                                    <div className="space-y-2">
-                                        {activeUsers.slice(0, 5).map((member) => (
-                                            <button
-                                                key={member.id}
-                                                type="button"
-                                                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-surface-600 transition hover:bg-surface-50 hover:text-surface-900"
-                                            >
-                                                <span
-                                                    className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-                                                    style={{ backgroundColor: member.color || '#4f7dff' }}
-                                                >
-                                                    {member.name.charAt(0).toUpperCase()}
-                                                </span>
-                                                <span className="min-w-0 flex-1">
-                                                    <span className="block truncate text-sm font-medium">{member.name}</span>
-                                                    <span className="block truncate text-xs text-surface-400">{member.jobTitle || member.role.replace('_', ' ')}</span>
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="mt-6">
-                                    <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-surface-400">Projects</p>
-                                    <div className="space-y-2">
-                                        {Object.entries(groupedProjects).slice(0, 4).map(([department, departmentProjects]) => (
-                                            <div key={department} className="rounded-2xl border border-[#edf2fb] bg-[#fbfdff] px-3 py-3">
-                                                <div className="mb-2 flex items-center justify-between">
-                                                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">{department}</span>
-                                                    <span className="text-[11px] text-surface-400">{departmentProjects.length}</span>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    {departmentProjects.slice(0, 3).map((project) => (
-                                                        <div key={project.id} className="flex items-center gap-2 rounded-xl px-1 py-1.5 text-sm text-surface-600">
-                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: project.color }} />
-                                                            <span className="truncate">{project.name}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    <div className={cn('border-t border-[#edf2fb] px-3 py-3', isToolsRailCollapsed ? 'flex justify-center' : 'space-y-2')}>
-                        <button
-                            type="button"
-                            onClick={() => setCurrentDate(new Date())}
-                            className={cn(
-                                'flex items-center rounded-2xl bg-surface-50 px-3 py-3 text-sm font-medium text-surface-600 transition hover:bg-surface-100 hover:text-surface-900',
-                                isToolsRailCollapsed ? 'justify-center px-0 w-10' : 'w-full gap-3'
-                            )}
-                        >
-                            <FolderKanban size={16} />
-                            {!isToolsRailCollapsed && <span>Back To Today</span>}
-                        </button>
-                    </div>
-                </div>
-
-                <div className={cn('flex min-w-0 flex-1 flex-col', isToolsRailCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[248px]')}>
-                    <div className="flex flex-col gap-4 border-b border-[#e4ecf8] bg-white/90 px-5 py-5 backdrop-blur sm:px-6">
-                        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                                <span className="text-sm font-semibold text-surface-600">Tools</span>
-                                {canCreate && (
-                                    <button
-                                        type="button"
-                                        className="inline-flex items-center gap-2 rounded-full bg-[#1697ff] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(22,151,255,0.28)] transition hover:bg-[#0f8ef3] max-sm:w-full max-sm:justify-center"
-                                        onClick={() => setSelectedTask('new')}
-                                    >
-                                        <Plus size={15} /> Add new
-                                    </button>
-                                )}
+        <div className="-m-6 flex h-[calc(100vh-60px)] min-h-[calc(100vh-60px)] w-[calc(100%+3rem)] flex-col bg-white max-md:-m-4 max-md:mb-0 max-md:w-[calc(100%+2rem)] font-inter">
+            {/* Perfectly Aligned Bordio Header */}
+            <div className="z-20 border-b border-[#e2e8f0] bg-white px-5 py-2.5 sm:px-6">
+                <div className="flex items-center justify-between w-full h-10">
+                    {/* Left: View Switcher + Navigator + Range */}
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center rounded-xl bg-[#f1f5f9] p-1">
+                            {['month', 'week', 'day'].map((v) => (
                                 <button
-                                    type="button"
-                                    className="inline-flex items-center gap-2 rounded-full bg-surface-100 px-4 py-2 text-sm font-medium text-surface-600 transition hover:bg-surface-200 max-sm:w-full max-sm:justify-center"
-                                    onClick={() => setCurrentDate(new Date())}
+                                    key={v}
+                                    onClick={() => {
+                                        if (v === 'week') setCurrentDate((prev) => startOfDay(getWeekRangeStart(prev)));
+                                        setView(v as any);
+                                    }}
+                                    className={cn(
+                                        'rounded-md px-4 py-1.5 text-[12px] font-black uppercase tracking-wider transition-all',
+                                        view === v
+                                            ? 'bg-white text-[#2563EB] shadow-sm ring-1 ring-[#E2E8F0]'
+                                            : 'text-[#64748B] hover:text-[#1E293B]'
+                                    )}
                                 >
-                                    Today <ChevronDown size={14} />
+                                    {v}
                                 </button>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3 max-sm:w-full max-sm:justify-start">
-                                <div className="flex items-center rounded-full bg-surface-100 p-1">
-                                    <button
-                                        onClick={() => setView('month')}
-                                        className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition-all', view === 'month' ? 'bg-white text-surface-900 shadow-sm' : 'text-surface-500')}
-                                    >
-                                        Month
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setCurrentDate((prev: Date) => startOfDay(getWeekRangeStart(prev)));
-                                            setView('week');
-                                        }}
-                                        className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition-all', view === 'week' ? 'bg-white text-surface-900 shadow-sm' : 'text-surface-500')}
-                                    >
-                                        Week
-                                    </button>
-                                    <button
-                                        onClick={() => setView('day')}
-                                        className={cn('rounded-full px-3 py-1.5 text-xs font-medium transition-all', view === 'day' ? 'bg-white text-surface-900 shadow-sm' : 'text-surface-500')}
-                                    >
-                                        Day
-                                    </button>
-                                </div>
-                            </div>
+                            ))}
                         </div>
 
-                        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                                <div className="flex items-center gap-3">
-                                    <button onClick={() => navigate('prev')} className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[#dbe6f7] bg-white text-surface-600 transition hover:text-brand-600">
-                                        <ChevronLeft size={16} />
-                                    </button>
-                                    <button onClick={() => navigate('next')} className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[#dbe6f7] bg-white text-surface-600 transition hover:text-brand-600 sm:hidden">
-                                        <ChevronRight size={16} />
-                                    </button>
-                                </div>
-                                <div className="min-w-0 sm:min-w-[220px]">
-                                    <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-surface-400">Calendar</div>
-                                    <div className="text-xl font-semibold text-surface-900 sm:text-[30px] sm:leading-[1.1]">{rangeTitle}</div>
-                                </div>
-                                <button onClick={() => navigate('next')} className="hidden h-12 w-12 items-center justify-center rounded-full border border-[#dbe6f7] bg-white text-surface-600 transition hover:text-brand-600 sm:inline-flex">
-                                    <ChevronRight size={16} />
-                                </button>
-                            </div>
-
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center xl:flex-nowrap">
-                                <div className="relative min-w-0 flex-1 md:min-w-[240px] xl:w-[320px]">
-                                    <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400" />
-                                    <input
-                                        value={searchQuery}
-                                        onChange={(event) => setSearchQuery(event.target.value)}
-                                        placeholder="Search projects, tasks, people..."
-                                        className="h-11 w-full rounded-full border border-[#dde7f6] bg-white pl-11 pr-4 text-sm outline-none transition placeholder:text-surface-400 focus:border-brand-300"
-                                    />
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <button type="button" className="inline-flex items-center gap-2 rounded-full bg-surface-100 px-4 py-2 text-sm font-medium text-surface-600 max-sm:flex-1 max-sm:justify-center">
-                                        <LayoutGrid size={15} /> Group
-                                    </button>
-                                    <button type="button" className="inline-flex items-center gap-2 rounded-full bg-surface-100 px-4 py-2 text-sm font-medium text-surface-600 max-sm:flex-1 max-sm:justify-center">
-                                        <Filter size={15} /> Filter
-                                    </button>
-                                </div>
-                            </div>
+                         <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => navigate('prev')}
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC] transition-colors"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            <button
+                                onClick={() => navigate('next')}
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC] transition-colors"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
                         </div>
+
+
+
+                        <h1 className="ml-2 text-[18px] font-black text-[#1E293B] tracking-tight">
+                            {rangeTitle}
+                        </h1>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                        <AdminCalendarBoard searchQuery={searchQuery} />
+                    <div className="flex items-center gap-3">
+                        <div className="relative hidden lg:block">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={15} />
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="h-9 w-[180px] rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-9 pr-4 text-[12px] font-medium text-[#1E293B] focus:border-[#2563EB] focus:bg-white focus:outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => { setShowGroupMenu(!showGroupMenu); setShowFilterMenu(false); }}
+                                className={cn(
+                                    "flex h-9 items-center gap-2 rounded-xl border px-3 text-[12px] font-bold transition-colors",
+                                    showGroupMenu ? "border-[#2563EB] bg-blue-50 text-[#2563EB]" : "border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]"
+                                )}
+                            >
+                                <LayoutGrid size={16} />
+                                <span className="hidden lg:inline text-[11px] font-black uppercase tracking-wide">Group</span>
+                                <ChevronDown size={12} className={cn("transition-transform", showGroupMenu && "rotate-180")} />
+                            </button>
+
+                            {showGroupMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-[#E2E8F0] bg-white p-2 shadow-xl z-[60]">
+                                    <div className="mb-1 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Grouping mode</div>
+                                    <button
+                                        onClick={() => { setGroupBy('time'); setShowGroupMenu(false); }}
+                                        className={cn("w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors", groupBy === 'time' ? "bg-blue-50 text-[#2563EB]" : "text-[#475569] hover:bg-[#F8FAFC]")}
+                                    >
+                                        By Time
+                                    </button>
+                                    <button
+                                        onClick={() => { setGroupBy('user'); setShowGroupMenu(false); }}
+                                        className={cn("w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors", groupBy === 'user' ? "bg-blue-50 text-[#2563EB]" : "text-[#475569] hover:bg-[#F8FAFC]")}
+                                    >
+                                        By Member
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => { setShowFilterMenu(!showFilterMenu); setShowGroupMenu(false); }}
+                                className={cn(
+                                    "flex h-9 items-center gap-2 rounded-xl border px-3 text-[12px] font-bold transition-colors",
+                                    showFilterMenu ? "border-[#2563EB] bg-blue-50 text-[#2563EB]" : "border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]"
+                                )}
+                            >
+                                <Filter size={16} />
+                                <span className="hidden lg:inline text-[11px] font-black uppercase tracking-wide">Filter</span>
+                                <ChevronDown size={12} className={cn("transition-transform", showFilterMenu && "rotate-180")} />
+                            </button>
+
+                            {showFilterMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-xl z-[60]">
+                                    <div>
+                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+                                            <Flag size={10} /> Priority
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {['all', 'high', 'medium', 'low'].map(p => (
+                                                <button
+                                                    key={p}
+                                                    onClick={() => setPriorityFilter(p as any)}
+                                                    className={cn(
+                                                        "rounded-lg px-2.5 py-1.5 text-[11px] font-bold capitalize border transition-all",
+                                                        priorityFilter === p ? "border-brand-500 bg-brand-50 text-brand-700 font-extrabold" : "border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]"
+                                                    )}
+                                                >
+                                                    {p}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 border-t border-[#F1F5F9] pt-3">
+                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+                                            <Info size={10} /> Status
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {['all', 'Pending', 'In Progress', 'Done'].map(s => (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => setStatusFilter(s as any)}
+                                                    className={cn(
+                                                        "rounded-lg px-2.5 py-1.5 text-[11px] font-bold border transition-all",
+                                                        statusFilter === s ? "border-brand-500 bg-brand-50 text-brand-700 font-extrabold" : "border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]"
+                                                    )}
+                                                >
+                                                    {s}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => { setPriorityFilter('all'); setStatusFilter('all'); }}
+                                        className="mt-4 w-full rounded-lg py-2 text-[11px] font-black uppercase text-[#EF4444] hover:bg-red-50 transition-colors"
+                                    >
+                                        Reset Filters
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
+            {/* Main Content Area */}
+            <div className="min-h-0 flex-1 overflow-hidden">
+                <AdminCalendarBoard searchQuery={searchQuery} />
+            </div>
+
             <AdminTaskModal />
+            <ReminderPoller />
         </div>
     );
 };
