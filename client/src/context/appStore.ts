@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import type { Project, Task, Team, Notification, TaskStatus, QuickTask, QuickTaskStatus, User, Workspace } from '../app/types';
 import { projectsService, tasksService, teamsService, quickTasksService, notificationsService, usersService, workspacesService } from '../services/api';
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 interface AppStore {
   users: User[];
   workspaces: Workspace[];
@@ -69,13 +73,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
       notificationsService.getAll(),
     ]);
     set({
-      users: usersRes.data.data ?? usersRes.data,
-      workspaces: workspacesRes.data.data ?? workspacesRes.data,
-      projects: projectsRes.data.data ?? projectsRes.data,
-      tasks: tasksRes.data.data ?? tasksRes.data,
-      teams: teamsRes.data.data ?? teamsRes.data,
-      quickTasks: quickRes.data.data ?? quickRes.data,
-      notifications: notifRes.data.data ?? notifRes.data,
+      users: asArray<User>(usersRes.data.data ?? usersRes.data),
+      workspaces: asArray<Workspace>(workspacesRes.data.data ?? workspacesRes.data),
+      projects: asArray<Project>(projectsRes.data.data ?? projectsRes.data),
+      tasks: asArray<Task>(tasksRes.data.data ?? tasksRes.data),
+      teams: asArray<Team>(teamsRes.data.data ?? teamsRes.data),
+      quickTasks: asArray<QuickTask>(quickRes.data.data ?? quickRes.data),
+      notifications: asArray<Notification>(notifRes.data.data ?? notifRes.data),
     });
   },
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { UserPlus, Search, Edit3, ShieldAlert } from 'lucide-react';
+import { UserPlus, Search, Edit3, ShieldAlert, Trash2 } from 'lucide-react';
 import { cn, formatDate } from '../../utils/helpers';
 import { ROLE_CONFIG } from '../../app/constants';
 import { UserAvatar } from '../../components/UserAvatar';
@@ -136,6 +136,23 @@ export const UsersPage: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async (user: any) => {
+    const confirmed = window.confirm(`Delete user "${user.name}" permanently?`);
+    if (!confirmed) return;
+
+    try {
+      await usersService.delete(user.id);
+      await bootstrap();
+      if (selectedUser?.id === user.id) {
+        setSelectedUser(null);
+        setShowModal(false);
+      }
+      emitSuccessToast('User deleted successfully.', 'User Deleted');
+    } catch {
+      // Shared API interceptor handles error toasts.
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="page-header flex items-start justify-between flex-wrap gap-4">
@@ -227,6 +244,9 @@ export const UsersPage: React.FC = () => {
                   <button onClick={() => { void handleToggleActive(u); }} className="p-1.5 text-surface-400 hover:text-rose-500 transition-colors" title={u.isActive ? 'Block User' : 'Activate User'}>
                     <ShieldAlert size={14} />
                   </button>
+                  <button onClick={() => { void handleDeleteUser(u); }} className="p-1.5 text-surface-400 hover:text-rose-600 transition-colors" title="Delete User">
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               )
             }
@@ -304,6 +324,15 @@ export const UsersPage: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-3 pt-2">
+            {selectedUser ? (
+              <button
+                type="button"
+                onClick={() => { void handleDeleteUser(selectedUser); }}
+                className="btn-danger btn-md"
+              >
+                Delete User
+              </button>
+            ) : null}
             <button type="button" onClick={() => { setShowModal(false); setSelectedUser(null); }} className="btn-secondary btn-md flex-1">Cancel</button>
             <button type="submit" disabled={saving} className="btn-primary btn-md flex-1">
               {selectedUser ? (saving ? 'Saving...' : 'Update User') : saving ? 'Creating...' : 'Create User'}

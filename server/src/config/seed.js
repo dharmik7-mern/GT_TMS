@@ -2,6 +2,20 @@ import Company from '../models/Company.js';
 import AuthLookup from '../models/AuthLookup.js';
 import { getTenantModels } from '../config/tenantDb.js';
 import { hashPassword } from '../utils/password.js';
+import { formatGeneratedId, getCompanyIdConfig } from '../services/settings.service.js';
+
+async function reserveOrganizationId() {
+  const config = await getCompanyIdConfig();
+  let nextSequence = config.nextSequence;
+  let organizationId = formatGeneratedId(config, nextSequence);
+
+  while (await Company.exists({ organizationId })) {
+    nextSequence += 1;
+    organizationId = formatGeneratedId(config, nextSequence);
+  }
+
+  return organizationId;
+}
 
 export async function ensureBootstrapSuperAdmin() {
   const superAdminEmail = (process.env.BOOTSTRAP_SUPER_ADMIN_EMAIL || 'gitakshmi@gmail.com').toLowerCase();
@@ -13,7 +27,9 @@ export async function ensureBootstrapSuperAdmin() {
 
   let company = await Company.findOne({ email: superAdminEmail });
   if (!company) {
+    const organizationId = await reserveOrganizationId();
     company = await Company.create({
+      organizationId,
       name: workspaceName,
       email: superAdminEmail,
       status: 'active',
@@ -69,7 +85,9 @@ export async function ensureDevSeed() {
 
   let company = await Company.findOne({ email: superAdminEmail });
   if (!company) {
+    const organizationId = await reserveOrganizationId();
     company = await Company.create({
+      organizationId,
       name: 'Gitakshmi Technologies',
       email: superAdminEmail,
       status: 'active',

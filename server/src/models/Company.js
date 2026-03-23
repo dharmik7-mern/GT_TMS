@@ -12,7 +12,6 @@ const companySchema = new mongoose.Schema(
 );
 
 companySchema.index({ email: 1 }, { unique: true });
-companySchema.index({ organizationId: 1 }, { unique: true });
 
 companySchema.set('toJSON', {
   transform: (_doc, ret) => {
