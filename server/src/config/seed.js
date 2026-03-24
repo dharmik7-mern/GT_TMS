@@ -17,6 +17,19 @@ async function reserveOrganizationId() {
   return organizationId;
 }
 
+async function dedupeUsersForEmail({ User, companyId, email, keepUserId }) {
+  await User.deleteMany({
+    _id: { $ne: keepUserId },
+    email,
+    $or: [
+      { tenantId: companyId },
+      { tenantId: { $exists: false } },
+      { tenantId: null },
+      { companyId },
+    ],
+  });
+}
+
 export async function ensureBootstrapSuperAdmin() {
   const superAdminEmail = (process.env.BOOTSTRAP_SUPER_ADMIN_EMAIL || 'gitakshmi@gmail.com').toLowerCase();
   const superAdminName = process.env.BOOTSTRAP_SUPER_ADMIN_NAME || 'Dhiren Makwana';
@@ -116,14 +129,11 @@ export async function ensureDevSeed() {
     });
   }
 
-  await User.deleteMany({
-    _id: { $ne: superAdmin._id },
+  await dedupeUsersForEmail({
+    User,
+    companyId: company._id,
     email: superAdminEmail,
-    $or: [
-      { tenantId: { $exists: false } },
-      { tenantId: null },
-      { companyId: company._id },
-    ],
+    keepUserId: superAdmin._id,
   });
 
   await AuthLookup.updateOne(
@@ -160,6 +170,13 @@ export async function ensureDevSeed() {
       color: '#3366ff',
     });
   }
+
+  await dedupeUsersForEmail({
+    User,
+    companyId: company._id,
+    email: superAdminEmail,
+    keepUserId: superAdmin._id,
+  });
 
   let workspace = await Workspace.findOne({ tenantId: company._id, slug: 'gitakshmitech' });
   if (!workspace) {
