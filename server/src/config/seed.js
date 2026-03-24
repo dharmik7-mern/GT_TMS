@@ -46,6 +46,25 @@ export async function ensureBootstrapSuperAdmin() {
 
   let superAdmin = await User.findOne({ tenantId: company._id, email: superAdminEmail }).select('+passwordHash');
   if (!superAdmin) {
+    superAdmin = await User.findOne({
+      email: superAdminEmail,
+      $or: [
+        { tenantId: { $exists: false } },
+        { tenantId: null },
+        { companyId: company._id },
+      ],
+    }).select('+passwordHash');
+
+    if (superAdmin) {
+      await User.updateOne(
+        { _id: superAdmin._id },
+        { $set: { tenantId: company._id }, $unset: { companyId: '' } }
+      );
+      superAdmin.tenantId = company._id;
+    }
+  }
+
+  if (!superAdmin) {
     const passwordHash = await hashPassword(superAdminPassword);
     superAdmin = await User.create({
       tenantId: company._id,
@@ -96,6 +115,16 @@ export async function ensureDevSeed() {
       color: '#3366ff',
     });
   }
+
+  await User.deleteMany({
+    _id: { $ne: superAdmin._id },
+    email: superAdminEmail,
+    $or: [
+      { tenantId: { $exists: false } },
+      { tenantId: null },
+      { companyId: company._id },
+    ],
+  });
 
   await AuthLookup.updateOne(
     { email: superAdminEmail },
