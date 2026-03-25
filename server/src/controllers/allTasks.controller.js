@@ -30,7 +30,25 @@ export async function getOverview(req, res, next) {
       .sort({ dueDate: 1 })
       .lean();
 
-    const quickTasks = await QuickTask.find(filter)
+    const isAdmin = ['super_admin', 'admin'].includes(role);
+    const qtFilter = { ...filter };
+    if (!isAdmin) {
+      const privacyOr = [
+        { isPrivate: false },
+        { isPrivate: { $exists: false } },
+        { createdBy: userId },
+        { reporterId: userId }
+      ];
+      if (qtFilter.$or) {
+        const involvedOr = qtFilter.$or;
+        delete qtFilter.$or;
+        qtFilter.$and = [{ $or: involvedOr }, { $or: privacyOr }];
+      } else {
+        qtFilter.$or = privacyOr;
+      }
+    }
+
+    const quickTasks = await QuickTask.find(qtFilter)
       .populate('assigneeIds', 'name avatar')
       .sort({ dueDate: 1 })
       .lean();
@@ -99,7 +117,25 @@ export async function getAllTasks(req, res, next) {
       .sort({ createdAt: -1 })
       .lean();
 
-    const quickTasks = await QuickTask.find(baseFilter)
+    const isAdmin = ['super_admin', 'admin'].includes(role);
+    const qtBaseFilter = { ...baseFilter };
+    if (!isAdmin) {
+      const privacyOr = [
+        { isPrivate: false },
+        { isPrivate: { $exists: false } },
+        { createdBy: userId },
+        { reporterId: userId }
+      ];
+      if (qtBaseFilter.$or) {
+        const involvedOr = qtBaseFilter.$or;
+        delete qtBaseFilter.$or;
+        qtBaseFilter.$and = [{ $or: involvedOr }, { $or: privacyOr }];
+      } else {
+        qtBaseFilter.$or = privacyOr;
+      }
+    }
+
+    const quickTasks = await QuickTask.find(qtBaseFilter)
       .populate('assigneeIds', 'name avatar')
       .sort({ createdAt: -1 })
       .lean();

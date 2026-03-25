@@ -248,7 +248,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
 
  export async function getTaskById({ companyId, workspaceId, userId, role, taskId }) {
    const tenantId = companyId;
-   const { Task } = getTenantModels();
+   const { Task } = await getTenantModels(companyId);
    
    // Try strict lookup first
    let task = await Task.findOne({ _id: taskId, tenantId, workspaceId });
@@ -278,11 +278,15 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
    }
    
    // Try quick task
-   const { QuickTask } = getTenantModels();
+   const { QuickTask } = await getTenantModels(companyId);
    // Fallback: search by ID and tenant only to avoid workspace metadata mismatches
    const quickTask = await QuickTask.findOne({ _id: taskId, tenantId: companyId });
    
    if (quickTask) {
+     if (quickTask.isPrivate && !isAdminRole(role) && strId(quickTask.createdBy) !== strId(userId) && strId(quickTask.reporterId) !== strId(userId)) {
+       console.log(`[TaskService] Access denied to private quick task for user ${userId}`);
+       return null;
+     }
      const qt = quickTask.toJSON();
      qt.type = 'quick';
      console.log(`[TaskService] QuickTask found for ID: ${taskId}`);
@@ -295,7 +299,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
 
 export async function updateTask({ companyId, workspaceId, userId, role, taskId, updates }) {
   const tenantId = companyId;
-   const { Task, ActivityLog } = getTenantModels();
+   const { Task, ActivityLog } = await getTenantModels(companyId);
    let existing = await Task.findOne({ _id: taskId, tenantId, workspaceId });
    
    if (!existing && (role === 'admin' || role === 'super_admin')) {

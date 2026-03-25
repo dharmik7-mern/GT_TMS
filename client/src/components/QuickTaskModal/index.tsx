@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Calendar, Flag, Search, User, X, Paperclip } from 'lucide-react';
+import { Calendar, Flag, Search, User, X, Paperclip, Lock } from 'lucide-react';
 import { Modal } from '../Modal';
 import { cn, generateId } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
@@ -16,6 +16,7 @@ type QuickTaskFormData = {
   status: QuickTaskStatus;
   assigneeIds: string[];
   dueDate?: string;
+  isPrivate: boolean;
 };
 
 const ASSIGNABLE_ROLES: Role[] = ['manager', 'team_leader', 'team_member'];
@@ -47,6 +48,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
       status: task?.status ?? 'todo',
       assigneeIds: task?.assigneeIds ?? [],
       dueDate: task?.dueDate ?? '',
+      isPrivate: task?.isPrivate ?? false,
     },
   });
 
@@ -62,6 +64,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
       status: task?.status ?? 'todo',
       assigneeIds: task?.assigneeIds ?? [],
       dueDate: task?.dueDate ?? '',
+      isPrivate: task?.isPrivate ?? false,
     });
   }, [task, reset, open]);
 
@@ -131,6 +134,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
         priority: data.priority,
         assigneeIds: data.assigneeIds || [],
         dueDate: data.dueDate || undefined,
+        isPrivate: data.isPrivate,
       };
 
       try {
@@ -338,6 +342,18 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 p-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-800/30">
+            <Lock size={14} className="text-amber-500" />
+            <div className="flex-1">
+              <p className="text-xs font-medium text-surface-800 dark:text-surface-200">Private Task</p>
+              <p className="text-[10px] text-surface-400">Only you and admins can see this task</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" {...register('isPrivate')} className="sr-only peer" />
+              <div className="w-9 h-5 bg-surface-200 peer-focus:outline-none rounded-full peer dark:bg-surface-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
+            </label>
           </div>
 
           <div>

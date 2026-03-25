@@ -11,10 +11,22 @@ function fileAgentLog(payload) {
   }
 }
 
-export async function listQuickTasks({ companyId, workspaceId }) {
+export async function listQuickTasks({ companyId, workspaceId, userId, role }) {
   const tenantId = companyId;
   const { QuickTask } = await getTenantModels(companyId);
-  return QuickTask.find({ tenantId, workspaceId }).sort({ updatedAt: -1 });
+
+  const filter = { tenantId, workspaceId };
+
+  if (role !== 'admin' && role !== 'super_admin') {
+    filter.$or = [
+      { isPrivate: false },
+      { isPrivate: { $exists: false } },
+      { $and: [{ isPrivate: true }, { createdBy: userId }] },
+      { $and: [{ isPrivate: true }, { reporterId: userId }] },
+    ];
+  }
+
+  return QuickTask.find(filter).sort({ updatedAt: -1 });
 }
 
 export async function createQuickTask({ companyId, workspaceId, userId, data }) {
@@ -35,6 +47,16 @@ export async function createQuickTask({ companyId, workspaceId, userId, data }) 
   const reporterId = data.reporterId || userId;
   const migrationMode = Boolean(data.migrationMode);
 
+  const primaryAssigneeId = assigneeIds.length === 1 ? assigneeIds[0] : null;
+
+  let isPrivate = data.isPrivate !== undefined ? Boolean(data.isPrivate) : false;
+  
+  if (primaryAssigneeId && String(primaryAssigneeId) === String(reporterId)) {
+    isPrivate = true;
+  } else if (assigneeIds.length > 0) {
+    isPrivate = false;
+  }
+
   let qt = await QuickTask.create({
     tenantId,
     workspaceId,
@@ -45,6 +67,9 @@ export async function createQuickTask({ companyId, workspaceId, userId, data }) 
     assigneeIds,
     reporterId,
     dueDate: data.dueDate ? new Date(data.dueDate) : null,
+    isPrivate,
+    createdBy: reporterId,
+    assignedTo: primaryAssigneeId,
   });
 
   if (data.createdAt || data.updatedAt) {
@@ -286,9 +311,28 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
     ...(updates.dueDate !== undefined ? { dueDate: updates.dueDate ? new Date(updates.dueDate) : null } : {}),
   };
 
+  const currentAssigneeIds = assigneeIds !== undefined ? assigneeIds : (existing.assigneeIds || []);
+  const primaryAssigneeId = currentAssigneeIds.length === 1 ? currentAssigneeIds[0] : null;
+
   if (assigneeIds !== undefined) {
     $set.assigneeIds = assigneeIds;
     delete $set.assigneeId;
+    $set.assignedTo = primaryAssigneeId;
+  }
+
+  // STRICT RULE: If assigned to someone else (who is not the reporter), it CANNOT be private.
+  // If assigned to self, it defaults to private if it's a new assignment, OR respects the toggle.
+  if (primaryAssigneeId && String(primaryAssigneeId) === String(existing.reporterId)) {
+    // Self-assigned: can be private.
+    if (updates.isPrivate !== undefined) {
+      $set.isPrivate = updates.isPrivate;
+    } else if (assigneeIds !== undefined) {
+      // New self-assignment: default to private
+      $set.isPrivate = true;
+    }
+  } else if (currentAssigneeIds.length > 0) {
+    // Assigned to someone else or multiple people: MUST be public
+    $set.isPrivate = false;
   }
 
   if (updates.completionRemark !== undefined || updates.status !== undefined) {
