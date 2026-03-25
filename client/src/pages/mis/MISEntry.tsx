@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../context/authStore';
 import api from '../../services/api';
+import { cn } from '../../utils/helpers';
+
 
 interface Goal {
   target: string;
@@ -156,16 +158,16 @@ export default function MISEntry() {
       
       {/* Header Info */}
       <div className="flex justify-start mb-4">
-        <div className="flex space-x-1 bg-gray-100/80 p-1 rounded-lg">
+        <div className="flex space-x-1 bg-surface-100 dark:bg-surface-800 p-1 rounded-lg">
            <button 
              onClick={() => setActiveTab('form')} 
-             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'form' ? 'bg-white dark:bg-surface-800 text-blue-600 dark:text-brand-400 shadow-sm' : 'text-gray-600 dark:text-surface-400 hover:text-gray-800 dark:hover:text-surface-200'}`}
+             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'form' ? 'bg-white dark:bg-surface-900 text-brand-600 dark:text-brand-400 shadow-sm' : 'text-surface-600 dark:text-surface-400 hover:text-surface-800 dark:hover:text-surface-200'}`}
            >
              Entry Form
            </button>
            <button 
              onClick={() => setActiveTab('history')} 
-             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'history' ? 'bg-white dark:bg-surface-800 text-blue-600 dark:text-brand-400 shadow-sm' : 'text-gray-600 dark:text-surface-400 hover:text-gray-800 dark:hover:text-surface-200'}`}
+             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'history' ? 'bg-white dark:bg-surface-900 text-brand-600 dark:text-brand-400 shadow-sm' : 'text-surface-600 dark:text-surface-400 hover:text-surface-800 dark:hover:text-surface-200'}`}
            >
              My History
            </button>
@@ -190,20 +192,21 @@ export default function MISEntry() {
                   <td className="px-4 py-2.5 text-gray-500 dark:text-surface-400">
                     {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border
-                      ${item.status === 'draft' ? 'bg-gray-100 text-gray-700 border-gray-200' : ''}
-                      ${item.status === 'submitted' ? 'bg-blue-100 text-blue-700 border-blue-200' : ''}
-                      ${item.status === 'approved' ? 'bg-green-100 text-green-700 border-green-200' : ''}
-                      ${item.status === 'rejected' ? 'bg-red-100 text-red-700 border-red-200' : ''}
-                    `}>
+                   <td className="px-4 py-2.5">
+                    <span className={cn(
+                      'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border',
+                      item.status === 'draft' && 'bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-300 border-surface-200 dark:border-surface-700',
+                      item.status === 'submitted' && 'bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-400 border-brand-200 dark:border-brand-900/50',
+                      item.status === 'approved' && 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
+                      item.status === 'rejected' && 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50'
+                    )}>
                       {item.status}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                   <td className="px-4 py-2.5 text-right">
                     <button 
                       onClick={() => loadMISIntoForm(item)}
-                      className="text-blue-600 hover:text-blue-800 font-medium text-xs underline"
+                      className="text-brand-600 dark:text-brand-400 hover:underline font-medium text-xs transition-colors"
                     >
                       View / Edit
                     </button>
@@ -253,20 +256,20 @@ export default function MISEntry() {
             </div>
             
             {status === 'rejected' && managerComment && (
-              <div className="w-full mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex flex-col">
+              <div className="w-full mt-2 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-lg text-xs text-rose-800 dark:text-rose-200 flex flex-col">
                 <span className="font-bold uppercase tracking-wide text-[10px] mb-1">Rejection Reason</span>
                 <span>{managerComment}</span>
               </div>
             )}
             {status === 'approved' && managerComment && (
-              <div className="w-full mt-2 p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800 flex flex-col">
+              <div className="w-full mt-2 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-200 flex flex-col">
                 <span className="font-bold uppercase tracking-wide text-[10px] mb-1">Manager Feedback</span>
                 <span>{managerComment}</span>
               </div>
             )}
           </div>
 
-          <div className="flex justify-between items-center px-1">
+           <div className="flex justify-between items-center px-1">
              <div className="flex space-x-3">
                <button 
                   onClick={() => {
@@ -277,14 +280,14 @@ export default function MISEntry() {
                     setLearnings([{ challenge: '', lesson: '' }]);
                     setKeyTasks([{ task: '', status: 'Pending', comment: '' }]);
                   }}
-                  className="text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+                  className="text-xs font-semibold text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 transition-colors"
                 >
                   Create Fresh Draft
                 </button>
-                <span className="text-gray-300 text-xs">|</span>
+                <span className="text-surface-200 dark:text-surface-700 text-xs">|</span>
                 <button 
                   onClick={handleDuplicateLast}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                  className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:opacity-80 transition-colors"
                   disabled={!isEditable}
                 >
                   Duplicate Last Week
@@ -327,20 +330,21 @@ export default function MISEntry() {
                       <td className="px-2 py-1">
                         <textarea disabled={!isEditable} value={goal.actual} onChange={(e) => { const n = [...goals]; n[idx].actual = e.target.value; setGoals(n); }} className="w-full resize-none bg-transparent focus:bg-white border border-transparent focus:border-blue-200 rounded p-1.5 outline-none transition-all disabled:text-gray-700" rows={1} placeholder="Achieved so far..." />
                       </td>
-                      <td className="px-2 py-1">
+                       <td className="px-2 py-1">
                         <select 
                           disabled={!isEditable}
                           value={goal.status}
                           onChange={(e) => { const n = [...goals]; n[idx].status = e.target.value as any; setGoals(n); }}
-                          className={`w-full py-1 text-xs px-1.5 rounded border font-semibold outline-none transition-colors cursor-pointer
-                            ${goal.status === 'Done' ? 'bg-green-50 text-green-700 border-green-200' : ''}
-                            ${goal.status === 'In Progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : ''}
-                            ${goal.status === 'Pending' ? 'bg-red-50 text-red-700 border-red-200' : ''}
-                          `}
+                          className={cn(
+                            'w-full py-1 text-xs px-1.5 rounded border font-semibold outline-none transition-colors cursor-pointer',
+                            goal.status === 'Done' && 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+                            goal.status === 'In Progress' && 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+                            goal.status === 'Pending' && 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                          )}
                         >
-                          <option value="Done">Done</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Pending">Pending</option>
+                          <option value="Done" className="bg-white dark:bg-surface-900">Done</option>
+                          <option value="In Progress" className="bg-white dark:bg-surface-900">In Progress</option>
+                          <option value="Pending" className="bg-white dark:bg-surface-900">Pending</option>
                         </select>
                       </td>
                       <td className="px-2 py-1">
@@ -361,13 +365,13 @@ export default function MISEntry() {
           </div>
 
           {/* Section 2: Learning From Last Week */}
-          <div className="bg-white border text-gray-800 border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-[#fcfdff] px-3 py-2 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-xs font-bold text-gray-700 uppercase tracking-widest">Section 2: Learning From Last Week</h2>
+          <div className="bg-white dark:bg-surface-900 border text-gray-800 dark:text-surface-100 border-gray-200 dark:border-surface-800 rounded-lg overflow-hidden">
+            <div className="bg-[#fcfdff] dark:bg-surface-950/50 px-3 py-2 border-b border-gray-200 dark:border-surface-800 flex justify-between items-center">
+              <h2 className="text-xs font-bold text-gray-700 dark:text-surface-300 uppercase tracking-widest">Section 2: Learning From Last Week</h2>
               {isEditable && (
                 <button 
                   onClick={() => learnings.length < 5 && setLearnings([...learnings, { challenge: '', lesson: '' }])}
-                  className="text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
+                  className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:opacity-80 transition-colors flex items-center gap-1"
                 >
                   <span className="text-lg leading-none">+</span> Add Row
                 </button>
@@ -375,21 +379,21 @@ export default function MISEntry() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-[#f9fafb] border-b border-gray-100 text-gray-500 font-semibold tracking-wide uppercase text-[10px]">
+                <thead className="bg-surface-50 dark:bg-surface-900 border-b border-surface-100 dark:border-surface-800 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px]">
                   <tr>
                     <th className="px-3 py-1.5 w-1/2">Challenge Faced</th>
                     <th className="px-3 py-1.5 w-1/2">Lesson Learned</th>
                     {isEditable && <th className="px-2 py-1.5 w-8"></th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
                   {learnings.map((l, idx) => (
-                    <tr key={idx} className="group hover:bg-gray-50/50">
+                    <tr key={idx} className="group hover:bg-surface-50/50">
                       <td className="px-2 py-1">
-                        <textarea disabled={!isEditable} value={l.challenge} onChange={(e) => { const n = [...learnings]; n[idx].challenge = e.target.value; setLearnings(n); }} className="w-full resize-none bg-transparent focus:bg-white border border-transparent focus:border-blue-200 rounded p-1.5 outline-none transition-all disabled:text-gray-700" rows={1} placeholder="What blocked you..." />
+                        <textarea disabled={!isEditable} value={l.challenge} onChange={(e) => { const n = [...learnings]; n[idx].challenge = e.target.value; setLearnings(n); }} className="w-full resize-none bg-transparent focus:bg-white dark:focus:bg-surface-800 border border-transparent focus:border-brand-200 rounded p-1.5 outline-none transition-all disabled:opacity-70 dark:text-surface-200" rows={1} placeholder="What blocked you..." />
                       </td>
                       <td className="px-2 py-1">
-                        <textarea disabled={!isEditable} value={l.lesson} onChange={(e) => { const n = [...learnings]; n[idx].lesson = e.target.value; setLearnings(n); }} className="w-full resize-none bg-transparent focus:bg-white border border-transparent focus:border-blue-200 rounded p-1.5 outline-none transition-all disabled:text-gray-700" rows={1} placeholder="How to fix it..." />
+                        <textarea disabled={!isEditable} value={l.lesson} onChange={(e) => { const n = [...learnings]; n[idx].lesson = e.target.value; setLearnings(n); }} className="w-full resize-none bg-transparent focus:bg-white dark:focus:bg-surface-800 border border-transparent focus:border-brand-200 rounded p-1.5 outline-none transition-all disabled:opacity-70 dark:text-surface-200" rows={1} placeholder="How to fix it..." />
                       </td>
                       {isEditable && (
                         <td className="px-2 py-1 text-center">
@@ -406,17 +410,17 @@ export default function MISEntry() {
           </div>
 
           {/* Section 3: Key Tasks (Priority Section) */}
-          <div className="bg-white border border-brand-200/60 rounded-lg overflow-hidden relative">
+          <div className="bg-white dark:bg-surface-900 border border-brand-200/60 dark:border-brand-900/40 rounded-lg overflow-hidden relative">
             <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-500"></div>
-            <div className="bg-brand-50/30 px-4 py-2 border-b border-brand-100/50 flex justify-between items-center pl-4">
+            <div className="bg-brand-50/30 dark:bg-brand-950/20 px-4 py-2 border-b border-brand-100/50 dark:border-brand-900/50 flex justify-between items-center pl-4">
               <div className="flex items-center gap-3">
-                 <h2 className="text-xs font-bold text-brand-800 uppercase tracking-widest leading-none">Key Priority Tasks</h2>
-                 <span className="text-[10px] text-brand-500 bg-brand-100 px-1.5 py-0.5 rounded font-semibold leading-none">Max 3</span>
+                 <h2 className="text-xs font-bold text-brand-800 dark:text-brand-300 uppercase tracking-widest leading-none">Key Priority Tasks</h2>
+                 <span className="text-[10px] text-brand-500 bg-brand-100 dark:bg-brand-950/40 px-1.5 py-0.5 rounded font-semibold leading-none">Max 3</span>
               </div>
               {isEditable && keyTasks.length < 3 && (
                 <button 
                   onClick={() => setKeyTasks([...keyTasks, { task: '', status: 'Pending', comment: '' }])}
-                  className="text-[11px] font-bold text-brand-700 hover:text-brand-900 transition-colors flex items-center gap-1"
+                  className="text-[11px] font-bold text-brand-700 dark:text-brand-400 hover:opacity-80 transition-colors flex items-center gap-1"
                 >
                   <span className="text-lg leading-none">+</span> Add Task
                 </button>
@@ -424,40 +428,41 @@ export default function MISEntry() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-[#f9fafb] border-b border-gray-100 text-gray-500 font-semibold tracking-wide uppercase text-[10px]">
+                <thead className="bg-surface-50 dark:bg-surface-900 border-b border-surface-100 dark:border-surface-800 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px]">
                   <tr>
                     <th className="px-3 py-1.5 w-8 text-center">#</th>
                     <th className="px-3 py-1.5 min-w-[200px]">Task / Focus Area</th>
-                    <th className="px-3 py-1.5 w-32">Status</th>
-                    <th className="px-3 py-1.5 min-w-[150px]">Comment</th>
+                    <th className="px-3 py-2.5 w-32">Status</th>
+                    <th className="px-3 py-1.5 min-w-[150px] hidden sm:table-cell">Comment</th>
                     {isEditable && <th className="px-2 py-1.5 w-8"></th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
                   {keyTasks.map((t, idx) => (
                     <tr key={idx} className="group hover:bg-brand-50/10 transition-colors">
                       <td className="px-3 py-1.5 text-center text-brand-400 font-bold">{idx + 1}</td>
                       <td className="px-2 py-1">
-                        <textarea disabled={!isEditable} value={t.task} onChange={(e) => { const n = [...keyTasks]; n[idx].task = e.target.value; setKeyTasks(n); }} className="w-full font-medium resize-none text-gray-800 bg-transparent focus:bg-white border border-transparent focus:border-brand-200 rounded p-1.5 outline-none transition-all disabled:text-gray-700" rows={1} placeholder="Main focus task..." />
+                        <textarea disabled={!isEditable} value={t.task} onChange={(e) => { const n = [...keyTasks]; n[idx].task = e.target.value; setKeyTasks(n); }} className="w-full font-medium resize-none text-surface-800 dark:text-surface-200 bg-transparent focus:bg-white dark:focus:bg-surface-800 border border-transparent focus:border-brand-200 rounded p-1.5 outline-none transition-all disabled:opacity-70" rows={1} placeholder="Main focus task..." />
                       </td>
                       <td className="px-2 py-1">
                         <select 
                           disabled={!isEditable}
                           value={t.status}
                           onChange={(e) => { const n = [...keyTasks]; n[idx].status = e.target.value as any; setKeyTasks(n); }}
-                          className={`w-full py-1 text-xs px-1.5 rounded border font-semibold outline-none transition-colors cursor-pointer
-                            ${t.status === 'Done' ? 'bg-green-50 text-green-700 border-green-200' : ''}
-                            ${t.status === 'In Progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : ''}
-                            ${t.status === 'Pending' ? 'bg-red-50 text-red-700 border-red-200' : ''}
-                          `}
+                          className={cn(
+                            'w-full py-1 text-xs px-1.5 rounded border font-semibold outline-none transition-colors cursor-pointer',
+                            t.status === 'Done' && 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+                            t.status === 'In Progress' && 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+                            t.status === 'Pending' && 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                          )}
                         >
-                          <option value="Done">Done</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Pending">Pending</option>
+                          <option value="Done" className="bg-white dark:bg-surface-900">Done</option>
+                          <option value="In Progress" className="bg-white dark:bg-surface-900">In Progress</option>
+                          <option value="Pending" className="bg-white dark:bg-surface-900">Pending</option>
                         </select>
                       </td>
-                      <td className="px-2 py-1">
-                        <textarea disabled={!isEditable} value={t.comment} onChange={(e) => { const n = [...keyTasks]; n[idx].comment = e.target.value; setKeyTasks(n); }} className="w-full resize-none bg-transparent focus:bg-white border border-transparent focus:border-brand-200 rounded p-1.5 outline-none transition-all disabled:text-gray-700" rows={1} placeholder="Notes..." />
+                      <td className="px-2 py-1 hidden sm:table-cell">
+                        <textarea disabled={!isEditable} value={t.comment} onChange={(e) => { const n = [...keyTasks]; n[idx].comment = e.target.value; setKeyTasks(n); }} className="w-full resize-none bg-transparent focus:bg-white dark:focus:bg-surface-800 border border-transparent focus:border-brand-200 rounded p-1.5 outline-none transition-all disabled:opacity-70 dark:text-surface-200" rows={1} placeholder="Notes..." />
                       </td>
                       {isEditable && (
                         <td className="px-2 py-1 text-center">
@@ -475,11 +480,11 @@ export default function MISEntry() {
 
           {/* Action Buttons */}
           {isEditable && (
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-6">
+            <div className="flex justify-end gap-3 pt-4 border-t border-surface-100 dark:border-surface-800 mt-6">
               <button 
                 onClick={() => handleSave(false)}
                 disabled={loading}
-                className="px-5 py-2 rounded border border-gray-200 text-gray-600 bg-gray-50/50 hover:bg-gray-100 hover:text-gray-800 text-xs font-bold transition-colors disabled:opacity-50"
+                className="px-5 py-2 rounded border border-surface-200 dark:border-surface-700 text-surface-600 dark:text-surface-400 bg-surface-50 dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 text-xs font-bold transition-colors disabled:opacity-50"
               >
                 {loading ? 'Saving...' : 'Save Draft'}
               </button>
@@ -493,7 +498,7 @@ export default function MISEntry() {
             </div>
           )}
           {!isEditable && (
-            <div className="flex justify-end pt-4 border-t border-gray-100 mt-6 text-xs text-gray-500 font-semibold">
+            <div className="flex justify-end pt-4 border-t border-surface-100 dark:border-surface-800 mt-6 text-xs text-surface-500 font-semibold">
                MIS is currently in completely Read-Only mode.
             </div>
           )}

@@ -582,6 +582,7 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
                    <input 
                      type="date" 
                      className="w-full bg-[#f8f9fc] border border-gray-100 rounded-2xl p-4 text-[13px] font-semibold focus:outline-none"
+                     min={new Date().toISOString().split('T')[0]}
                      value={formData.dueDate}
                      onChange={e => setFormData({ ...formData, dueDate: e.target.value })}
                    />
@@ -724,6 +725,7 @@ const TaskDetailOverlay: React.FC<{
                      <input 
                        type="date" 
                        className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-1 rounded transition-colors"
+                       min={new Date().toISOString().split('T')[0]}
                        value={data.dueDate ? data.dueDate.split('T')[0] : ''}
                        onChange={(e) => onUpdateField('dueDate', e.target.value)}
                      />

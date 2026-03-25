@@ -38,11 +38,11 @@ const MessageBubble = ({ message, isMe, showSender }: { message: Message, isMe: 
             "max-w-[85%] px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm break-words",
             isMe
                 ? "bg-brand-500 text-white rounded-br-md"
-                : "bg-white text-surface-900 rounded-bl-md border border-surface-200"
+                : "bg-white dark:bg-surface-800 text-surface-900 dark:text-white rounded-bl-md border border-surface-200 dark:border-surface-700"
         )}>
             {message.text}
         </div>
-        <span className="text-[11px] text-surface-400 mt-1 tabular-nums">
+        <span className="text-[11px] text-surface-400 dark:text-surface-500 mt-1 tabular-nums">
             {format(new Date(message.createdAt), 'HH:mm')}
         </span>
     </div>
@@ -59,13 +59,13 @@ const ConversationItem = ({ convo, isActive, onClick, currentUserId }: { convo: 
         <button 
             onClick={onClick}
             className={cn(
-                "w-full px-5 py-4 flex items-center gap-3 transition-all border-b border-surface-100 relative group",
-                isActive ? "bg-surface-50" : "hover:bg-surface-50/50"
+                "w-full px-5 py-4 flex items-center gap-3 transition-all border-b border-surface-100 dark:border-surface-800 relative group",
+                isActive ? "bg-surface-50 dark:bg-surface-800" : "hover:bg-surface-50/50 dark:hover:bg-surface-800/50"
             )}
         >
             <div className={cn(
-                "w-11 h-11 rounded-full border flex items-center justify-center text-sm shrink-0 overflow-hidden transition-colors bg-surface-100",
-                isActive ? "border-brand-500 bg-brand-50 shadow-sm" : "border-surface-200"
+                "w-11 h-11 rounded-full border flex items-center justify-center text-sm shrink-0 overflow-hidden transition-colors bg-surface-100 dark:bg-surface-800",
+                isActive ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20 shadow-sm" : "border-surface-200 dark:border-surface-700"
             )}>
                  {avatar}
             </div>
@@ -107,36 +107,36 @@ const CreateGroupView = ({ onCancel, onCreate }: { onCancel: () => void, onCreat
     );
 
     return (
-        <div className="flex flex-col h-full bg-white">
-            <div className="px-6 py-5 border-b border-surface-100 flex items-center gap-3">
-                <button onClick={onCancel} className="p-1 hover:bg-surface-50 rounded-lg text-surface-400">
+        <div className="flex flex-col h-full bg-white dark:bg-surface-900">
+            <div className="px-6 py-5 border-b border-surface-100 dark:border-surface-800 flex items-center gap-3">
+                <button onClick={onCancel} className="p-1 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg text-surface-400 dark:text-surface-500">
                     <ChevronLeft size={20} />
                 </button>
-                <h1 className="text-[18px] font-semibold text-surface-900">New Group</h1>
+                <h1 className="text-[18px] font-semibold text-surface-900 dark:text-white">New Group</h1>
             </div>
 
             <div className="p-5 space-y-5 flex-1 overflow-y-auto">
                 <div>
-                    <label className="text-[12px] font-bold text-surface-400 uppercase tracking-wider block mb-2">Group Name</label>
+                    <label className="text-[12px] font-bold text-surface-400 dark:text-surface-500 uppercase tracking-wider block mb-2">Group Name</label>
                     <input 
                         type="text" 
                         placeholder="e.g. Design Team" 
                         value={name}
                         onChange={e => setName(e.target.value)}
-                        className="w-full bg-surface-50 border border-surface-200 rounded-xl px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 transition-all font-medium"
+                        className="w-full bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl px-4 py-2.5 text-[14px] text-surface-900 dark:text-white outline-none focus:border-brand-500 transition-all font-medium"
                     />
                 </div>
 
                 <div>
-                    <label className="text-[12px] font-bold text-surface-400 uppercase tracking-wider block mb-2">Select Members</label>
+                    <label className="text-[12px] font-bold text-surface-400 dark:text-surface-500 uppercase tracking-wider block mb-2">Select Members</label>
                     <div className="relative mb-3">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500" />
                         <input 
                             type="text" 
                             placeholder="Search people..." 
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="w-full bg-surface-50 border border-surface-200 rounded-xl pl-9 pr-4 py-2 text-[13px] outline-none focus:border-brand-500 transition-all"
+                            className="w-full bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl pl-9 pr-4 py-2 text-[13px] text-surface-900 dark:text-white outline-none focus:border-brand-500 transition-all"
                         />
                     </div>
                     
@@ -165,7 +165,7 @@ const CreateGroupView = ({ onCancel, onCreate }: { onCancel: () => void, onCreat
                 </div>
             </div>
 
-            <div className="p-4 border-t border-surface-100 bg-surface-50/50">
+            <div className="p-4 border-t border-surface-100 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-950/50">
                 <button 
                     disabled={!name.trim() || selected.length === 0}
                     onClick={() => onCreate(name, selected)}
@@ -196,27 +196,27 @@ const GroupOverviewPanel = ({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.25 }}
-            className="absolute inset-y-0 right-0 w-full bg-white border-l border-surface-200 z-10 flex flex-col"
+            className="absolute inset-y-0 right-0 w-full bg-white dark:bg-surface-900 border-l border-surface-200 dark:border-surface-800 z-10 flex flex-col"
         >
-            <div className="px-6 py-5 border-b border-surface-100 flex items-center gap-3">
-                <button onClick={onClose} className="p-1 hover:bg-surface-50 rounded-lg text-surface-400">
+            <div className="px-6 py-5 border-b border-surface-100 dark:border-surface-800 flex items-center gap-3">
+                <button onClick={onClose} className="p-1 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg text-surface-400 dark:text-surface-500">
                     <ChevronLeft size={20} />
                 </button>
                 <div className="min-w-0">
-                    <h2 className="text-[18px] font-semibold text-surface-900 truncate">{conversation.groupName || 'Group Overview'}</h2>
-                    <p className="text-[12px] text-surface-400 truncate">{members.length} members</p>
+                    <h2 className="text-[18px] font-semibold text-surface-900 dark:text-white truncate">{conversation.groupName || 'Group Overview'}</h2>
+                    <p className="text-[12px] text-surface-400 dark:text-surface-500 truncate">{members.length} members</p>
                 </div>
             </div>
 
             <div className="p-5 space-y-5 overflow-y-auto">
-                <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4">
+                <div className="rounded-2xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 p-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-2xl bg-white border border-surface-200 flex items-center justify-center text-brand-600 shadow-sm">
+                        <div className="w-14 h-14 rounded-2xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700 flex items-center justify-center text-brand-600 shadow-sm">
                             <Users size={24} />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-base font-semibold text-surface-900 truncate">{conversation.groupName || 'Project Group'}</p>
-                            <p className="text-xs text-surface-500 capitalize">
+                            <p className="text-base font-semibold text-surface-900 dark:text-white truncate">{conversation.groupName || 'Project Group'}</p>
+                            <p className="text-xs text-surface-500 dark:text-surface-400 capitalize">
                                 {conversation.groupType || 'group'} {conversation.department ? `• ${conversation.department}` : ''}
                             </p>
                         </div>
@@ -277,23 +277,23 @@ const StartDirectView = ({ onCancel, onSelect }: { onCancel: () => void, onSelec
     );
 
     return (
-        <div className="flex flex-col h-full bg-white">
-            <div className="px-6 py-5 border-b border-surface-100 flex items-center gap-3">
-                <button onClick={onCancel} className="p-1 hover:bg-surface-50 rounded-lg text-surface-400">
+        <div className="flex flex-col h-full bg-white dark:bg-surface-900">
+            <div className="px-6 py-5 border-b border-surface-100 dark:border-surface-800 flex items-center gap-3">
+                <button onClick={onCancel} className="p-1 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg text-surface-400 dark:text-surface-500">
                     <ChevronLeft size={20} />
                 </button>
-                <h1 className="text-[18px] font-semibold text-surface-900">New Message</h1>
+                <h1 className="text-[18px] font-semibold text-surface-900 dark:text-white">New Message</h1>
             </div>
 
             <div className="p-5 space-y-4 flex-1 overflow-y-auto">
                 <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500" />
                     <input
                         type="text"
                         placeholder="Search people..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full bg-surface-50 border border-surface-200 rounded-xl pl-9 pr-4 py-2 text-[13px] outline-none focus:border-brand-500 transition-all"
+                        className="w-full bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl pl-9 pr-4 py-2 text-[13px] text-surface-900 dark:text-white outline-none focus:border-brand-500 transition-all font-medium"
                     />
                 </div>
 
@@ -302,7 +302,7 @@ const StartDirectView = ({ onCancel, onSelect }: { onCancel: () => void, onSelec
                         <button
                             key={item.id}
                             onClick={() => onSelect(item.id)}
-                            className="w-full flex items-center gap-3 p-3 hover:bg-surface-50 rounded-xl text-left transition-colors"
+                            className="w-full flex items-center gap-3 p-3 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-xl text-left transition-colors"
                         >
                             <div className="w-9 h-9 rounded-full bg-surface-100 flex items-center justify-center text-xs font-semibold text-brand-600">
                                 {item.name[0]}
@@ -498,7 +498,7 @@ export const AdminChatSidebar = () => {
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'tween', duration: 0.3 }}
-                        className="fixed inset-y-0 right-0 w-full xs:w-[340px] sm:w-[380px] bg-white shadow-xl z-[110] flex flex-col border-l border-surface-200 text-surface-900 font-sans overflow-hidden"
+                        className="fixed inset-y-0 right-0 w-full xs:w-[340px] sm:w-[380px] bg-white dark:bg-surface-900 shadow-xl z-[110] flex flex-col border-l border-surface-200 dark:border-surface-800 text-surface-900 dark:text-white font-sans overflow-hidden"
                     >
                         {isCreatingGroup ? (
                             <CreateGroupView 
@@ -512,28 +512,28 @@ export const AdminChatSidebar = () => {
                             />
                         ) : !activeConversationId ? (
                             <>
-                                <div className="px-6 py-5 border-b border-surface-100 flex items-center justify-between bg-white sticky top-0 z-20">
+                                <div className="px-6 py-5 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-900 sticky top-0 z-20">
                                     <div className="flex items-center gap-2">
-                                        <h1 className="text-[18px] font-semibold text-surface-900">Messages</h1>
+                                        <h1 className="text-[18px] font-semibold text-surface-900 dark:text-white">Messages</h1>
                                         <button
                                             onClick={() => setIsStartingDirect(true)}
-                                            className="p-1.5 hover:bg-surface-50 text-surface-400 hover:text-brand-600 rounded-lg transition-all"
+                                            className="p-1.5 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-400 dark:text-surface-500 hover:text-brand-600 rounded-lg transition-all"
                                             title="New direct message"
                                         >
                                             <Plus size={18} />
                                         </button>
                                     </div>
-                                    <button onClick={() => setOpen(false)} className="p-1.5 hover:bg-surface-50 text-surface-400 hover:text-surface-900 rounded-lg transition-all">
+                                    <button onClick={() => setOpen(false)} className="p-1.5 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-400 dark:text-surface-500 hover:text-surface-900 dark:hover:text-white rounded-lg transition-all">
                                         <X size={20} />
                                     </button>
                                 </div>
 
-                                <div className="px-5 pt-4 flex gap-6 border-b border-surface-100">
+                                <div className="px-5 pt-4 flex gap-6 border-b border-surface-100 dark:border-surface-800">
                                     <button 
                                         onClick={() => setActiveTab('direct')}
                                         className={cn(
                                             "pb-3 text-sm font-semibold relative transition-colors",
-                                            activeTab === 'direct' ? "text-brand-600" : "text-surface-400 hover:text-surface-600"
+                                            activeTab === 'direct' ? "text-brand-600" : "text-surface-400 dark:text-surface-500 hover:text-surface-600 dark:hover:text-surface-300"
                                         )}
                                     >
                                         Direct
@@ -543,7 +543,7 @@ export const AdminChatSidebar = () => {
                                         onClick={() => setActiveTab('projects')}
                                         className={cn(
                                             "pb-3 text-sm font-semibold relative transition-colors",
-                                            activeTab === 'projects' ? "text-brand-600" : "text-surface-400 hover:text-surface-600"
+                                            activeTab === 'projects' ? "text-brand-600" : "text-surface-400 dark:text-surface-500 hover:text-surface-600 dark:hover:text-surface-300"
                                         )}
                                     >
                                         Project Teams
@@ -553,13 +553,13 @@ export const AdminChatSidebar = () => {
 
                                 <div className="p-4">
                                     <div className="relative group">
-                                        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 focus-within:text-brand-500" />
+                                        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 focus-within:text-brand-500" />
                                         <input 
                                             type="text" 
                                             placeholder={`Search ${activeTab === 'projects' ? 'project teams' : 'direct messages'}...`} 
                                             value={search}
                                             onChange={e => setSearch(e.target.value)}
-                                            className="w-full bg-surface-50 border border-surface-200 rounded-xl pl-11 pr-4 py-2 text-[14px] text-surface-900 placeholder:text-surface-400 outline-none focus:border-brand-500 focus:bg-white transition-all shadow-sm"
+                                            className="w-full bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl pl-11 pr-4 py-2 text-[14px] text-surface-900 dark:text-white placeholder:text-surface-400 dark:placeholder:text-surface-500 outline-none focus:border-brand-500 focus:bg-white dark:focus:bg-surface-700 transition-all shadow-sm"
                                         />
                                     </div>
                                 </div>
@@ -578,44 +578,44 @@ export const AdminChatSidebar = () => {
                                                         <div key={dept} className="mb-2">
                                                             <button 
                                                                 onClick={() => setCollapsedDepts(prev => ({ ...prev, [dept]: !prev[dept] }))}
-                                                                className="w-full px-5 py-2 flex items-center justify-between bg-surface-50/50 hover:bg-surface-50 border-y border-surface-100/50 transition-colors"
+                                                                className="w-full px-5 py-2 flex items-center justify-between bg-surface-50/50 dark:bg-surface-800/50 hover:bg-surface-50 dark:hover:bg-surface-800 border-y border-surface-100/50 dark:border-surface-700/50 transition-colors"
                                                             >
-                                                                <span className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">{dept} ({deptProjs.length})</span>
+                                                                <span className="text-[10px] font-bold text-surface-400 dark:text-surface-500 uppercase tracking-widest">{dept} ({deptProjs.length})</span>
                                                                 <ChevronDown 
                                                                     size={12} 
-                                                                    className={cn('text-surface-400 transition-transform', collapsedDepts[dept] ? '-rotate-90' : '')} 
+                                                                    className={cn('text-surface-400 dark:text-surface-500 transition-transform', collapsedDepts[dept] ? '-rotate-90' : '')} 
                                                                 />
                                                             </button>
                                                             {!collapsedDepts[dept] && (
-                                                                <div className="divide-y divide-surface-50">
+                                                                <div className="divide-y divide-surface-50 dark:divide-surface-800">
                                                                     {deptProjs.map((proj: any) => (
                                                                          <button 
                                                                             key={proj._id || proj.id}
                                                                             onClick={() => handleStartProjectChat(proj)}
                                                                             className={cn(
-                                                                                "w-full px-5 py-4 flex items-center gap-3 transition-all border-b border-surface-100 relative group text-left",
-                                                                                activeConversationId === proj.conversation?._id ? "bg-surface-50" : "hover:bg-surface-50/50"
+                                                                                "w-full px-5 py-4 flex items-center gap-3 transition-all border-b border-surface-100 dark:border-surface-800 relative group text-left",
+                                                                                activeConversationId === proj.conversation?._id ? "bg-surface-50 dark:bg-surface-800" : "hover:bg-surface-50/50 dark:hover:bg-surface-800/50"
                                                                             )}
                                                                         >
                                                                             <div className={cn(
-                                                                                "w-11 h-11 rounded-full border flex items-center justify-center text-sm shrink-0 overflow-hidden transition-colors bg-surface-100",
-                                                                                activeConversationId === proj.conversation?._id ? "border-brand-500 bg-brand-50 shadow-sm" : "border-surface-200"
+                                                                                "w-11 h-11 rounded-full border flex items-center justify-center text-sm shrink-0 overflow-hidden transition-colors bg-surface-100 dark:bg-surface-800",
+                                                                                activeConversationId === proj.conversation?._id ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20 shadow-sm" : "border-surface-200 dark:border-surface-700"
                                                                             )}>
-                                                                                <Users size={20} className="text-brand-600" />
+                                                                                <Users size={20} className="text-brand-600 dark:text-brand-400" />
                                                                             </div>
                                                                             <div className="flex-1 min-w-0">
                                                                                 <div className="flex items-center justify-between mb-0.5">
                                                                                     <span className={cn(
                                                                                         "text-[14px] font-semibold transition-colors truncate pr-2",
-                                                                                        activeConversationId === proj.conversation?._id ? "text-brand-600" : "text-surface-900 group-hover:text-brand-600"
+                                                                                        activeConversationId === proj.conversation?._id ? "text-brand-600 dark:text-brand-400" : "text-surface-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400"
                                                                                     )}>
                                                                                         {proj.name}
                                                                                     </span>
-                                                                                    <span className="text-[11px] text-surface-400 tabular-nums">
+                                                                                    <span className="text-[11px] text-surface-400 dark:text-surface-500 tabular-nums">
                                                                                         {proj.conversation?.lastMessage?.createdAt ? format(new Date(proj.conversation.lastMessage.createdAt), 'HH:mm') : ''}
                                                                                     </span>
                                                                                 </div>
-                                                                                <p className="text-[12px] text-surface-500 truncate font-normal">
+                                                                                <p className="text-[12px] text-surface-500 dark:text-surface-400 truncate font-normal">
                                                                                     {proj.conversation?.lastMessage?.text || 'No messages yet'}
                                                                                 </p>
                                                                             </div>
@@ -676,10 +676,10 @@ export const AdminChatSidebar = () => {
                                     )}
                                 </div>
                                 {activeTab === 'projects' && ['admin', 'manager', 'team_leader'].includes(user?.role || '') && (
-                                    <div className="p-4 border-t border-surface-100 bg-surface-50/50">
+                                    <div className="p-4 border-t border-surface-100 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-950/50">
                                         <button 
                                             onClick={() => setIsCreatingGroup(true)}
-                                            className="w-full py-2.5 bg-white hover:bg-surface-50 text-brand-600 rounded-xl text-xs font-bold border border-brand-200 shadow-sm transition-all flex items-center justify-center gap-2"
+                                            className="w-full py-2.5 bg-white dark:bg-surface-800 hover:bg-surface-50 dark:hover:bg-surface-700 text-brand-600 dark:text-brand-400 rounded-xl text-xs font-bold border border-brand-200 dark:border-brand-800 shadow-sm transition-all flex items-center justify-center gap-2"
                                         >
                                             <Plus size={14} /> Create New Group
                                         </button>
@@ -688,23 +688,23 @@ export const AdminChatSidebar = () => {
                             </>
                         ) : (
                             <>
-                                <div className="px-5 py-4 border-b border-surface-100 flex items-center justify-between bg-white shrink-0 shadow-sm">
+                                <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-900 shrink-0 shadow-sm">
                                      <div className="flex items-center gap-3 min-w-0">
                                          <button
-                                            className="sm:hidden p-2 -ml-2 text-surface-400 hover:text-surface-900 rounded-lg"
+                                            className="sm:hidden p-2 -ml-2 text-surface-400 dark:text-surface-500 hover:text-surface-900 dark:hover:text-white rounded-lg"
                                             onClick={() => setActiveConversation(null)}
                                          >
                                             <ChevronLeft size={18} />
                                          </button>
-                                         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-surface-50 to-surface-100 border border-surface-200 flex items-center justify-center text-brand-600 relative shrink-0 shadow-inner">
+                                         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-surface-50 to-surface-100 dark:from-surface-800 dark:to-surface-900 border border-surface-200 dark:border-surface-700 flex items-center justify-center text-brand-600 dark:text-brand-400 relative shrink-0 shadow-inner">
                                              {isGroupConversation(activeConvo) ? <Users size={24} /> : <span className="text-lg font-semibold">{currentRecipient ? currentRecipient[0] : 'U'}</span>}
-                                             <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />
+                                             <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white dark:border-surface-900" />
                                          </div>
                                          <div className="flex-1 min-w-0">
-                                              <div className="text-[15px] font-semibold text-surface-900 leading-tight truncate">
+                                              <div className="text-[15px] font-semibold text-surface-900 dark:text-white leading-tight truncate">
                                                   {currentRecipient}
                                               </div>
-                                              <span className="text-[12px] text-emerald-500 font-semibold block mt-0.5 truncate">
+                                              <span className="text-[12px] text-emerald-500 dark:text-emerald-400 font-semibold block mt-0.5 truncate">
                                                   {isGroupConversation(activeConvo) ? `@${activeConvo?.participants.length || 0} members` : 'Online'}
                                               </span>
                                          </div>
@@ -712,20 +712,20 @@ export const AdminChatSidebar = () => {
                                      <div className="flex items-center gap-1">
                                          {isGroupConversation(activeConvo) && (
                                              <button
-                                                 className="p-2 text-surface-400 hover:text-brand-600 rounded-lg"
+                                                 className="p-2 text-surface-400 dark:text-surface-500 hover:text-brand-600 dark:hover:text-brand-400 rounded-lg"
                                                  onClick={() => setShowGroupOverview(true)}
                                                  title="Group overview"
                                              >
                                                  <Info size={18} />
                                              </button>
                                          )}
-                                         <button className="hidden sm:flex p-2 text-surface-400 hover:text-surface-900 rounded-lg" onClick={() => setActiveConversation(null)}>
+                                         <button className="hidden sm:flex p-2 text-surface-400 dark:text-surface-500 hover:text-surface-900 dark:hover:text-white rounded-lg" onClick={() => setActiveConversation(null)}>
                                              <X size={18} />
                                          </button>
                                      </div>
                                 </div>
 
-                                <div ref={scrollRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-surface-50/80 to-white px-4 py-5 sm:px-5">
+                                <div ref={scrollRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-surface-50/80 to-white dark:from-surface-950/80 dark:to-surface-900 px-4 py-5 sm:px-5">
                                     {messages.length > 0 ? (
                                         <div className="space-y-1">
                                             {messages.map((msg, index) => {
@@ -742,19 +742,19 @@ export const AdminChatSidebar = () => {
                                             })}
                                         </div>
                                     ) : (
-                                        <div className="h-full min-h-[240px] flex flex-col items-center justify-center text-center text-surface-400 px-6">
-                                            <div className="w-14 h-14 rounded-2xl bg-white border border-surface-200 flex items-center justify-center shadow-sm mb-4">
+                                        <div className="h-full min-h-[240px] flex flex-col items-center justify-center text-center text-surface-400 dark:text-surface-500 px-6">
+                                            <div className="w-14 h-14 rounded-2xl bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 flex items-center justify-center shadow-sm mb-4">
                                                 <MessageCircle size={24} className="opacity-60" />
                                             </div>
-                                            <p className="text-sm font-medium text-surface-600">No messages yet</p>
-                                            <p className="text-xs mt-1 max-w-[220px]">Start the conversation with a quick update or question.</p>
+                                            <p className="text-sm font-medium text-surface-600 dark:text-surface-300">No messages yet</p>
+                                            <p className="text-xs mt-1 max-w-[220px] dark:text-surface-400">Start the conversation with a quick update or question.</p>
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="p-4 border-t border-surface-200 bg-white shrink-0">
-                                    <form onSubmit={handleSend} className="relative flex items-center gap-2 rounded-3xl border border-brand-200 bg-white px-2 py-1.5 shadow-[0_8px_24px_rgba(51,102,255,0.08)] focus-within:border-brand-400 transition-all">
-                                        <button type="button" className="p-2.5 text-surface-400 hover:text-brand-500 transition-colors rounded-xl">
+                                <div className="p-4 border-t border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 shrink-0">
+                                    <form onSubmit={handleSend} className="relative flex items-center gap-2 rounded-3xl border border-brand-200 dark:border-brand-800 bg-white dark:bg-surface-800 px-2 py-1.5 shadow-[0_8px_24px_rgba(51,102,255,0.08)] focus-within:border-brand-400 transition-all">
+                                        <button type="button" className="p-2.5 text-surface-400 dark:text-surface-500 hover:text-brand-500 transition-colors rounded-xl">
                                             <Paperclip size={18} />
                                         </button>
                                         <input
@@ -762,7 +762,7 @@ export const AdminChatSidebar = () => {
                                             placeholder="Type a message..."
                                             value={input}
                                             onChange={e => setInput(e.target.value)}
-                                            className="flex-1 bg-transparent text-[14px] text-surface-900 placeholder:text-surface-400 py-3 outline-none px-1 min-w-0"
+                                            className="flex-1 bg-transparent text-[14px] text-surface-900 dark:text-white placeholder:text-surface-400 dark:placeholder:text-surface-500 py-3 outline-none px-1 min-w-0"
                                         />
                                         <button 
                                             type="submit" 

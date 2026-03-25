@@ -14,7 +14,7 @@ import { KanbanBoard } from '../../components/KanbanBoard';
 import { TaskModal } from '../../components/TaskModal';
 import { TaskCard } from '../../components/TaskCard';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
-import { ProgressBar, EmptyState, Tabs, TabsContent } from '../../components/ui';
+import { ProgressBar, EmptyState, Tabs, TabsContent, Dropdown } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import type { Task, TaskStatus, Priority } from '../../app/types';
 import { projectsService, tasksService } from '../../services/api';
@@ -49,9 +49,12 @@ export const ProjectDetailPage: React.FC = () => {
   const members = users.filter(u => project?.members.includes(u.id));
   const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
 
-  const { register, handleSubmit, reset } = useForm<TaskFormData>({
+  const { register, handleSubmit, reset, setValue, watch } = useForm<TaskFormData>({
     defaultValues: { priority: 'medium', status: defaultStatus }
   });
+
+  const watchPriority = watch('priority');
+  const watchAssignee = watch('assigneeId');
 
   if (!project) {
     return (
@@ -193,57 +196,50 @@ export const ProjectDetailPage: React.FC = () => {
             <p className="text-sm text-surface-400 mt-0.5">{project.description}</p>
           </div>
 
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap flex-shrink-0 ml-auto pt-2 sm:pt-0">
             {/* Progress */}
-            <div className="text-right hidden sm:block">
+            <div className="text-right hidden lg:block">
               <p className="text-xs text-surface-400 mb-1">Progress</p>
               <div className="flex items-center gap-2">
-                <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="md" className="w-24" />
+                <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="md" className="w-20 xl:w-24" />
                 <span className="text-sm font-semibold text-surface-700 dark:text-surface-300">{project.progress}%</span>
               </div>
             </div>
 
             {/* Team */}
-            <div className="hidden sm:block text-right">
+            <div className="hidden lg:block text-right">
               <p className="text-xs text-surface-400 mb-1">Team</p>
-              <AvatarGroup users={members} max={5} size="sm" />
+              <AvatarGroup users={members} max={3} size="sm" />
             </div>
 
             {/* Due date */}
             {project.endDate && (
-              <div className="hidden md:block text-right">
+              <div className="hidden xl:block text-right">
                 <p className="text-xs text-surface-400 mb-1">Due date</p>
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-300">{formatDate(project.endDate)}</p>
               </div>
             )}
 
-            {typeof project.budget === 'number' && (
-              <div className="hidden md:block text-right">
-                <p className="text-xs text-surface-400 mb-1">Budget</p>
-                <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
-                  {project.budgetCurrency || 'INR'} {project.budget.toLocaleString()}
-                </p>
-              </div>
-            )}
-
-            <Link to={`/projects/${project.id}/todo`} className="btn-secondary btn-md">
+            <Link to={`/projects/${project.id}/todo`} className="btn-secondary btn-sm sm:btn-md whitespace-nowrap">
               <ListTodo size={15} />
-              To-do table
+              <span className="hidden sm:inline">To-do table</span>
+              <span className="sm:hidden">To-do</span>
             </Link>
-            <button onClick={() => handleAddTask()} className="btn-primary btn-md">
-              <Plus size={15} />
-              Add Task
-            </button>
           </div>
         </div>
 
         {/* Status pills */}
         <div className="flex items-center gap-2 mt-4 flex-wrap">
           {(Object.entries(STATUS_CONFIG) as [TaskStatus, typeof STATUS_CONFIG.todo][]).map(([key, cfg]) => (
-            <div key={key} className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium', cfg.bg, cfg.text)}>
+            <div key={key} className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wide border transition-colors', 
+              key === 'todo' && 'bg-surface-50 dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-200 dark:border-surface-700',
+              key === 'in_progress' && 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50',
+              key === 'done' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
+              key === 'blocked' && 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50'
+            )}>
               <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
               {cfg.label}
-              <span className="font-bold ml-0.5">{statusCounts[key]}</span>
+              <span className="ml-0.5 opacity-60">{statusCounts[key]}</span>
             </div>
           ))}
         </div>
@@ -381,17 +377,19 @@ export const ProjectDetailPage: React.FC = () => {
               {project.sdlcPlan && project.sdlcPlan.length > 0 ? (
                 <div className="space-y-3">
                   {project.sdlcPlan.map((phase) => (
-                    <div key={`${phase.name}-${phase.durationDays}`} className="flex items-center justify-between gap-3 rounded-xl bg-surface-50 px-4 py-3 dark:bg-surface-800/60">
+                    <div key={`${phase.name}-${phase.durationDays}`} className="flex items-center justify-between gap-3 rounded-xl bg-surface-50 dark:bg-surface-800/60 px-4 py-3 border border-transparent dark:border-surface-700/50">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-surface-800 dark:text-surface-200">{phase.name}</p>
-                        {phase.notes ? <p className="text-xs text-surface-400">{phase.notes}</p> : null}
+                        {phase.notes ? <p className="text-xs text-surface-400 mt-0.5 line-clamp-1">{phase.notes}</p> : null}
                       </div>
-                      <span className="badge-gray text-xs whitespace-nowrap">{phase.durationDays} days</span>
+                      <span className="px-2 py-0.5 rounded-md bg-white dark:bg-surface-900 text-surface-500 dark:text-surface-400 text-[10px] font-bold border border-surface-100 dark:border-surface-700 whitespace-nowrap shadow-sm">
+                        {phase.durationDays}d
+                      </span>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between border-t border-surface-100 pt-3 text-sm dark:border-surface-800">
-                    <span className="text-surface-500">Total planned duration</span>
-                    <span className="font-semibold text-surface-800 dark:text-surface-200">{project.totalPlannedDurationDays || 0} days</span>
+                  <div className="flex items-center justify-between border-t border-surface-100 dark:border-surface-800 pt-3 mt-1 text-sm">
+                    <span className="text-surface-500 text-xs uppercase tracking-widest font-bold">Planned duration</span>
+                    <span className="font-bold text-brand-600 dark:text-brand-400">{project.totalPlannedDurationDays || 0} days</span>
                   </div>
                 </div>
               ) : (
@@ -438,33 +436,42 @@ export const ProjectDetailPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Priority</label>
-              <div className="relative">
-                <select {...register('priority')} className="input pr-8 appearance-none">
-                  {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
-              </div>
+              <Dropdown 
+                value={watchPriority} 
+                onChange={(val) => setValue('priority', val as Priority)}
+                items={Object.entries(PRIORITY_CONFIG).map(([k, v]) => ({ 
+                  id: k, 
+                  label: v.label,
+                  icon: <Flag size={12} style={{ color: v.color }} />
+                }))}
+              />
             </div>
             <div>
               <label className="label">Status</label>
-              <div className="relative">
-                <select value={defaultStatus} onChange={e => setDefaultStatus(e.target.value as TaskStatus)} className="input pr-8 appearance-none">
-                  {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
-              </div>
+              <Dropdown 
+                value={defaultStatus} 
+                onChange={(val) => setDefaultStatus(val as TaskStatus)}
+                items={Object.entries(STATUS_CONFIG).map(([k, v]) => ({ 
+                  id: k, 
+                  label: v.label,
+                  icon: <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: v.color }} />
+                }))}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Assignee</label>
-              <div className="relative">
-                <select {...register('assigneeId')} className="input pr-8 appearance-none">
-                  <option value="">Unassigned</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
-              </div>
+              <Dropdown 
+                value={watchAssignee} 
+                onChange={(val) => setValue('assigneeId', val)}
+                placeholder="Unassigned"
+                items={users.map(u => ({ 
+                  id: u.id, 
+                  label: u.name,
+                  icon: <UserAvatar name={u.name} color={u.color} size="xs" />
+                }))}
+              />
             </div>
             <div>
               <label className="label">Due Date</label>

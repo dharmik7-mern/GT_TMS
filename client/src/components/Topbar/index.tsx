@@ -79,7 +79,7 @@ export const Topbar: React.FC = () => {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 h-[60px] bg-white/90 dark:bg-surface-900/90 backdrop-blur-md border-b border-surface-100 dark:border-surface-800 z-20 flex items-center px-4 gap-3 transition-all duration-250',
+        'fixed top-0 right-0 h-[60px] bg-white dark:bg-surface-950 border-b border-surface-100 dark:border-surface-800 z-20 flex items-center px-4 gap-3 transition-all duration-250',
         sidebarCollapsed ? 'md:left-16' : 'md:left-[260px]',
         'left-0'
       )}
@@ -180,14 +180,9 @@ export const Topbar: React.FC = () => {
 
       {/* Profile */}
       {user && (
-        <button
-          onClick={() => navigate('/profile')}
-          className="flex-shrink-0 hover:opacity-80 transition-opacity"
-        >
-          <UserAvatar name={user.name} avatar={user.avatar} color={user.color} size="sm" isOnline />
-        </button>
         <div ref={profileRef} className="relative flex-shrink-0">
           <button
+
             type="button"
             onClick={() => setProfileOpen((prev) => !prev)}
             className="flex-shrink-0 hover:opacity-80 transition-opacity"
@@ -203,7 +198,7 @@ export const Topbar: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.16 }}
-                className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-lg dark:border-surface-700 dark:bg-surface-900"
+                className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-lg dark:border-surface-800 dark:bg-surface-900"
               >
                 <div className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">
                   <p className="text-sm font-semibold text-surface-900 dark:text-white">{user.name}</p>

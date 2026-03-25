@@ -11,7 +11,7 @@ import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { PROJECT_COLORS, STATUS_CONFIG } from '../../app/constants';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
-import { ProgressBar, EmptyState } from '../../components/ui';
+import { ProgressBar, EmptyState, Dropdown } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type { Project, ProjectStatus, ProjectSdlcPhase } from '../../app/types';
@@ -125,22 +125,24 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
         <p className="text-xs text-surface-400 mb-3 line-clamp-2 leading-relaxed">{project.description}</p>
       )}
 
-      <div className="mb-3">
-        <div className="flex items-center justify-between text-xs text-surface-500 mb-1.5">
-          <span>Progress</span>
-          <span className="font-medium">{project.completedTasksCount}/{project.tasksCount} tasks</span>
+      <div className="mb-4">
+        <div className="flex items-center justify-between text-[11px] text-surface-500 mb-2">
+          <span className="font-semibold uppercase tracking-wider opacity-60">Progress</span>
+          <span className="font-bold text-surface-700 dark:text-surface-300">{project.progress}%</span>
         </div>
         <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="md" />
       </div>
 
-      <div className="flex items-center justify-between">
-        <AvatarGroup users={members} max={4} size="xs" />
-        {project.endDate && (
-          <span className="flex items-center gap-1 text-[11px] text-surface-400">
-            <Calendar size={11} />
-            {formatDate(project.endDate, 'MMM d')}
-          </span>
-        )}
+      <div className="flex items-center justify-between pt-2 border-t border-surface-50 dark:border-surface-800/50 mt-1">
+        <AvatarGroup users={members} max={3} size="xs" />
+        <div className="flex flex-col items-end">
+          {project.endDate && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-surface-400 uppercase tracking-tight">
+              <Calendar size={10} />
+              {formatDate(project.endDate, 'MMM d')}
+            </span>
+          )}
+        </div>
       </div>
     </motion.div>
   );
@@ -157,7 +159,7 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
       layout
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      className="flex items-center gap-4 px-5 py-3.5 border-b border-surface-50 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors"
+      className="flex items-center gap-4 px-5 py-3.5 border-b border-surface-50 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors group"
       onClick={() => navigate(`/projects/${project.id}`)}
     >
       <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
@@ -167,17 +169,23 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{project.name}</p>
       </div>
-      <span className={cn('badge text-[10px] hidden sm:inline-flex', badge.className)}>{badge.label}</span>
-      <div className="hidden md:flex items-center gap-2 w-32">
-        <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="sm" className="flex-1" />
-        <span className="text-xs text-surface-400 w-8 text-right">{project.progress}%</span>
+      <div className="hidden sm:flex items-center w-24">
+         <span className={cn('badge text-[10px] font-bold uppercase tracking-wider', badge.className)}>{badge.label}</span>
       </div>
-      <AvatarGroup users={members} max={3} size="xs" className="hidden sm:flex" />
-      {project.endDate && (
-        <span className="text-xs text-surface-400 hidden lg:block whitespace-nowrap">{formatDate(project.endDate)}</span>
-      )}
+      <div className="hidden md:flex items-center gap-3 w-40">
+        <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="sm" className="flex-1" />
+        <span className="text-[10px] font-bold text-surface-500 w-8 text-right">{project.progress}%</span>
+      </div>
+      <div className="hidden sm:flex items-center justify-center w-24">
+        <AvatarGroup users={members} max={3} size="xs" />
+      </div>
+      <div className="hidden lg:flex items-center w-28">
+        {project.endDate && (
+          <span className="text-[11px] font-medium text-surface-400 whitespace-nowrap">{formatDate(project.endDate)}</span>
+        )}
+      </div>
       <button onClick={e => { e.stopPropagation(); onDelete(project.id); }}
-        className="btn-ghost w-7 h-7 rounded-lg text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center">
+        className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-rose-500 dark:hover:bg-rose-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
         <Trash2 size={13} />
       </button>
     </motion.div>
@@ -199,7 +207,11 @@ export const ProjectsPage: React.FC = () => {
   const [reportingSearch, setReportingSearch] = useState('');
   const [sdlcPlan, setSdlcPlan] = useState<ProjectSdlcPhase[]>(DEFAULT_SDLC_PLAN);
   const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ProjectFormData>();
+  const { register, handleSubmit, reset, formState: { errors }, setValue, watch } = useForm<ProjectFormData>({
+    defaultValues: { budgetCurrency: 'INR' }
+  });
+
+  const budgetCurrency = watch('budgetCurrency');
 
   const filteredAssignableUsers = users.filter((candidate) => {
     const query = memberSearch.trim().toLowerCase();
@@ -403,14 +415,14 @@ export const ProjectsPage: React.FC = () => {
                       </motion.div>
                     ) : (
                       <div className="card overflow-hidden group">
-                        <div className="flex items-center gap-4 px-5 py-2.5 bg-surface-50 dark:bg-surface-800/50 border-b border-surface-100 dark:border-surface-800">
+                        <div className="flex items-center gap-4 px-5 py-2.5 bg-surface-50 dark:bg-surface-900 border-b border-surface-100 dark:border-surface-800">
                           <div className="w-8 flex-shrink-0" />
-                          <p className="flex-1 text-xs font-semibold text-surface-400 uppercase tracking-wider">Project</p>
-                          <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider hidden sm:block w-16">Status</p>
-                          <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider hidden md:block w-36">Progress</p>
-                          <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider hidden sm:block w-24">Team</p>
-                          <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider hidden lg:block w-24">Due Date</p>
-                          <div className="w-7 flex-shrink-0" />
+                          <p className="flex-1 text-[10px] font-bold text-surface-400 uppercase tracking-widest">Project</p>
+                          <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest hidden sm:block w-24">Status</p>
+                          <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest hidden md:block w-40">Progress</p>
+                          <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest hidden sm:block w-24 text-center">Team</p>
+                          <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest hidden lg:block w-28">Due Date</p>
+                          <div className="w-8 flex-shrink-0" />
                         </div>
                         <AnimatePresence mode="popLayout">
                           {deptProjects.map(project => (
@@ -503,12 +515,16 @@ export const ProjectsPage: React.FC = () => {
             </div>
             <div>
               <label className="label">Currency</label>
-              <select {...register('budgetCurrency')} defaultValue="INR" className="input">
-                <option value="INR">INR</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-              </select>
+              <Dropdown 
+                value={budgetCurrency}
+                onChange={(val) => setValue('budgetCurrency', val)}
+                items={[
+                  { id: 'INR', label: 'INR (₹)' },
+                  { id: 'USD', label: 'USD ($)' },
+                  { id: 'EUR', label: 'EUR (€)' },
+                  { id: 'GBP', label: 'GBP (£)' },
+                ]}
+              />
             </div>
           </div>
 

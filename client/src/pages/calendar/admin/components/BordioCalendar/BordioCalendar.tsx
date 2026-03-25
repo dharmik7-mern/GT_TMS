@@ -79,8 +79,8 @@ const DroppableColumn = ({ item, colTasks, getColumnTasks, setSelectedTask, dele
         <div
             ref={setNodeRef}
             className={cn(
-                "flex flex-col overflow-y-auto scrollbar-hide border-r border-[#E2E8F0] last:border-r-0 transition-colors",
-                isOver ? "bg-[#f8fafc]" : "bg-[#ffffff]"
+                "flex flex-col overflow-y-auto scrollbar-hide border-r border-surface-200 dark:border-surface-800 last:border-r-0 transition-colors",
+                isOver ? "bg-surface-50 dark:bg-surface-800/50" : "bg-white dark:bg-surface-900"
             )}
             style={{ padding: '10px 8px', gap: 9 }}
         >
@@ -96,7 +96,7 @@ const DroppableColumn = ({ item, colTasks, getColumnTasks, setSelectedTask, dele
 
             <button
                 onClick={() => setSelectedTask('new')}
-                className="mt-1 flex w-full items-center justify-center rounded-lg border border-dashed border-[#CBD5E1] py-3 text-[#94A3B8] transition-all hover:border-[#2563EB] hover:bg-blue-50/50 hover:text-[#2563EB]"
+                className="mt-1 flex w-full items-center justify-center rounded-lg border border-dashed border-surface-300 dark:border-surface-600 py-3 text-surface-400 hover:border-brand-500 hover:bg-brand-50/50 dark:hover:bg-brand-900/20 hover:text-brand-600 transition-all"
                 title="Add task to this column"
             >
                 <Plus size={18} strokeWidth={2.5} />
@@ -107,9 +107,26 @@ const DroppableColumn = ({ item, colTasks, getColumnTasks, setSelectedTask, dele
 
 export const BordioCalendar: React.FC<{ searchQuery?: string }> = ({ searchQuery }) => {
     const { 
-        tasks, setSelectedTask, view, groupBy, currentDate, setCurrentDate, deleteTask, createTask,
+        tasks, selectedTask, setSelectedTask, view, groupBy, currentDate, setCurrentDate, deleteTask, createTask,
         priorityFilter, statusFilter 
     } = useAdminCalendarStore();
+
+    // State for the modal (assuming these are needed for the modal content provided)
+    const isOpen = !!selectedTask;
+    const isNewTask = selectedTask === 'new';
+    const taskToEdit = selectedTask !== 'new' ? selectedTask : null;
+
+    const [eventName, setEventName] = React.useState(taskToEdit?.title || '');
+    const [startTime, setStartTime] = React.useState(taskToEdit?.startDateTime ? new Date(taskToEdit.startDateTime) : new Date());
+    const [endTime, setEndTime] = React.useState(taskToEdit?.endDateTime ? new Date(taskToEdit.endDateTime) : addHours(new Date(), 1)); // Assuming addHours is available or needs to be imported
+    const [repeatEvent, setRepeatEvent] = React.useState(taskToEdit?.isRecurring || false);
+
+    // Helper for addHours if not imported
+    function addHours(date: Date, hours: number) {
+        const newDate = new Date(date);
+        newDate.setHours(date.getHours() + hours);
+        return newDate;
+    }
 
     const normalizedQuery = (searchQuery || '').trim().toLowerCase();
 
@@ -166,20 +183,20 @@ export const BordioCalendar: React.FC<{ searchQuery?: string }> = ({ searchQuery
     const MIN_WIDTH    = 640;
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-white">
+        <div className="flex h-full flex-col overflow-hidden bg-white dark:bg-surface-900">
             <div className="flex flex-1 flex-col overflow-x-auto overflow-y-hidden">
                 <div style={{ minWidth: MIN_WIDTH }}>
 
                     {/* ════ HEADER ══════════════════════════════════════════ */}
-                    <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, background: '#fff', borderBottom: '1px solid #E2E8F0' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: gridTemplate }} className="bg-white dark:bg-surface-900 border-b border-surface-100 dark:border-surface-800">
                         {columns.map((item: any, idx) => {
                             if (groupBy === 'user') {
                                 return (
-                                    <div key={item.id} className="flex flex-col items-center py-3 border-r border-[#E2E8F0] last:border-r-0">
+                                    <div key={item.id} className="flex flex-col items-center py-3 border-r border-surface-200 dark:border-surface-800 last:border-r-0">
                                         <div className="h-9 w-9 rounded-full flex items-center justify-center text-white font-black text-sm" style={{ backgroundColor: userColor(item.name) }}>
                                             {item.name.charAt(0)}
                                         </div>
-                                        <span className="mt-1 text-[11px] font-bold text-[#1e293b] truncate px-2 text-center">{item.name}</span>
+                                        <span className="mt-1 text-[11px] font-bold text-surface-900 dark:text-white truncate px-2 text-center">{item.name}</span>
                                     </div>
                                 );
                             }
@@ -198,33 +215,22 @@ export const BordioCalendar: React.FC<{ searchQuery?: string }> = ({ searchQuery
                             return (
                                 <div
                                     key={day.toISOString()}
-                                    className="relative flex flex-col items-center py-[14px] border-r border-[#E2E8F0] last:border-r-0"
-                                    style={{ background: today ? '#F8FBFF' : '#fff' }}
+                                    className="relative flex flex-col items-center py-[14px] border-r border-surface-200 dark:border-surface-800 last:border-r-0"
+                                    style={{ backgroundColor: today ? 'rgba(51, 102, 255, 0.05)' : 'transparent' }}
                                 >
-                                    {isFirst && (
-                                        <button onClick={() => setCurrentDate(d => addDays(d, -4))} className="absolute left-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-[#94A3B8] hover:bg-slate-100">
-                                            <ChevronLeft size={15} />
-                                        </button>
-                                    )}
-                                    {isLast && (
-                                        <button onClick={() => setCurrentDate(d => addDays(d, 4))} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-[#94A3B8] hover:bg-slate-100">
-                                            <ChevronRight size={15} />
-                                        </button>
-                                    )}
-
                                     {totalMins > 0 && (
-                                        <span className="absolute top-1.5 right-3 text-[9.5px] font-bold text-[#94A3B8]">{fmtTotal(totalMins)}</span>
+                                        <span className="absolute top-1.5 right-3 text-[9.5px] font-bold text-surface-400 dark:text-surface-500">{fmtTotal(totalMins)}</span>
                                     )}
 
                                     <div className="flex items-baseline gap-1.5">
-                                        <span className={cn('text-[17px] font-black tracking-tight', today ? 'text-[#2563EB]' : 'text-[#1E293B]')}>
+                                        <span className={cn('text-[17px] font-black tracking-tight', today ? 'text-brand-600 dark:text-brand-400' : 'text-surface-900 dark:text-white')}>
                                             {format(day, 'd')}
                                         </span>
-                                        <span className={cn('text-[13px] font-medium', today ? 'text-[#2563EB]' : 'text-[#64748B]')}>
+                                        <span className={cn('text-[13px] font-medium', today ? 'text-brand-600 dark:text-brand-400' : 'text-surface-500 dark:text-surface-400')}>
                                             {format(day, 'EEE')}
                                         </span>
                                     </div>
-                                    {today && <div className="mt-1 h-[2.5px] w-[44px] rounded-full bg-[#2563EB]" />}
+                                    {today && <div className="mt-1 h-[2.5px] w-[44px] rounded-full bg-brand-600 dark:bg-brand-500" />}
                                 </div>
                             );
                         })}
@@ -232,12 +238,11 @@ export const BordioCalendar: React.FC<{ searchQuery?: string }> = ({ searchQuery
 
                     {/* ════ BODY ════════════════════════════════════════════ */}
                     <div
-                        className="overflow-y-auto"
+                        className="overflow-y-auto bg-white dark:bg-surface-900"
                         style={{
                             display: 'grid',
                             gridTemplateColumns: gridTemplate,         // exactly matches header
                             height: 'calc(100vh - 220px)',
-                            background: '#fff',
                         }}
                     >
                         {columns.map((item: any, idx) => {

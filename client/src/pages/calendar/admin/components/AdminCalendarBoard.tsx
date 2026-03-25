@@ -31,10 +31,10 @@ const MonthDaySlot = ({
         <div
             ref={setNodeRef}
             className={cn(
-                'relative flex min-h-[120px] flex-col border-b border-r border-[#e5edf9] bg-white p-1.5 transition-colors',
-                !isCurrentMonth && 'bg-surface-50/50',
-                isToday(day) && 'bg-brand-50/25 ring-1 ring-inset ring-brand-200',
-                isOver && 'bg-brand-50/70 ring-2 ring-inset ring-brand-400'
+                'relative flex min-h-[120px] flex-col border-b border-r border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900 transition-colors',
+                !isCurrentMonth && 'bg-surface-50/50 dark:bg-surface-950/50',
+                isToday(day) && 'bg-brand-50/25 dark:bg-brand-900/10 ring-1 ring-inset ring-brand-200 dark:ring-brand-800',
+                isOver && 'bg-brand-50/70 dark:bg-brand-900/20 ring-2 ring-inset ring-brand-400 dark:ring-brand-700'
             )}
         >
             <div className="mb-1 flex items-center justify-between">
@@ -217,23 +217,23 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
         <div
             ref={setWaitingListRef}
             className={cn(
-                'flex w-full flex-col border-t border-[#E2E8F0] bg-[#F8FAFC] xl:w-[320px] xl:min-w-[320px] xl:border-l xl:border-t-0',
-                isWaitingListOver && 'bg-blue-50'
+                'flex w-full flex-col border-t border-surface-200 dark:border-surface-800 bg-surface-50 dark:bg-surface-950 xl:w-[320px] xl:min-w-[320px] xl:border-l xl:border-t-0',
+                isWaitingListOver && 'bg-brand-50/50 dark:bg-brand-900/10'
             )}
         >
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] p-4 bg-white">
+            <div className="flex items-center justify-between border-b border-surface-200 dark:border-surface-800 p-4 bg-white dark:bg-surface-900">
                 <div className="flex items-center gap-2">
-                    <h3 className="text-[15px] font-black text-[#1E293B]">Waiting list</h3>
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#E2E8F0] text-[11px] font-black text-[#64748B]">
+                    <h3 className="text-[15px] font-black text-surface-900 dark:text-white">Waiting list</h3>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-100 dark:bg-surface-800 text-[11px] font-black text-surface-500 dark:text-surface-400">
                         {filteredWaitingList.length}
                     </span>
                 </div>
-                <div className="flex items-center gap-2 text-[#64748B]">
-                    <button className="p-1 hover:bg-[#F1F5F9] rounded-md transition-colors" onClick={() => setIsAddingInline(true)} title="Create task"><Plus size={16} strokeWidth={3} /></button>
-                    <button className="p-1 hover:bg-[#F1F5F9] rounded-md transition-colors"><Search size={16} strokeWidth={3} /></button>
+                <div className="flex items-center gap-2 text-surface-400 dark:text-surface-500">
+                    <button className="p-1 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-md transition-colors" onClick={() => setIsAddingInline(true)} title="Create task"><Plus size={16} strokeWidth={3} /></button>
+                    <button className="p-1 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-md transition-colors"><Search size={16} strokeWidth={3} /></button>
                     <button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-surface-500 transition hover:bg-surface-100 hover:text-surface-800 xl:inline-flex"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-surface-500 transition hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-800 dark:hover:text-surface-200 xl:inline-flex"
                         onClick={() => setIsWaitingListOpen(false)}
                         title="Close waiting list"
                     >
@@ -242,12 +242,12 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                 </div>
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto p-3 bg-[#F8FAFC]">
+            <div className="flex-1 space-y-3 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-950">
                 {/* ── INLINE TASK CREATION CARD ── */}
                 {isAddingInline && (
-                    <div className="relative mb-3 flex flex-col gap-3 rounded-[12px] bg-white p-3 shadow-[0_4px_12px_rgba(0,0,0,0.06)] ring-1 ring-[#e2e8f0]">
+                    <div className="relative mb-3 flex flex-col gap-3 rounded-[12px] bg-white dark:bg-surface-900 p-3 shadow-lg ring-1 ring-surface-200 dark:ring-surface-800">
                         <button 
-                            className="absolute right-2 top-2 rounded-full p-1 text-[#94a3b8] hover:bg-[#f1f5f9] hover:text-[#475569] transition"
+                            className="absolute right-2 top-2 rounded-full p-1 text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-600 transition"
                             onClick={() => setIsAddingInline(false)}
                         >
                             <X size={14} strokeWidth={3} />
@@ -259,22 +259,22 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                             placeholder="Run A/B |"
                             value={inlineTitle}
                             onChange={(e) => setInlineTitle(e.target.value)}
-                            className="w-full pr-6 text-[13px] font-extrabold text-[#1e293b] placeholder:text-[#94a3b8] outline-none"
+                            className="w-full pr-6 text-[13px] font-extrabold text-surface-900 dark:text-white placeholder:text-surface-400 bg-transparent outline-none"
                             onKeyDown={(e) => { if (e.key === 'Enter') handleInlineSave(); }}
                         />
 
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-[#94a3b8]">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-surface-400 dark:text-surface-500">
                             <span>Estimated time:</span>
                             <div className="flex items-center gap-1">
                                 <input 
                                     type="text" placeholder="hh" 
-                                    className="w-8 p-0 border-b border-[#e2e8f0] bg-transparent text-center text-[#1e293b] outline-none focus:border-brand-500 placeholder:text-[#cbd5e1]" 
+                                    className="w-8 p-0 border-b border-surface-200 dark:border-surface-700 bg-transparent text-center text-surface-900 dark:text-white outline-none focus:border-brand-500 placeholder:text-surface-300" 
                                     value={inlineHrs} onChange={e => setInlineHrs(e.target.value.replace(/\D/g, ''))} maxLength={2} 
                                 />
                                 <span>:</span>
                                 <input 
                                     type="text" placeholder="mm" 
-                                    className="w-8 p-0 border-b border-[#e2e8f0] bg-transparent text-center text-[#1e293b] outline-none focus:border-brand-500 placeholder:text-[#cbd5e1]" 
+                                    className="w-8 p-0 border-b border-surface-200 dark:border-surface-700 bg-transparent text-center text-surface-900 dark:text-white outline-none focus:border-brand-500 placeholder:text-surface-300" 
                                     value={inlineMins} onChange={e => setInlineMins(e.target.value.replace(/\D/g, ''))} maxLength={2} 
                                 />
                             </div>
@@ -282,10 +282,9 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
 
                         <div className="flex items-center justify-between pt-1">
                             <div className="flex items-center gap-2">
-                                {/* Calendar picker */}
-                                <label title={inlineDate || "Select Date"} className={cn(
-                                    "relative flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full border border-[#e2e8f0] hover:bg-[#f8fafc] transition-colors",
-                                    inlineDate ? "bg-brand-50 border-brand-200 text-brand-600" : "text-[#94a3b8]"
+                                {/* Calendar pick                                 <label title={inlineDate || "Select Date"} className={cn(
+                                    "relative flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors",
+                                    inlineDate ? "bg-brand-50 dark:bg-brand-900/30 border-brand-200 dark:border-brand-800 text-brand-600 dark:text-brand-400" : "text-surface-400"
                                 )}>
                                     <CalendarDays size={13} strokeWidth={2.5} />
                                     <input 
@@ -298,52 +297,49 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                                 </label>
 
                                 {/* Tag dropdown visual placeholder */}
-                                <button className="flex h-[26px] items-center justify-center gap-1 rounded bg-[#F1F5F9] px-2 text-[#64748b] hover:bg-[#e2e8f0]">
+                                <button className="flex h-[26px] items-center justify-center gap-1 rounded bg-surface-100 dark:bg-surface-800 px-2 text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-700">
                                     <ChevronDown size={14} strokeWidth={3} />
-                                </button>
-
-                                {/* User picker */}
-                                <label title={inlineUser || "Assign User"} className="relative flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full bg-[#fcd34d] text-white shadow-sm border-[1.5px] border-white hover:brightness-95">
+                                </button>/but                                 {/* User picker */}
+                                <label title={inlineUser || "Assign User"} className="relative flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full bg-brand-500 text-white shadow-sm border-[1.5px] border-white dark:border-surface-800 hover:brightness-95">
                                     <User size={13} strokeWidth={3} />
                                     <select 
                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                                         value={inlineUser}
                                         onChange={e => setInlineUser(e.target.value)}
                                     >
-                                        <option value="">User...</option>
+                                        <option value="" className="bg-white dark:bg-surface-900">User...</option>
                                         {(Array.isArray(users) ? users : []).map(u => (
-                                            <option key={u.id || (u as any)._id || u.name} value={u.name}>{u.name}</option>
+                                            <option key={u.id || (u as any)._id || u.name} value={u.name} className="bg-white dark:bg-surface-900">{u.name}</option>
                                         ))}
                                     </select>
                                 </label>
-
                                 {/* Priority picker */}
                                 <div title="Priority" className={cn(
                                     "relative flex h-[26px] items-center gap-1.5 cursor-pointer rounded-full px-2 border transition-all",
-                                    inlinePriority === 'high'   ? "bg-red-50 border-red-200 text-red-600" :
-                                    inlinePriority === 'medium' ? "bg-amber-50 border-amber-200 text-amber-600" :
-                                    inlinePriority === 'low'    ? "bg-blue-50 border-blue-200 text-blue-600" :
-                                    "bg-slate-50 border-slate-200 text-[#94a3b8]"
+                                    inlinePriority === 'high'   ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400" :
+                                    inlinePriority === 'medium' ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50 text-amber-600 dark:text-amber-400" :
+                                    inlinePriority === 'low'    ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/50 text-blue-600 dark:text-blue-400" :
+                                    "bg-surface-50 dark:bg-surface-800 border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500"
                                 )}>
                                     <Flag size={12} fill={inlinePriority !== 'none' ? 'currentColor' : 'none'} strokeWidth={3} />
                                     <span className="text-[10px] uppercase tracking-wider font-black">
                                         {inlinePriority === 'none' ? 'Prio' : inlinePriority}
                                     </span>
-                                    <select 
+                                      <select 
                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                                         value={inlinePriority}
                                         onChange={e => setInlinePriority(e.target.value as any)}
                                     >
-                                        <option value="none">None</option>
-                                        <option value="high">High</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="low">Low</option>
+                                        <option value="none" className="bg-white dark:bg-surface-900">None</option>
+                                        <option value="high" className="bg-white dark:bg-surface-900 text-red-600">High</option>
+                                        <option value="medium" className="bg-white dark:bg-surface-900 text-amber-600">Medium</option>
+                                        <option value="low" className="bg-white dark:bg-surface-900 text-blue-600">Low</option>
                                     </select>
                                 </div>
                             </div>
                             <button 
                                 onClick={handleInlineSave}
-                                className="rounded-[6px] bg-[#2563eb] px-3.5 py-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-[#1d4ed8]"
+                                className="rounded-[6px] bg-brand-600 px-3.5 py-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-brand-700"
                             >
                                 Save
                             </button>
@@ -365,16 +361,16 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
     );
 
     const WaitingListCollapsed = () => (
-        <div className="hidden h-full items-center justify-center border-l border-[#e5edf9] bg-white xl:flex xl:w-[60px] xl:min-w-[60px]">
+        <div className="hidden h-full items-center justify-center border-l border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 xl:flex xl:w-[60px] xl:min-w-[60px]">
             <button
                 type="button"
                 onClick={() => setIsWaitingListOpen(true)}
-                className="flex h-full w-full flex-col items-center justify-center gap-3 text-surface-400 transition-colors hover:bg-surface-50 hover:text-brand-600"
+                className="flex h-full w-full flex-col items-center justify-center gap-3 text-surface-400 transition-colors hover:bg-surface-50 dark:hover:bg-surface-800 hover:text-brand-600"
                 title="Open waiting list"
             >
                 <ChevronsLeft size={16} />
                 <span className="rotate-180 text-[10px] font-bold uppercase tracking-[0.2em] [writing-mode:vertical-rl]">Waiting List</span>
-                <span className="rounded-full bg-[#EFF6FF] px-1.5 py-1 text-[10px] font-bold text-[#3B82F6]">
+                <span className="rounded-full bg-brand-50 dark:bg-brand-900/30 px-1.5 py-1 text-[10px] font-bold text-brand-600 dark:text-brand-400">
                     {filteredWaitingList.length}
                 </span>
             </button>
@@ -383,19 +379,19 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
 
     return (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="flex h-full flex-col overflow-hidden bg-white xl:flex-row">
+            <div className="flex h-full flex-col overflow-hidden bg-white dark:bg-surface-950 xl:flex-row">
                 <div className="flex flex-1 flex-col overflow-hidden">
                     {view === 'month' ? (
-                        <div className="flex flex-col h-full overflow-hidden bg-[#f8fafc]">
-                            <div className="grid shrink-0 grid-cols-7 border-b border-[#e2e8f0] bg-white">
+                        <div className="flex flex-col h-full overflow-hidden bg-surface-50 dark:bg-surface-950">
+                            <div className="grid shrink-0 grid-cols-7 border-b border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900">
                                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label) => (
-                                    <div key={label} className="py-3 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-[#94a3b8]">
+                                    <div key={label} className="py-3 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400 dark:text-surface-500">
                                         {label}
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="grid w-full min-w-0 flex-1 grid-cols-7 auto-rows-[1fr] overflow-y-auto bg-[#f1f5f9] gap-px border-l border-[#e2e8f0]">
+                            <div className="grid w-full min-w-0 flex-1 grid-cols-7 auto-rows-[1fr] overflow-y-auto bg-surface-100 dark:bg-surface-800 gap-px border-l border-surface-200 dark:border-surface-800">
                                 {calendarDays.map((day) => (
                                     <MonthDaySlot
                                         key={day.toISOString()}
