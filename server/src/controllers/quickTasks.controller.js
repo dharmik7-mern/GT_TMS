@@ -13,8 +13,8 @@ function fileAgentLog(payload) {
 
 export async function list(req, res, next) {
   try {
-    const { companyId, workspaceId } = req.auth;
-    const items = await QuickTaskService.listQuickTasks({ companyId, workspaceId });
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const items = await QuickTaskService.listQuickTasks({ companyId, workspaceId, userId, role });
     return res.status(200).json({ success: true, data: items });
   } catch (e) {
     return next(e);

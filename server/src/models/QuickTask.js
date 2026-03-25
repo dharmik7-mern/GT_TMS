@@ -12,6 +12,9 @@ const quickTaskSchema = new mongoose.Schema(
     assigneeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
     reporterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     dueDate: { type: Date, default: null, index: true },
+    isPrivate: { type: Boolean, default: false, index: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
 
     attachments: [
       {
@@ -58,6 +61,9 @@ quickTaskSchema.set('toJSON', {
     ret.createdAt = ret.createdAt?.toISOString?.() || ret.createdAt;
     ret.updatedAt = ret.updatedAt?.toISOString?.() || ret.updatedAt;
     ret.dueDate = ret.dueDate ? new Date(ret.dueDate).toISOString().split('T')[0] : undefined;
+    ret.isPrivate = !!ret.isPrivate;
+    ret.createdBy = ret.createdBy ? String(ret.createdBy) : String(ret.reporterId);
+    ret.assignedTo = ret.assignedTo ? String(ret.assignedTo) : (ret.assigneeIds?.[0] ? String(ret.assigneeIds[0]) : undefined);
 
     ret.attachments = Array.isArray(ret.attachments)
       ? ret.attachments.map((a) => ({
