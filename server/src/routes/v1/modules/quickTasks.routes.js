@@ -57,6 +57,7 @@ const createSchema = z.object({
   assigneeId: z.string().optional().nullable(),
   dueDate: z.string().optional(),
   completionRemark: z.string().trim().max(5000).optional(),
+  isPrivate: z.boolean().optional(),
 });
 
 const importSchema = z.object({

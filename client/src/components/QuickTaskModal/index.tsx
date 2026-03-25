@@ -92,9 +92,16 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
     .filter(u => ASSIGNABLE_ROLES.includes(u.role));
 
   const selectedAssigneeIds = watch('assigneeIds') || [];
+  const canUsePrivateTask = selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === user?.id;
   const selectedAssignees = selectedAssigneeIds
     .map((id) => assignableUsers.find((u) => u.id === id))
     .filter(Boolean);
+
+  useEffect(() => {
+    if (!canUsePrivateTask) {
+      setValue('isPrivate', false, { shouldDirty: true });
+    }
+  }, [canUsePrivateTask, setValue]);
 
   const filteredAssignableUsers = useMemo(() => {
     const query = assigneeQuery.trim().toLowerCase();
@@ -348,10 +355,12 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
             <Lock size={14} className="text-amber-500" />
             <div className="flex-1">
               <p className="text-xs font-medium text-surface-800 dark:text-surface-200">Private Task</p>
-              <p className="text-[10px] text-surface-400">Only you and admins can see this task</p>
+              <p className="text-[10px] text-surface-400">
+                Only self-assigned private tasks are allowed. Only you and admins can see them.
+              </p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" {...register('isPrivate')} className="sr-only peer" />
+            <label className={cn("relative inline-flex items-center", canUsePrivateTask ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
+              <input type="checkbox" {...register('isPrivate')} disabled={!canUsePrivateTask} className="sr-only peer" />
               <div className="w-9 h-5 bg-surface-200 peer-focus:outline-none rounded-full peer dark:bg-surface-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
             </label>
           </div>
