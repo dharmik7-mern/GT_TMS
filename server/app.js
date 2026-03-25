@@ -22,8 +22,8 @@ import adminCalendarRoutes from './src/routes/admin/calendar.routes.js';
 import adminChatRoutes from './src/routes/admin/adminChat.routes.js';
 import adminDashboardRoutes from './src/routes/admin/adminDashboard.routes.js';
 import adminNotificationRoutes from './src/routes/admin/adminNotification.routes.js';
-import {sendMail} from './src/services/mail.service.js'
-import {welcomeTemplate} from './src/templates/mail.templates.js'
+// import {sendMail} from './src/services/mail.service.js'
+// import {welcomeTemplate} from './src/templates/mail.templates.js'
 const app = express();
 
 // ✅ __dirname fix
