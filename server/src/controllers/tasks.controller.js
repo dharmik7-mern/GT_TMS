@@ -55,35 +55,46 @@ export async function list(req, res, next) {
       console.error(`[TasksController] Error in getOne:`, e);
       return next(e);
     }
+}
+
+export async function getDetail(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { companyId, role } = req.auth;
+    const Task = getTaskModel(mongoose.connection);
+    const QuickTask = getQuickTaskModel(mongoose.connection);
+
+    const isSuperAdmin = ['super_admin', 'system_admin'].includes(role);
+
+    const filter = { _id: id };
+    if (!isSuperAdmin) {
+       filter.tenantId = companyId;
+    }
+
+    let task = await Task.findOne(filter)
+      .populate('projectId', 'name')
+      .populate('assigneeIds', 'name avatar email role')
+      .populate('reporterId', 'name avatar email role')
+      .lean();
+
+    if (task) {
+      return res.status(200).json({ success: true, data: { ...task, type: 'project' } });
+    }
+
+    task = await QuickTask.findOne(filter)
+      .populate('assigneeIds', 'name avatar email role')
+      .populate('reporterId', 'name avatar email role')
+      .lean();
+
+    if (task) {
+      return res.status(200).json({ success: true, data: { ...task, type: 'quick' } });
+    }
+
+    return res.status(404).json({ success: false, error: { message: 'Task not found' } });
+  } catch (err) {
+    next(err);
   }
-  
-   export async function getDetail(req, res, next) {
-     try {
-       const { id } = req.params;
-       const Task = getTaskModel(mongoose.connection);
-       const QuickTask = getQuickTaskModel(mongoose.connection);
-       
-       console.log(`[TasksController] DETAIL_API searching for ID: ${id}`);
-       
-       let task = await Task.findById(id).populate('assigneeIds', 'name avatar').populate('projectId', 'name').lean();
-       let foundType = 'project';
-       
-       if (!task) {
-         task = await QuickTask.findById(id).populate('assigneeIds', 'name avatar').lean();
-         foundType = 'quick';
-       }
-       
-       if (!task) {
-         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
-       }
-       
-       task.type = foundType;
-       return res.status(200).json({ success: true, data: task });
-     } catch (e) {
-       console.error(`[TasksController] DETAIL_API Error:`, e);
-       return next(e);
-     }
-   }
+}
 
 export async function create(req, res, next) {
   try {

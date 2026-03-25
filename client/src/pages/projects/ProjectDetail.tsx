@@ -19,6 +19,8 @@ import { Modal } from '../../components/Modal';
 import type { Task, TaskStatus, Priority } from '../../app/types';
 import { projectsService, tasksService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
+import { ProjectTimelineModule } from '../../components/ProjectTimelineModule';
+
 
 interface TaskFormData {
   title: string;
@@ -147,6 +149,7 @@ export const ProjectDetailPage: React.FC = () => {
   const TAB_ITEMS = [
     { value: 'kanban', label: 'Board', icon: <LayoutDashboard size={14} /> },
     { value: 'list', label: 'List', icon: <List size={14} /> },
+    { value: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
     { value: 'overview', label: 'Overview', icon: <BarChart3 size={14} /> },
   ];
 
@@ -269,6 +272,10 @@ export const ProjectDetailPage: React.FC = () => {
               ))
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="timeline" className="pt-4">
+          <ProjectTimelineModule projectId={project.id} />
         </TabsContent>
 
         <TabsContent value="overview" className="pt-4">
@@ -461,7 +468,7 @@ export const ProjectDetailPage: React.FC = () => {
             </div>
             <div>
               <label className="label">Due Date</label>
-              <input {...register('dueDate')} type="date" className="input" />
+              <input {...register('dueDate')} type="date" className="input" min={new Date().toISOString().split('T')[0]} />
             </div>
           </div>
           <div>

@@ -25,6 +25,7 @@ import { cn } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
 import { UserAvatar } from '../../components/UserAvatar';
+import { ProfilePhotoUpload } from '../../components/ProfilePhotoUpload';
 import { Tabs, TabsContent } from '../../components/ui';
 import { PROJECT_COLORS } from '../../app/constants';
 import { usersService, workspacesService } from '../../services/api';
@@ -411,11 +412,8 @@ export const SettingsPage: React.FC = () => {
           <form onSubmit={handleProfile(onSaveProfile)}>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div className="card flex flex-col items-center gap-4 p-5">
-                <div className="relative">
-                  <UserAvatar name={user.name} color={selectedColor} size="xl" />
-                  <button type="button" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm transition-colors hover:bg-brand-700">
-                    <Camera size={13} />
-                  </button>
+                <div className="relative group">
+                  <ProfilePhotoUpload size="xl" />
                 </div>
                 <div className="text-center">
                   <p className="font-display font-semibold text-surface-900 dark:text-white">{user.name}</p>

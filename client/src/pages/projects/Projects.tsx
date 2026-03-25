@@ -480,12 +480,13 @@ export const ProjectsPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Start date</label>
-              <input {...register('startDate')} type="date" className="input" defaultValue={new Date().toISOString().split('T')[0]} />
+              <input {...register('startDate')} type="date" className="input" min={new Date().toISOString().split('T')[0]} defaultValue={new Date().toISOString().split('T')[0]} />
             </div>
             <div>
               <label className="label">Due date</label>
-              <input {...register('endDate')} type="date" className="input" />
+              <input {...register('endDate')} type="date" className="input" min={new Date().toISOString().split('T')[0]} />
             </div>
+
           </div>
 
           <div className="grid grid-cols-2 gap-4">

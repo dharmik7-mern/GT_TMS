@@ -157,25 +157,25 @@ export default function MISEntry() {
       {/* Header Info */}
       <div className="flex justify-start mb-4">
         <div className="flex space-x-1 bg-gray-100/80 p-1 rounded-lg">
-          <button 
-            onClick={() => setActiveTab('form')} 
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'form' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
-          >
-            Entry Form
-          </button>
-          <button 
-            onClick={() => setActiveTab('history')} 
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
-          >
-            My History
-          </button>
+           <button 
+             onClick={() => setActiveTab('form')} 
+             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'form' ? 'bg-white dark:bg-surface-800 text-blue-600 dark:text-brand-400 shadow-sm' : 'text-gray-600 dark:text-surface-400 hover:text-gray-800 dark:hover:text-surface-200'}`}
+           >
+             Entry Form
+           </button>
+           <button 
+             onClick={() => setActiveTab('history')} 
+             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTab === 'history' ? 'bg-white dark:bg-surface-800 text-blue-600 dark:text-brand-400 shadow-sm' : 'text-gray-600 dark:text-surface-400 hover:text-gray-800 dark:hover:text-surface-200'}`}
+           >
+             My History
+           </button>
         </div>
       </div>
 
-      {activeTab === 'history' && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm animate-in fade-in">
-          <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
-            <thead className="bg-[#fcfdff] text-gray-500 font-semibold text-xs uppercase tracking-wide">
+       {activeTab === 'history' && (
+        <div className="bg-white dark:bg-surface-900 rounded-lg border border-gray-200 dark:border-surface-800 overflow-hidden shadow-sm animate-in fade-in">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-surface-800 text-sm text-left">
+            <thead className="bg-[#fcfdff] dark:bg-surface-950/50 text-gray-500 dark:text-surface-400 font-semibold text-xs uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-2">Week</th>
                 <th className="px-4 py-2">Submitted On</th>
@@ -183,11 +183,11 @@ export default function MISEntry() {
                 <th className="px-4 py-2 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {history.map(item => (
-                <tr key={item.id || item._id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-2.5 font-medium text-gray-800">{item.week}</td>
-                  <td className="px-4 py-2.5 text-gray-500">
+            <tbody className="divide-y divide-gray-100 dark:divide-surface-800">
+               {history.map(item => (
+                <tr key={item.id || item._id} className="hover:bg-gray-50/50 dark:hover:bg-surface-800/50 transition-colors">
+                  <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-surface-100">{item.week}</td>
+                  <td className="px-4 py-2.5 text-gray-500 dark:text-surface-400">
                     {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="px-4 py-2.5">
@@ -225,28 +225,28 @@ export default function MISEntry() {
       {activeTab === 'form' && (
         <div className="space-y-4 animate-in fade-in">
           
-          {/* Header Controls */}
-          <div className="bg-gray-50/50 p-3 rounded-lg border border-gray-200 flex flex-wrap gap-4 items-center">
+           {/* Header Controls */}
+          <div className="bg-gray-50/50 dark:bg-surface-900/50 p-3 rounded-lg border border-gray-200 dark:border-surface-800 flex flex-wrap gap-4 items-center">
             <div className="flex-1 min-w-[150px]">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Employee</label>
-              <div className="text-gray-800 font-semibold text-sm">{user?.name}</div>
+              <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-0.5">Employee</label>
+              <div className="text-gray-800 dark:text-surface-100 font-semibold text-sm">{user?.name}</div>
             </div>
             <div className="flex-1 min-w-[150px]">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Week</label>
+              <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-0.5">Week</label>
               <input 
                 value={week} 
                 onChange={e => setWeek(e.target.value)} 
                 disabled={!isEditable}
-                className="bg-transparent border-b border-gray-200 focus:border-blue-400 focus:outline-none py-0.5 w-full text-gray-800 font-semibold text-sm disabled:text-gray-500 disabled:border-transparent transition-colors"
+                className="bg-transparent border-b border-gray-200 dark:border-surface-700 focus:border-blue-400 dark:focus:border-brand-500 focus:outline-none py-0.5 w-full text-gray-800 dark:text-surface-100 font-semibold text-sm disabled:text-gray-500 disabled:border-transparent transition-colors"
               />
             </div>
             <div className="flex-1 min-w-[150px]">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Status</label>
+              <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-0.5">Status</label>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border
-                ${status === 'draft' ? 'bg-gray-100 text-gray-700 border-gray-200' : ''}
-                ${status === 'submitted' ? 'bg-blue-100 text-blue-700 border-blue-200' : ''}
-                ${status === 'approved' ? 'bg-green-100 text-green-700 border-green-200' : ''}
-                ${status === 'rejected' ? 'bg-red-100 text-red-700 border-red-200' : ''}
+                ${status === 'draft' ? 'bg-gray-100 dark:bg-surface-800 text-gray-700 dark:text-surface-300 border-gray-200 dark:border-surface-700' : ''}
+                ${status === 'submitted' ? 'bg-blue-100 dark:bg-brand-950/40 text-blue-700 dark:text-brand-400 border-blue-200 dark:border-brand-900' : ''}
+                ${status === 'approved' ? 'bg-green-100 dark:bg-emerald-950/40 text-green-700 dark:text-emerald-400 border-green-200 dark:border-emerald-900' : ''}
+                ${status === 'rejected' ? 'bg-red-100 dark:bg-rose-950/40 text-red-700 dark:text-rose-400 border-red-200 dark:border-rose-900' : ''}
               `}>
                 {status}
               </span>
@@ -292,14 +292,14 @@ export default function MISEntry() {
              </div>
           </div>
 
-          {/* Section 1: Business Goals Table */}
-          <div className="bg-white border text-gray-800 border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-[#fcfdff] px-3 py-2 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-xs font-bold text-gray-700 uppercase tracking-widest">Section 1: Business Goals</h2>
+           {/* Section 1: Business Goals Table */}
+          <div className="bg-white dark:bg-surface-900 border text-gray-800 dark:text-surface-100 border-gray-200 dark:border-surface-800 rounded-lg overflow-hidden">
+            <div className="bg-[#fcfdff] dark:bg-surface-950/50 px-3 py-2 border-b border-gray-200 dark:border-surface-800 flex justify-between items-center">
+              <h2 className="text-xs font-bold text-gray-700 dark:text-surface-300 uppercase tracking-widest">Section 1: Business Goals</h2>
               {isEditable && (
                 <button 
                   onClick={() => goals.length < 15 && setGoals([...goals, { target: '', actual: '', status: 'Pending', comment: '' }])}
-                  className="text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
+                  className="text-[11px] font-bold text-blue-600 dark:text-brand-400 hover:text-blue-800 transition-colors flex items-center gap-1"
                 >
                   <span className="text-lg leading-none">+</span> Add Row
                 </button>
@@ -307,7 +307,7 @@ export default function MISEntry() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-[#f9fafb] border-b border-gray-100 text-gray-500 font-semibold tracking-wide uppercase text-[10px]">
+                <thead className="bg-[#f9fafb] dark:bg-surface-900 border-b border-gray-100 dark:border-surface-800 text-gray-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px]">
                   <tr>
                     <th className="px-3 py-1.5 w-8 text-center">SN</th>
                     <th className="px-3 py-1.5 min-w-[150px]">Goal / Target</th>
@@ -317,7 +317,7 @@ export default function MISEntry() {
                     {isEditable && <th className="px-2 py-1.5 w-8"></th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-surface-800">
                   {goals.map((goal, idx) => (
                     <tr key={idx} className="group hover:bg-gray-50/50">
                       <td className="px-3 py-1.5 text-center text-gray-400">{idx + 1}</td>

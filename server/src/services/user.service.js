@@ -508,9 +508,20 @@ export async function updateMyPassword({ companyId, userId, currentPassword, new
     throw err;
   }
 
-  await assertPasswordAllowed(newPassword, { companyId: tenantId, workspaceId });
+  await assertPasswordAllowed(newPassword, { companyId: tenantId });
   user.passwordHash = await hashPassword(newPassword);
   await user.save();
   return true;
+}
+
+export async function updateProfilePhoto({ companyId, userId, avatarUrl }) {
+  const tenantId = companyId;
+  const { User } = await getTenantModels(companyId);
+  const user = await User.findOneAndUpdate(
+    { _id: userId, tenantId },
+    { $set: { avatar: avatarUrl } },
+    { new: true }
+  );
+  return user;
 }
 

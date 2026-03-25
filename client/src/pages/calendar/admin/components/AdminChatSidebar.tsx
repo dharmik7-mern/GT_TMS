@@ -77,9 +77,16 @@ const ConversationItem = ({ convo, isActive, onClick, currentUserId }: { convo: 
                     )}>
                         {displayName}
                     </span>
-                    <span className="text-[11px] text-surface-400 tabular-nums">
-                        {convo.lastMessage?.createdAt ? format(new Date(convo.lastMessage.createdAt), 'HH:mm') : ''}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                        <span className="text-[11px] text-surface-400 tabular-nums">
+                            {convo.lastMessage?.createdAt ? format(new Date(convo.lastMessage.createdAt), 'HH:mm') : ''}
+                        </span>
+                        {(convo.unreadCount || 0) > 0 && (
+                            <div className="bg-brand-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center animate-in zoom-in">
+                                {convo.unreadCount}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <p className="text-[12px] text-surface-500 truncate font-normal">{convo.lastMessage?.text || 'No messages yet'}</p>
             </div>

@@ -365,3 +365,23 @@ export interface Report {
   weeklyCompletion: { week: string; completed: number; total: number }[];
   memberPerformance: { userId: string; completed: number; inProgress: number }[];
 }
+
+export interface TimelineTask {
+  id: string;
+  taskName: string;
+  startDate: string;
+  endDate: string;
+  duration: number;
+  assignedRole?: string;
+  dependencyTaskId?: string;
+  progress: number;
+  status: string;
+}
+
+export interface ProjectTimeline {
+  projectId: string;
+  tasks: TimelineTask[];
+  status: 'Draft' | 'Approved';
+  createdAt: string;
+  updatedAt: string;
+}

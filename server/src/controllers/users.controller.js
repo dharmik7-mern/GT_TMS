@@ -154,3 +154,18 @@ export async function updateMyPassword(req, res, next) {
   }
 }
 
+export async function updateProfilePhoto(req, res, next) {
+  try {
+    const { sub: userId, companyId } = req.auth;
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: { message: 'No file uploaded' } });
+    }
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    const user = await UserService.updateProfilePhoto({ companyId, userId, avatarUrl });
+    if (!user) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    return res.status(200).json({ success: true, data: user });
+  } catch (e) {
+    return next(e);
+  }
+}
+

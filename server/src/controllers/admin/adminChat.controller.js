@@ -35,7 +35,33 @@ export const getConversations = async (req, res) => {
         .populate('participants', 'name email avatar role')
         .sort({ updatedAt: -1 });
         
-        res.status(200).json(conversations);
+        const results = await Promise.all(conversations.map(async (convo) => {
+            const unreadCount = await AdminMessage.countDocuments({
+                conversationId: convo._id,
+                senderId: { $ne: userId },
+                isRead: false
+            });
+            const json = convo.toJSON();
+            json.unreadCount = unreadCount;
+            return json;
+        }));
+        
+        res.status(200).json(results);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Mark as read
+export const markAsRead = async (req, res) => {
+    try {
+        const { id: userId } = getCurrentUser(req);
+        const { conversationId } = req.params;
+        await AdminMessage.updateMany(
+            { conversationId, senderId: { $ne: userId }, isRead: false },
+            { $set: { isRead: true } }
+        );
+        res.status(200).json({ success: true });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
