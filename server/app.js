@@ -22,8 +22,8 @@ import adminCalendarRoutes from './src/routes/admin/calendar.routes.js';
 import adminChatRoutes from './src/routes/admin/adminChat.routes.js';
 import adminDashboardRoutes from './src/routes/admin/adminDashboard.routes.js';
 import adminNotificationRoutes from './src/routes/admin/adminNotification.routes.js';
-// import {sendMail} from './src/services/mail.service.js'
-// import {welcomeTemplate} from './src/templates/mail.templates.js'
+import { sendMail } from './src/services/mail.service.js'
+import { welcomeTemplate } from './src/templates/mail.templates.js'
 const app = express();
 
 // ✅ __dirname fix
@@ -72,6 +72,21 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '1mb' }));
+
+// WAF workaround: allow tunneling PUT/PATCH/DELETE via POST + X-HTTP-Method-Override.
+// This avoids ModSecurity CRS rule 911100 on IIS/Plesk blocking PUT.
+app.use((req, _res, next) => {
+  if (req.method === 'POST') {
+    const headerValue = req.headers['x-http-method-override'];
+    if (typeof headerValue === 'string') {
+      const candidate = headerValue.trim().toUpperCase();
+      if (candidate === 'PUT' || candidate === 'PATCH' || candidate === 'DELETE') {
+        req.method = candidate;
+      }
+    }
+  }
+  next();
+});
 
 // ✅ RATE LIMIT
 app.use(rateLimit({
