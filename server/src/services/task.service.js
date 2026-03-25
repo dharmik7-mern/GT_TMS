@@ -50,6 +50,22 @@ function taskModifyRoles(role, task, userId) {
   return false;
 }
 
+function canViewQuickTask({ role, userId, task }) {
+  const uid = strId(userId);
+  const isOwner = (
+    strId(task.reporterId) === uid ||
+    strId(task.createdBy) === uid ||
+    (task.assigneeIds || []).some((assigneeId) => strId(assigneeId) === uid)
+  );
+
+  if (task.isPrivate) {
+    return isAdminRole(role) || isOwner;
+  }
+
+  if (isAdminRole(role) || ['manager', 'team_leader'].includes(role)) return true;
+  return isOwner;
+}
+
 function mapIdList(values) {
   return Array.isArray(values) ? values.map((value) => strId(value)).filter(Boolean) : [];
 }
@@ -354,7 +370,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
    return (await attachTaskActivity({ companyId, workspaceId: task.workspaceId, tasks: [task] }))[0];
  }
 
- export async function getAnyTaskById({ companyId, workspaceId, userId, role, taskId }) {
+export async function getAnyTaskById({ companyId, workspaceId, userId, role, taskId }) {
    if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
    
    // Try project task
@@ -371,27 +387,20 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
    const quickTask = await QuickTask.findOne({ _id: taskId, tenantId: companyId });
    
    if (quickTask) {
-     if (quickTask.isPrivate && !isAdminRole(role) && strId(quickTask.createdBy) !== strId(userId) && strId(quickTask.reporterId) !== strId(userId)) {
-       console.log(`[TaskService] Access denied to private quick task for user ${userId}`);
+     if (!canViewQuickTask({ role, userId, task: quickTask })) {
        return null;
      }
      const qt = quickTask.toJSON();
      qt.type = 'quick';
-     console.log(`[TaskService] QuickTask found for ID: ${taskId}`);
      return qt;
    }
    
-   console.warn(`[TaskService] No task found in any collection for ID: ${taskId}`);
    return null;
  }
 
 export async function updateTask({ companyId, workspaceId, userId, role, taskId, updates }) {
   const tenantId = companyId;
-<<<<<<< HEAD
-   const { Task, ActivityLog, Notification, Project } = getTenantModels(tenantId);
-=======
-   const { Task, ActivityLog } = await getTenantModels(companyId);
->>>>>>> main
+   const { Task, ActivityLog, Notification, Project } = await getTenantModels(companyId);
    let existing = await Task.findOne({ _id: taskId, tenantId, workspaceId });
    
    if (!existing && (role === 'admin' || role === 'super_admin')) {
@@ -715,7 +724,7 @@ export async function removeSubtask({ companyId, workspaceId, userId, role, task
 
  export async function addTaskAttachments({ companyId, workspaceId, userId, role, taskId, files, requestBaseUrl }) {
    const tenantId = companyId;
-   const { Task } = getTenantModels();
+   const { Task } = await getTenantModels(companyId);
  
    const task = await Task.findOne({
       _id: taskId,
@@ -746,7 +755,7 @@ export async function removeSubtask({ companyId, workspaceId, userId, role, task
  
  export async function addTaskComment({ companyId, workspaceId, userId, role, taskId, content }) {
    const tenantId = companyId;
-   const { Task } = getTenantModels();
+   const { Task } = await getTenantModels(companyId);
  
    const task = await Task.findOne({
       _id: taskId,

@@ -78,8 +78,8 @@ export async function update(req, res, next) {
 
 export async function remove(req, res, next) {
   try {
-    const { companyId, workspaceId, sub: userId } = req.auth;
-    const qt = await QuickTaskService.deleteQuickTask({ companyId, workspaceId, userId, id: req.params.id });
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const qt = await QuickTaskService.deleteQuickTask({ companyId, workspaceId, userId, role, id: req.params.id });
     if (!qt) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Quick task not found' } });
     return res.status(200).json({ success: true, data: { ok: true } });
   } catch (e) {
