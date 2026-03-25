@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Flag, Trash2, Zap, MessageSquare, Send, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, Flag, Trash2, Zap, MessageSquare, Send, Plus, Lock } from 'lucide-react';
 import { cn, formatDate, generateId } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
@@ -318,6 +318,12 @@ export const QuickTaskDetailPage: React.FC = () => {
               )}>
                 {(task.completionReview?.reviewStatus || 'pending').replace('_', ' ')}
               </span>
+              {task.isPrivate && (
+                <span className="badge text-[10px] bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                  <Lock size={10} />
+                  Private
+                </span>
+              )}
               {isOverdue && <span className="badge text-[10px] bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-300">Overdue</span>}
             </div>
 

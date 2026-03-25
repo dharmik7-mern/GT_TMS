@@ -269,6 +269,9 @@ export interface QuickTask {
   priority: Priority;
   assigneeIds: string[];
   reporterId: string;
+  assignedTo?: string;
+  createdBy?: string;
+  isPrivate?: boolean;
   dueDate?: string;
   attachments?: Attachment[];
   comments?: Comment[];
