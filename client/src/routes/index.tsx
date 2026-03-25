@@ -138,6 +138,7 @@ export const router = createBrowserRouter([
       },
       { path: 'support', element: <SASupport /> },
       { path: 'broadcast-notifications', element: <SABroadcast /> },
+      { path: 'profile', element: <UserSettingsPage /> },
 
       // Admin
       { path: 'admin/workspaces', element: <AdminWorkspacesPage /> },
@@ -151,7 +152,6 @@ export const router = createBrowserRouter([
   },
 ], {
   future: {
-    v7_startTransition: true,
     v7_relativeSplatPath: true,
   },
 });

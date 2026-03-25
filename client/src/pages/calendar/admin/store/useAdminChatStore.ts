@@ -22,9 +22,10 @@ export interface Conversation {
     groupName?: string;
     groupAvatar?: string;
     projectId?: string;
-    groupType?: 'project' | 'team' | 'manual';
-    department?: string;
-}
+     groupType?: 'project' | 'team' | 'manual';
+     department?: string;
+     unreadCount?: number;
+ }
 
 export interface Message {
     _id: string;
@@ -46,10 +47,11 @@ interface AdminChatState {
     fetchConversations: () => Promise<void>;
     fetchMessages: (conversationId: string) => Promise<void>;
     sendMessage: (text: string, conversationId?: string) => Promise<void>;
-    startConversation: (participantId: string) => Promise<Conversation | undefined>;
-    createGroup: (name: string, members: string[], metadata?: { projectId?: string, groupType?: string, department?: string }) => Promise<any>;
-    setActiveConversation: (id: string | null) => void;
-}
+     startConversation: (participantId: string) => Promise<Conversation | undefined>;
+     createGroup: (name: string, members: string[], metadata?: { projectId?: string, groupType?: string, department?: string }) => Promise<any>;
+     setActiveConversation: (id: string | null) => void;
+     markAsRead: (conversationId: string) => Promise<void>;
+ }
 
 export const useAdminChatStore = create<AdminChatState>((set, get) => ({
     isOpen: false,
@@ -60,12 +62,26 @@ export const useAdminChatStore = create<AdminChatState>((set, get) => ({
     messages: [],
     loading: false,
 
-    setActiveConversation: (id) => {
-        set({ activeConversationId: id });
-        if (id) {
-            get().fetchMessages(id);
-        }
-    },
+     setActiveConversation: (id) => {
+         set({ activeConversationId: id });
+         if (id) {
+             get().fetchMessages(id);
+             get().markAsRead(id);
+         }
+     },
+ 
+     markAsRead: async (conversationId) => {
+         try {
+             await API.post(`/admin/chat/conversations/${conversationId}/read`);
+             set(state => ({
+                 conversations: state.conversations.map(c => 
+                     c._id === conversationId ? { ...c, unreadCount: 0 } : c
+                 )
+             }));
+         } catch (error) {
+             console.error('Failed to mark as read', error);
+         }
+     },
 
     fetchConversations: async () => {
         set({ loading: true });

@@ -7,6 +7,7 @@ import { useAuthStore } from '../../../../context/authStore.ts';
 import { useAppStore } from '../../../../context/appStore.ts';
 import { emitErrorToast, emitSuccessToast } from '../../../../context/toastBus.ts';
 import { cn } from '../../../../utils/helpers.ts';
+import { Dropdown } from '../../../../components/ui/index.tsx';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers to read stored tag-encoded values
@@ -174,13 +175,13 @@ export const AdminTaskModal = () => {
             onClose={() => setSelectedTask(null)}
             size="full"
             showClose={false}
-            className="max-w-[860px] h-auto max-h-[90vh] rounded-[24px] border-0 bg-white shadow-2xl overflow-hidden"
+            className="max-w-[860px] h-auto max-h-[90vh] rounded-[24px] border-0 bg-white dark:bg-surface-900 shadow-2xl overflow-hidden"
         >
-            <div className="flex h-full flex-col bg-white">
+            <div className="flex h-full flex-col bg-white dark:bg-surface-900">
 
                 {/* ── Header ─────────────────────────────────────────────────── */}
-                <div className="flex items-center justify-between px-8 py-5 border-b border-[#f1f5f9]">
-                    <h2 className="text-[22px] font-bold text-[#1e293b]">
+                <div className="flex items-center justify-between px-8 py-5 border-b border-surface-100 dark:border-surface-800">
+                    <h2 className="text-[22px] font-bold text-surface-900 dark:text-white">
                         {isNew ? 'Create event' : 'Edit event'}
                     </h2>
                     <div className="flex items-center gap-4">
@@ -191,19 +192,24 @@ export const AdminTaskModal = () => {
                                 onClick={() => setRepeatEvent(!repeatEvent)}
                                 className={cn(
                                     'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border',
-                                    repeatEvent ? 'bg-brand-50 border-brand-200 text-brand-700 shadow-sm' : 'text-[#64748b] border-transparent hover:bg-slate-50'
+                                    repeatEvent ? 'bg-brand-50 dark:bg-brand-900/40 border-brand-200 dark:border-brand-800 text-brand-700 dark:text-brand-400 shadow-sm' : 'text-surface-500 dark:text-surface-300 border-transparent hover:bg-surface-50 dark:hover:bg-surface-800'
                                 )}
                             >
                                 <RefreshCcw size={15} /><span>Repeat event</span>
                             </button>
                             {repeatEvent && (
-                                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 p-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                    {['daily', 'weekly', 'monthly'].map((freq) => (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl shadow-xl z-50 p-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    {['daily', 'weekly', 'monthly', 'yearly'].map((freq) => (
                                         <button
                                             key={freq}
                                             type="button"
                                             onClick={() => setRecurrenceFrequency(freq)}
-                                            className={cn('w-full text-left px-3 py-2 rounded-lg text-sm font-bold capitalize transition-colors', recurrenceFrequency === freq ? 'bg-brand-50 text-brand-700' : 'text-[#475569] hover:bg-[#f8fafc]')}
+                                            className={cn(
+                                                'w-full text-left px-3 py-2 rounded-lg text-sm font-bold capitalize',
+                                                recurrenceFrequency === freq
+                                                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400'
+                                                    : 'text-surface-700 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-700'
+                                            )}
                                         >
                                             Every {freq.replace('ly', '')}
                                         </button>
@@ -211,63 +217,79 @@ export const AdminTaskModal = () => {
                                 </div>
                             )}
                         </div>
-                        <button type="button" onClick={() => setSelectedTask(null)} className="p-1 text-[#94a3b8] hover:text-[#1e293b] transition-colors">
-                            <X size={24} />
+
+                        {/* Reminder toggle */}
+                        <button
+                            type="button"
+                            onClick={() => setShowReminderPicker((v) => !v)}
+                            className={cn(
+                                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors',
+                                reminderAt
+                                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 border border-brand-200 dark:border-brand-800'
+                                    : 'text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/50'
+                            )}
+                        >
+                            <Bell size={16} />
+                            <span>{reminderAt ? `Reminder: ${format(reminderAt, 'dd MMM HH:mm')}` : 'Set reminder'}</span>
+                        </button>
+
+                        <button type="button" onClick={() => setSelectedTask(null)} className="text-surface-400 hover:text-surface-700 dark:text-surface-500 dark:hover:text-surface-200 transition-colors">
+                            <X size={20} />
                         </button>
                     </div>
                 </div>
 
-                {/* ── Body ───────────────────────────────────────────────────── */}
-                <div className="flex flex-1 min-h-0">
+                {/* ── Main content ───────────────────────────────────────────── */}
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-3">
+                    {/* Left content */}
+                    <div className="md:col-span-2 p-8 space-y-6 overflow-y-auto">
 
-                    {/* Left column */}
-                    <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
+                        {/* Event name */}
+                        <input
+                            type="text"
+                            placeholder="Project status update meeting"
+                            value={eventName}
+                            onChange={(e) => setEventName(e.target.value)}
+                            className="w-full text-[20px] font-bold text-surface-900 dark:text-white placeholder:text-surface-300 dark:placeholder:text-surface-600 outline-none border border-surface-200 dark:border-surface-700 rounded-xl px-4 py-2.5 bg-surface-50 dark:bg-surface-800 focus:bg-white dark:focus:bg-surface-700 focus:border-brand-400 transition-all shadow-sm"
+                        />
 
                         {/* Date & Time */}
                         <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2.5 px-3 py-2 border border-[#e2e8f0] rounded-xl bg-[#f8fafc] focus-within:bg-white focus-within:border-brand-300 transition-all">
-                                <CalendarDays size={18} className="text-[#94a3b8]" />
+                            <div className="flex items-center gap-2.5 px-3 py-2 border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-800 focus-within:bg-white dark:focus-within:bg-surface-700 focus-within:border-brand-300 transition-all">
+                                <CalendarDays size={18} className="text-surface-400 dark:text-surface-500" />
                                 <input
                                     type="date"
                                     value={format(startTime, 'yyyy-MM-dd')}
+                                    min={format(new Date(), 'yyyy-MM-dd')}
                                     onChange={(e) => {
                                         const [y, m, d] = e.target.value.split('-').map(Number);
                                         const nextS = new Date(startTime); nextS.setFullYear(y, m - 1, d);
                                         const nextE = new Date(endTime);   nextE.setFullYear(y, m - 1, d);
                                         setStartTime(nextS); setEndTime(nextE);
                                     }}
-                                    className="bg-transparent text-sm font-bold text-[#1e293b] outline-none cursor-pointer"
+                                    className="bg-transparent text-sm font-bold text-surface-900 dark:text-white outline-none cursor-pointer"
                                 />
                             </div>
-                            <div className="flex items-center border border-[#e2e8f0] rounded-xl bg-[#f8fafc] p-1 font-bold text-sm text-[#1e293b]">
+                            <div className="flex items-center border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-800 p-1 font-bold text-sm text-surface-900 dark:text-white">
                                 <input type="time" value={format(startTime, 'HH:mm')} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); const n = new Date(startTime); n.setHours(h, m); setStartTime(n); }} className="bg-transparent px-2 py-1 outline-none cursor-pointer" />
-                                <span className="px-1 text-[#94a3b8]">-</span>
+                                <span className="px-1 text-surface-300 dark:text-surface-600">-</span>
                                 <input type="time" value={format(endTime,   'HH:mm')} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); const n = new Date(endTime);   n.setHours(h, m); setEndTime(n);   }} className="bg-transparent px-2 py-1 outline-none cursor-pointer" />
                             </div>
                         </div>
 
-                        {/* Event title */}
-                        <input
-                            type="text"
-                            placeholder="Project status update meeting"
-                            value={eventName}
-                            onChange={(e) => setEventName(e.target.value)}
-                            className="w-full text-[20px] font-bold text-[#1e293b] placeholder:text-[#cbd5e1] outline-none border border-[#e2e8f0] rounded-xl px-4 py-2.5 bg-[#f8fafc] focus:bg-white focus:border-brand-400 transition-all shadow-sm"
-                        />
-
                         {/* Meeting provider */}
                         <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2.5 px-3 py-2 border border-[#e2e8f0] rounded-xl bg-[#f8fafc] flex-1">
-                                <Video size={18} className="text-[#34a853]" />
-                                <select value={meetingProvider} onChange={(e) => setMeetingProvider(e.target.value)} className="bg-transparent text-sm font-bold text-[#1e293b] outline-none flex-1 cursor-pointer">
-                                    <option>Google Meet</option>
-                                    <option>Zoom</option>
-                                    <option>Teams</option>
-                                    <option>None</option>
+                            <div className="flex items-center gap-2.5 px-3 py-2 border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-800 flex-1 transition-all">
+                                <Video size={18} className="text-emerald-500" />
+                                <select value={meetingProvider} onChange={(e) => setMeetingProvider(e.target.value)} className="bg-transparent text-sm font-bold text-surface-900 dark:text-white outline-none flex-1 cursor-pointer">
+                                    <option className="bg-white dark:bg-surface-800">Google Meet</option>
+                                    <option className="bg-white dark:bg-surface-800">Zoom</option>
+                                    <option className="bg-white dark:bg-surface-800">Teams</option>
+                                    <option className="bg-white dark:bg-surface-800">None</option>
                                 </select>
-                                <ChevronDown size={14} className="text-[#94a3b8]" />
+                                <ChevronDown size={14} className="text-surface-400 dark:text-surface-500" />
                             </div>
-                            <span className="text-[13px] text-[#94a3b8] font-medium">{meetingLinkHint}</span>
+                            <span className="text-[13px] text-surface-500 dark:text-surface-400 font-medium">{meetingLinkHint}</span>
                         </div>
 
                         {/* Description */}
@@ -275,59 +297,45 @@ export const AdminTaskModal = () => {
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder={"Let's discuss:\n• What progress have we made toward the campaign's launch\n• What are the major challenges or obstacles\n• Are we on track to meet our next set of milestones"}
-                            className="w-full h-[160px] border border-[#e2e8f0] rounded-2xl bg-[#f8fafc] p-4 text-[14px] leading-relaxed text-[#475569] placeholder:text-[#cbd5e1] outline-none focus:bg-white focus:border-brand-400 transition-all resize-none shadow-inner"
+                            className="w-full h-[160px] border border-surface-200 dark:border-surface-700 rounded-2xl bg-surface-50 dark:bg-surface-800 p-4 text-[14px] leading-relaxed text-surface-700 dark:text-surface-200 placeholder:text-surface-300 dark:placeholder:text-surface-600 outline-none focus:bg-white dark:focus:bg-surface-700 focus:border-brand-400 transition-all resize-none shadow-inner"
                         />
 
                         {/* Action buttons */}
                         <div className="flex items-center gap-3 pt-1 flex-wrap">
                             {/* Attach file */}
-                            <label className="flex items-center gap-2 text-[#64748b] bg-[#f1f5f9] px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-[#e2e8f0] transition-colors cursor-pointer">
+                            <label className="flex items-center gap-2 text-surface-600 dark:text-surface-400 bg-surface-100 dark:bg-surface-800 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors cursor-pointer">
                                 <Paperclip size={16} />
                                 <span>Attach file</span>
                                 <input type="file" multiple className="hidden" onChange={handleFileUpload} />
                             </label>
                             {pendingFiles.length > 0 && (
-                                <span className="text-xs font-bold text-[#64748b]">{pendingFiles.length} file(s) ready</span>
+                                <span className="text-xs font-bold text-surface-500">{pendingFiles.length} file(s) ready</span>
                             )}
-
-                            {/* Set reminder */}
-                            <button
-                                type="button"
-                                onClick={() => setShowReminderPicker((v) => !v)}
-                                className={cn(
-                                    'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors',
-                                    reminderAt
-                                        ? 'bg-[#eff6ff] text-[#2563eb] border border-[#bfdbfe]'
-                                        : 'text-[#2563eb] bg-[#eff6ff] hover:bg-[#dbeafe]'
-                                )}
-                            >
-                                <Bell size={16} />
-                                <span>{reminderAt ? `Reminder: ${format(reminderAt, 'dd MMM HH:mm')}` : 'Set reminder'}</span>
-                            </button>
                         </div>
 
-                        {/* Reminder picker inline */}
+                        {/* Reminder picker */}
                         {showReminderPicker && (
-                            <div className="flex items-center gap-3 p-4 border border-[#bfdbfe] rounded-xl bg-[#eff6ff]">
-                                <Bell size={18} className="text-[#2563eb] shrink-0" />
+                            <div className="flex items-center gap-3 p-4 border border-brand-200 dark:border-brand-800 rounded-xl bg-brand-50 dark:bg-brand-900/20 transition-all">
+                                <Bell size={18} className="text-brand-600 dark:text-brand-400 shrink-0" />
                                 <div className="flex flex-col gap-2 flex-1">
-                                    <p className="text-[12px] font-bold text-[#2563eb] uppercase tracking-wider">Reminder time</p>
+                                    <p className="text-[12px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">Reminder time</p>
                                     <div className="flex gap-2">
                                         <input
                                             type="date"
                                             value={reminderDate}
+                                            min={format(new Date(), 'yyyy-MM-dd')}
                                             onChange={(e) => setReminderDate(e.target.value)}
-                                            className="border border-[#bfdbfe] rounded-lg px-3 py-1.5 text-sm font-bold text-[#1e293b] bg-white outline-none focus:border-[#2563eb]"
+                                            className="border border-surface-200 dark:border-surface-700 rounded-lg px-3 py-1.5 text-sm font-bold text-surface-900 dark:text-white bg-white dark:bg-surface-800 outline-none focus:border-brand-500"
                                         />
                                         <input
                                             type="time"
                                             value={reminderTime}
                                             onChange={(e) => setReminderTime(e.target.value)}
-                                            className="border border-[#bfdbfe] rounded-lg px-3 py-1.5 text-sm font-bold text-[#1e293b] bg-white outline-none focus:border-[#2563eb]"
+                                            className="border border-surface-200 dark:border-surface-700 rounded-lg px-3 py-1.5 text-sm font-bold text-surface-900 dark:text-white bg-white dark:bg-surface-800 outline-none focus:border-brand-500"
                                         />
                                     </div>
                                     {reminderAt && (
-                                        <p className="text-[11px] text-[#2563eb] font-medium">
+                                        <p className="text-[11px] text-brand-600 dark:text-brand-400 font-medium">
                                             Alert fires at: {format(reminderAt, 'dd MMM yyyy, HH:mm')}
                                         </p>
                                     )}
@@ -337,61 +345,64 @@ export const AdminTaskModal = () => {
                     </div>
 
                     {/* Right sidebar */}
-                    <div className="w-[300px] bg-[#f8fafc] border-l border-[#f1f5f9] px-6 py-6 overflow-y-auto space-y-6">
+                    <div className="w-[300px] bg-surface-50 dark:bg-surface-950 border-l border-surface-100 dark:border-surface-800 px-6 py-6 overflow-y-auto space-y-6 transition-colors">
 
                         {/* Create In */}
                         <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-[#94a3b8] mb-2">Create in</p>
-                            <select value={createIn} onChange={(e) => setCreateIn(e.target.value)} className="w-full bg-white border border-[#e2e8f0] rounded-xl px-3 py-2.5 text-sm font-bold text-[#1e293b] outline-none shadow-sm cursor-pointer">
-                                <option>Marketing campaign</option>
-                                <option>Sales Funnel</option>
-                                <option>Internal Sync</option>
-                            </select>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 mb-2 ml-1">Create in</p>
+                            <Dropdown 
+                                value={createIn} 
+                                onChange={(val) => setCreateIn(val)}
+                                items={[
+                                    { id: 'Marketing campaign', label: 'Marketing campaign' },
+                                    { id: 'Sales Funnel', label: 'Sales Funnel' },
+                                    { id: 'Internal Sync', label: 'Internal Sync' },
+                                ]}
+                            />
                         </div>
+
                         {/* Type */}
                         <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-[#94a3b8] mb-2">Type</p>
-                            <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-[#e2e8f0] rounded-xl shadow-sm">
-                                <div className="h-4 w-4 rounded" style={{ backgroundColor: taskColor }} />
-                                <select value={eventType} onChange={(e) => setEventType(e.target.value)} className="bg-transparent text-sm font-bold text-[#1e293b] outline-none flex-1 cursor-pointer">
-                                    <option>Meeting & Interview</option>
-                                    <option>Planning</option>
-                                    <option>Feedback</option>
-                                </select>
-                            </div>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 mb-2 ml-1">Type</p>
+                            <Dropdown 
+                                value={eventType} 
+                                onChange={(val) => setEventType(val)}
+                                items={[
+                                    { id: 'Meeting & Interview', label: 'Meeting & Interview', icon: <div className="h-3 w-3 rounded-full bg-brand-500" /> },
+                                    { id: 'Planning', label: 'Planning', icon: <div className="h-3 w-3 rounded-full bg-emerald-500" /> },
+                                    { id: 'Feedback', label: 'Feedback', icon: <div className="h-3 w-3 rounded-full bg-amber-500" /> },
+                                ]}
+                            />
                         </div>
 
                         {/* Priority */}
                         <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-[#94a3b8] mb-2">Priority</p>
-                            <div className={cn(
-                                "flex items-center gap-3 px-3 py-2.5 bg-white border rounded-xl shadow-sm transition-all",
-                                priority === 'high'   ? "border-red-200 bg-red-50 text-red-700" :
-                                priority === 'medium' ? "border-amber-200 bg-amber-50 text-amber-700" :
-                                priority === 'low'    ? "border-blue-200 bg-blue-50 text-blue-700" :
-                                "border-[#e2e8f0] bg-white text-[#1e293b]"
-                            )}>
-                                <Flag size={16} fill={priority !== 'none' ? 'currentColor' : 'none'} className={cn(
-                                    priority === 'none' ? "text-[#94a3b8]" : "text-current"
-                                )} />
-                                <select 
-                                    value={priority} 
-                                    onChange={(e) => setPriority(e.target.value as any)} 
-                                    className="bg-transparent text-sm font-bold outline-none flex-1 cursor-pointer"
-                                >
-                                    <option value="none" className="text-[#1e293b]">None</option>
-                                    <option value="high" className="text-red-700">High</option>
-                                    <option value="medium" className="text-amber-700">Medium</option>
-                                    <option value="low" className="text-blue-700">Low</option>
-                                </select>
-                                <ChevronDown size={14} className={priority === 'none' ? "text-[#94a3b8]" : "text-current opacity-70"} />
-                            </div>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 mb-2 ml-1">Priority</p>
+                            <Dropdown 
+                                value={priority} 
+                                onChange={(val) => setPriority(val as any)}
+                                triggerClassName={cn(
+                                    priority === 'high'   ? "border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400" :
+                                    priority === 'medium' ? "border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
+                                    priority === 'low'    ? "border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" :
+                                    ""
+                                )}
+                                items={[
+                                    { id: 'none', label: 'None', icon: <Flag size={14} className="text-surface-300 dark:text-surface-600" /> },
+                                    { id: 'high', label: 'High', icon: <Flag size={14} className="text-red-500 fill-red-500" /> },
+                                    { id: 'medium', label: 'Medium', icon: <Flag size={14} className="text-amber-500 fill-amber-500" /> },
+                                    { id: 'low', label: 'Low', icon: <Flag size={14} className="text-blue-500 fill-blue-500" /> },
+                                ]}
+                            />
                         </div>
 
                         {/* Participants */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
-                                <p className="text-[11px] font-bold uppercase tracking-wider text-[#94a3b8]">Participants</p>
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500">Participants</p>
+                                <button type="button" onClick={() => setShowParticipants((v) => !v)} className="text-brand-600 dark:text-brand-400 text-sm font-bold hover:underline">
+                                    {showParticipants ? 'Hide' : 'Add'}
+                                </button>
                             </div>
                             <div className="space-y-2">
                                 {/* Currently selected */}
@@ -399,30 +410,20 @@ export const AdminTaskModal = () => {
                                     const found = availableParticipants.find((u) => u.name === name);
                                     return (
                                         <div key={name} className="flex items-center gap-2.5">
-                                            <div className="h-8 w-8 rounded-full border-2 border-white flex items-center justify-center text-white font-bold text-xs shadow-sm" style={{ backgroundColor: found?.color || '#4DA3FF' }}>
+                                            <div className="h-8 w-8 rounded-full border-2 border-white dark:border-surface-800 flex items-center justify-center text-white font-bold text-xs shadow-sm" style={{ backgroundColor: found?.color || '#4DA3FF' }}>
                                                 {name.charAt(0).toUpperCase()}
                                             </div>
-                                            <span className="text-sm font-bold text-[#1e293b] flex-1">{name}</span>
-                                            <button type="button" onClick={() => toggleParticipant(name)} className="text-[#94a3b8] hover:text-red-500 transition-colors">
+                                            <span className="text-sm font-bold text-surface-900 dark:text-white flex-1 truncate">{name}</span>
+                                            <button type="button" onClick={() => toggleParticipant(name)} className="text-surface-400 dark:text-surface-500 hover:text-red-500 transition-colors">
                                                 <X size={14} />
                                             </button>
                                         </div>
                                     );
                                 })}
 
-                                {/* Add participants button */}
-                                <button
-                                    type="button"
-                                    onClick={() => setShowParticipants((v) => !v)}
-                                    className="flex items-center gap-2 text-brand-600 text-sm font-bold mt-1 hover:underline"
-                                >
-                                    <Plus size={15} />
-                                    <span>Add participants</span>
-                                </button>
-
                                 {/* Participant picker dropdown */}
                                 {showParticipants && (
-                                    <div className="mt-1 border border-[#e2e8f0] rounded-xl bg-white shadow-lg max-h-[180px] overflow-y-auto">
+                                    <div className="mt-1 border border-surface-200 dark:border-surface-700 rounded-xl bg-white dark:bg-surface-800 shadow-xl max-h-[180px] overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-150">
                                         {availableParticipants.map((p) => (
                                             <button
                                                 key={p.id}
@@ -431,8 +432,8 @@ export const AdminTaskModal = () => {
                                                 className={cn(
                                                     'w-full flex items-center gap-2.5 px-3 py-2 text-sm font-bold transition-colors text-left',
                                                     participants.includes(p.name)
-                                                        ? 'bg-brand-50 text-brand-700'
-                                                        : 'hover:bg-[#f8fafc] text-[#1e293b]'
+                                                        ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400'
+                                                        : 'hover:bg-surface-50 dark:hover:bg-surface-700 text-surface-700 dark:text-surface-200'
                                                 )}
                                             >
                                                 <div className="h-7 w-7 rounded-full flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: p.color || '#4DA3FF' }}>
@@ -450,19 +451,19 @@ export const AdminTaskModal = () => {
                 </div>
 
                 {/* ── Footer ────────────────────────────────────────────────── */}
-                <div className="flex items-center justify-between px-8 py-4 border-t border-[#f1f5f9] bg-[#f8fafc]/50">
+                <div className="flex items-center justify-between px-8 py-4 border-t border-surface-100 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-950/50 transition-colors">
                     {!isNew ? (
                         <button type="button" onClick={handleDelete} className="text-red-500 text-sm font-bold hover:underline">
                             Delete event
                         </button>
                     ) : <div />}
                     <div className="flex items-center gap-3">
-                        <button type="button" onClick={() => setSelectedTask(null)} className="px-6 py-2.5 text-sm font-bold text-[#64748b] hover:text-[#1e293b] transition-all">
+                        <button type="button" onClick={() => setSelectedTask(null)} className="px-6 py-2.5 text-sm font-bold text-surface-500 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white transition-all">
                             Cancel
                         </button>
                         <button
                             onClick={handleSave}
-                            className="bg-[#2563eb] text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-600/20 hover:bg-[#1d4ed8] transition-all"
+                            className="bg-brand-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all active:scale-[0.98]"
                         >
                             {isNew ? 'Create event' : 'Save changes'}
                         </button>

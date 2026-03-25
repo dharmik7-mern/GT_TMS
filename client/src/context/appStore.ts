@@ -60,9 +60,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   notifications: [],
   activeProjectId: null,
   sidebarCollapsed: false,
-  darkMode: false,
+  darkMode: localStorage.getItem('darkMode') === 'true',
 
   bootstrap: async () => {
+    // Apply dark mode on initial load
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark');
+    }
+
     const [usersRes, workspacesRes, projectsRes, tasksRes, teamsRes, quickRes, notifRes] = await Promise.all([
       usersService.getAll(),
       workspacesService.getAll(),
@@ -89,6 +94,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   toggleDarkMode: () => {
     const newMode = !get().darkMode;
     set({ darkMode: newMode });
+    localStorage.setItem('darkMode', String(newMode));
     if (newMode) {
       document.documentElement.classList.add('dark');
     } else {

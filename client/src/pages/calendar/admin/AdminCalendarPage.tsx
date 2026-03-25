@@ -77,13 +77,13 @@ export const AdminCalendarPage: React.FC = () => {
     const activeUsers = useMemo(() => users.filter((member) => member.isActive), [users]);
 
     return (
-        <div className="-m-6 flex h-[calc(100vh-60px)] min-h-[calc(100vh-60px)] w-[calc(100%+3rem)] flex-col bg-white max-md:-m-4 max-md:mb-0 max-md:w-[calc(100%+2rem)] font-inter">
+        <div className="-m-6 flex h-[calc(100vh-60px)] min-h-[calc(100vh-60px)] w-[calc(100%+3rem)] flex-col bg-surface-50 dark:bg-surface-950 max-md:-m-4 max-md:mb-0 max-md:w-[calc(100%+2rem)] font-inter">
             {/* Perfectly Aligned Bordio Header */}
-            <div className="z-20 border-b border-[#e2e8f0] bg-white px-5 py-2.5 sm:px-6">
+            <div className="z-20 border-b border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900 px-5 py-2.5 sm:px-6">
                 <div className="flex items-center justify-between w-full h-10">
                     {/* Left: View Switcher + Navigator + Range */}
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center rounded-xl bg-[#f1f5f9] p-1">
+                        <div className="flex items-center rounded-xl bg-surface-100 dark:bg-surface-800 p-1">
                             {['month', 'week', 'day'].map((v) => (
                                 <button
                                     key={v}
@@ -94,8 +94,8 @@ export const AdminCalendarPage: React.FC = () => {
                                     className={cn(
                                         'rounded-md px-4 py-1.5 text-[12px] font-black uppercase tracking-wider transition-all',
                                         view === v
-                                            ? 'bg-white text-[#2563EB] shadow-sm ring-1 ring-[#E2E8F0]'
-                                            : 'text-[#64748B] hover:text-[#1E293B]'
+                                            ? 'bg-white dark:bg-surface-700 text-brand-600 dark:text-brand-400 shadow-sm ring-1 ring-surface-200 dark:ring-surface-600'
+                                            : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'
                                     )}
                                 >
                                     {v}
@@ -106,13 +106,13 @@ export const AdminCalendarPage: React.FC = () => {
                          <div className="flex items-center gap-1">
                             <button
                                 onClick={() => navigate('prev')}
-                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC] transition-colors"
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors"
                             >
                                 <ChevronLeft size={18} />
                             </button>
                             <button
                                 onClick={() => navigate('next')}
-                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC] transition-colors"
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors"
                             >
                                 <ChevronRight size={18} />
                             </button>
@@ -120,7 +120,7 @@ export const AdminCalendarPage: React.FC = () => {
 
 
 
-                        <h1 className="ml-2 text-[18px] font-black text-[#1E293B] tracking-tight">
+                        <h1 className="ml-2 text-[18px] font-black text-surface-900 dark:text-white tracking-tight">
                             {rangeTitle}
                         </h1>
                     </div>
@@ -128,12 +128,12 @@ export const AdminCalendarPage: React.FC = () => {
                     <div className="flex items-center gap-3">
                         <div className="relative hidden lg:block">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={15} />
-                            <input
+                             <input
                                 type="text"
                                 placeholder="Search..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="h-9 w-[180px] rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-9 pr-4 text-[12px] font-medium text-[#1E293B] focus:border-[#2563EB] focus:bg-white focus:outline-none transition-all"
+                                className="h-9 w-[180px] rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 pl-9 pr-4 text-[12px] font-medium text-surface-900 dark:text-white focus:border-brand-500 focus:bg-white dark:focus:bg-surface-700 focus:outline-none transition-all"
                             />
                         </div>
 
@@ -141,9 +141,9 @@ export const AdminCalendarPage: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => { setShowGroupMenu(!showGroupMenu); setShowFilterMenu(false); }}
-                                className={cn(
+                                 className={cn(
                                     "flex h-9 items-center gap-2 rounded-xl border px-3 text-[12px] font-bold transition-colors",
-                                    showGroupMenu ? "border-[#2563EB] bg-blue-50 text-[#2563EB]" : "border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]"
+                                    showGroupMenu ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400" : "border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700"
                                 )}
                             >
                                 <LayoutGrid size={16} />
@@ -151,18 +151,18 @@ export const AdminCalendarPage: React.FC = () => {
                                 <ChevronDown size={12} className={cn("transition-transform", showGroupMenu && "rotate-180")} />
                             </button>
 
-                            {showGroupMenu && (
-                                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-[#E2E8F0] bg-white p-2 shadow-xl z-[60]">
-                                    <div className="mb-1 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Grouping mode</div>
+                             {showGroupMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 p-2 shadow-xl z-[60]">
+                                    <div className="mb-1 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-surface-400">Grouping mode</div>
                                     <button
                                         onClick={() => { setGroupBy('time'); setShowGroupMenu(false); }}
-                                        className={cn("w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors", groupBy === 'time' ? "bg-blue-50 text-[#2563EB]" : "text-[#475569] hover:bg-[#F8FAFC]")}
+                                        className={cn("w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors", groupBy === 'time' ? "bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400" : "text-surface-600 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-700")}
                                     >
                                         By Time
                                     </button>
                                     <button
                                         onClick={() => { setGroupBy('user'); setShowGroupMenu(false); }}
-                                        className={cn("w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors", groupBy === 'user' ? "bg-blue-50 text-[#2563EB]" : "text-[#475569] hover:bg-[#F8FAFC]")}
+                                        className={cn("w-full rounded-lg px-3 py-2 text-left text-sm font-bold transition-colors", groupBy === 'user' ? "bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400" : "text-surface-600 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-700")}
                                     >
                                         By Member
                                     </button>
@@ -174,9 +174,9 @@ export const AdminCalendarPage: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => { setShowFilterMenu(!showFilterMenu); setShowGroupMenu(false); }}
-                                className={cn(
+                                 className={cn(
                                     "flex h-9 items-center gap-2 rounded-xl border px-3 text-[12px] font-bold transition-colors",
-                                    showFilterMenu ? "border-[#2563EB] bg-blue-50 text-[#2563EB]" : "border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]"
+                                    showFilterMenu ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400" : "border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700"
                                 )}
                             >
                                 <Filter size={16} />
@@ -184,10 +184,10 @@ export const AdminCalendarPage: React.FC = () => {
                                 <ChevronDown size={12} className={cn("transition-transform", showFilterMenu && "rotate-180")} />
                             </button>
 
-                            {showFilterMenu && (
-                                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-xl z-[60]">
+                             {showFilterMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 p-3 shadow-xl z-[60]">
                                     <div>
-                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+                                         <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-surface-400">
                                             <Flag size={10} /> Priority
                                         </div>
                                         <div className="flex flex-wrap gap-1.5">
@@ -195,9 +195,9 @@ export const AdminCalendarPage: React.FC = () => {
                                                 <button
                                                     key={p}
                                                     onClick={() => setPriorityFilter(p as any)}
-                                                    className={cn(
+                                                     className={cn(
                                                         "rounded-lg px-2.5 py-1.5 text-[11px] font-bold capitalize border transition-all",
-                                                        priorityFilter === p ? "border-brand-500 bg-brand-50 text-brand-700 font-extrabold" : "border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]"
+                                                        priorityFilter === p ? "border-brand-500 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 font-extrabold" : "border-surface-200 dark:border-surface-700 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700"
                                                     )}
                                                 >
                                                     {p}
@@ -206,8 +206,8 @@ export const AdminCalendarPage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="mt-4 border-t border-[#F1F5F9] pt-3">
-                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+                                    <div className="mt-4 border-t border-surface-200 dark:border-surface-700 pt-3">
+                                         <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-surface-400">
                                             <Info size={10} /> Status
                                         </div>
                                         <div className="flex flex-wrap gap-1.5">
@@ -215,9 +215,9 @@ export const AdminCalendarPage: React.FC = () => {
                                                 <button
                                                     key={s}
                                                     onClick={() => setStatusFilter(s as any)}
-                                                    className={cn(
+                                                     className={cn(
                                                         "rounded-lg px-2.5 py-1.5 text-[11px] font-bold border transition-all",
-                                                        statusFilter === s ? "border-brand-500 bg-brand-50 text-brand-700 font-extrabold" : "border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]"
+                                                        statusFilter === s ? "border-brand-500 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 font-extrabold" : "border-surface-200 dark:border-surface-700 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700"
                                                     )}
                                                 >
                                                     {s}

@@ -85,3 +85,12 @@ export function getAvatarColor(name: string): string {
   }
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
+
+export function getAvatarUrl(avatar?: string): string | undefined {
+  if (!avatar) return undefined;
+  if (avatar.startsWith('http') || avatar.startsWith('data:') || avatar.startsWith('blob:')) return avatar;
+  
+  // Return the path as is (e.g., /uploads/...).
+  // The Vite proxy configurated in vite.config.ts will map this to http://localhost:5000/uploads
+  return avatar;
+}

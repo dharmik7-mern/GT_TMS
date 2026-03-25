@@ -237,9 +237,10 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
             <div>
               <label className="label">Due date</label>
               <div className="relative">
-                <input type="date" {...register('dueDate')} className="input pr-10" />
+                <input type="date" {...register('dueDate')} className="input pr-10" min={new Date().toISOString().split('T')[0]} />
                 <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
               </div>
+
             </div>
           </div>
 

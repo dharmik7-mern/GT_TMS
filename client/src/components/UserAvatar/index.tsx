@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn, getInitials, getAvatarColor } from '../../utils/helpers';
+import { cn, getInitials, getAvatarColor, getAvatarUrl } from '../../utils/helpers';
 
 interface UserAvatarProps {
   name: string;
@@ -42,7 +42,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     <div className={cn('relative flex-shrink-0', className)}>
       {avatar ? (
         <img
-          src={avatar}
+          src={getAvatarUrl(avatar)}
           alt={name}
           className={cn(SIZE_MAP[size], 'rounded-full object-cover')}
         />

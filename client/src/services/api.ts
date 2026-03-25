@@ -94,6 +94,11 @@ export const usersService = {
   updateMe: (data: unknown) => api.put('/users/me', data),
   updatePreferences: (data: unknown) => api.put('/users/me/preferences', data),
   updatePassword: (data: { currentPassword: string; newPassword: string }) => api.put('/users/me/password', data),
+  updateProfilePhoto: (file: File) => {
+    const fd = new FormData();
+    fd.append('avatar', file);
+    return api.put('/users/profile-photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
 };
 
 export const teamsService = {
@@ -169,4 +174,11 @@ export const systemSettingsService = {
   clearCache: () => api.post('/settings/system/clear-cache'),
   refresh: () => api.post('/settings/system/refresh'),
   testEmail: (email: unknown) => api.post('/settings/system/test-email', email),
+};
+
+export const timelineService = {
+  get: (projectId: string) => api.get(`/timeline/${projectId}`),
+  upsert: (projectId: string, data: unknown) => api.post(`/timeline/${projectId}`, data),
+  lock: (projectId: string) => api.patch(`/timeline/${projectId}/lock`),
+  unlock: (projectId: string) => api.patch(`/timeline/${projectId}/unlock`),
 };

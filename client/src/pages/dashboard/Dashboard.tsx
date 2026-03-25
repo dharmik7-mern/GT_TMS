@@ -478,64 +478,65 @@ export const DashboardPage: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white border text-gray-800 border-gray-200 rounded-lg overflow-hidden flex flex-col shadow-sm"
+            className="card overflow-hidden flex flex-col"
           >
-            <div className="bg-[#fcfdff] px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-widest">
+            <div className="bg-surface-50 dark:bg-surface-950/50 px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-surface-700 dark:text-surface-300 uppercase tracking-widest">
                 Team Tasks Overview
               </h3>
-              <span className="text-[10px] text-gray-500 font-semibold bg-gray-100 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] text-brand-600 dark:text-brand-400 font-semibold bg-brand-50 dark:bg-brand-950/30 px-2 py-0.5 rounded-full">
                 In-Progress
               </span>
             </div>
             
-            <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+            <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-hide">
               <table className="w-full text-xs text-left">
-                <thead className="bg-[#f9fafb] text-gray-500 font-semibold tracking-wide uppercase text-[10px] sticky top-0 border-b border-gray-100">
+                <thead className="bg-surface-50 dark:bg-surface-900 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px] sticky top-0 border-b border-surface-100 dark:border-surface-800">
                   <tr>
                     <th className="px-3 py-2 font-semibold">Employee</th>
                     <th className="px-3 py-2 font-semibold">Task</th>
-                    <th className="px-3 py-2 font-semibold">Project</th>
-                    <th className="px-3 py-2 font-semibold">Type</th>
+                    <th className="px-3 py-2 font-semibold hidden sm:table-cell">Project</th>
+                    <th className="px-3 py-2 font-semibold hidden md:table-cell">Type</th>
                     <th className="px-3 py-2 font-semibold text-center">Status</th>
-                    <th className="px-3 py-2 font-semibold text-right">Due Date</th>
+                    <th className="px-3 py-2 font-semibold text-right hidden lg:table-cell">Due Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-surface-50 dark:divide-surface-800">
                   {overviewLoading ? (
-                    <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">Loading tasks...</td></tr>
+                    <tr><td colSpan={6} className="px-3 py-6 text-center text-surface-400">Loading tasks...</td></tr>
                   ) : overviewTasks.length > 0 ? (
                     overviewTasks.map((task) => (
-                      <tr key={task.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-3 py-2.5 font-medium text-gray-800 whitespace-nowrap">{task.assignedTo}</td>
-                        <td className="px-3 py-2.5 text-gray-800 font-medium truncate max-w-[150px]">{task.title}</td>
-                        <td className="px-3 py-2.5 text-gray-600 truncate max-w-[100px]">{task.projectName}</td>
-                        <td className="px-3 py-2.5 text-gray-500 capitalize">{task.type}</td>
+                      <tr key={task.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
+                        <td className="px-3 py-2.5 font-medium text-surface-800 dark:text-surface-200 whitespace-nowrap">{task.assignedTo}</td>
+                        <td className="px-3 py-2.5 text-surface-800 dark:text-surface-200 font-medium truncate max-w-[120px] sm:max-w-[150px]">{task.title}</td>
+                        <td className="px-3 py-2.5 text-surface-500 dark:text-surface-400 truncate max-w-[100px] hidden sm:table-cell">{task.projectName}</td>
+                        <td className="px-3 py-2.5 text-surface-500 dark:text-surface-400 capitalize hidden md:table-cell">{task.type}</td>
                         <td className="px-3 py-2.5 text-center">
-                          <span className={`px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wide
-                            ${task.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200/50' : ''}
-                            ${task.status === 'done' || task.status === 'completed' ? 'bg-green-50 text-green-700 border border-green-200/50' : ''}
-                            ${task.status === 'todo' || task.status === 'pending' || task.status === 'backlog' ? 'bg-red-50 text-red-700 border border-red-200/50' : ''}
-                          `}>
+                          <span className={cn(
+                            'px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wide border',
+                            (task.status === 'in_progress') && 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50',
+                            (task.status === 'done' || task.status === 'completed') && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
+                            (task.status === 'todo' || task.status === 'pending' || task.status === 'backlog') && 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50'
+                          )}>
                             {task.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right text-gray-500 whitespace-nowrap">
-                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '—'}
+                        <td className="px-3 py-2.5 text-right text-surface-500 dark:text-surface-400 whitespace-nowrap hidden lg:table-cell">
+                          {task.dueDate ? formatDate(task.dueDate) : '—'}
                         </td>
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">No in-progress tasks found.</td></tr>
+                    <tr><td colSpan={6} className="px-3 py-6 text-center text-surface-400">No in-progress tasks found.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
             
-            <div className="p-3 border-t border-gray-100 flex justify-end bg-[#fcfdff]">
+            <div className="p-3 border-t border-surface-100 dark:border-surface-800 flex justify-end bg-surface-50 dark:bg-surface-950/50">
               <button 
                 onClick={() => navigate('/tasks')}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
+                className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:text-brand-800 transition-colors flex items-center gap-1"
               >
                 View All Tasks &rarr;
               </button>

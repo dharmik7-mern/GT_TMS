@@ -351,43 +351,6 @@ export const QuickTasksPage: React.FC = () => {
 
   return (
     <div className="max-w-full mx-auto">
-      <div className="page-header">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="page-title flex items-center gap-2">
-              <Zap size={18} className="text-brand-600" />
-              Quick Tasks
-            </h1>
-            <p className="page-subtitle">
-              Individual assignments without linking a project
-            </p>
-          </div>
-          <div className='flex items-start justify-between gap-4'>
-          {canImportQuickTasks ? (
-            <>
-              {/* <button className="btn-secondary btn-sm hidden md:flex" onClick={downloadImportTemplate}>
-                <Upload size={16} />
-                Download Template
-              </button> */}
-              <button
-                className="btn-secondary btn-sm hidden md:flex"
-                onClick={() => {
-                  resetImportState();
-                  setImportOpen(true);
-                }}
-              >
-                <Upload size={16} />
-                Import Excel
-              </button>
-            </>
-          ) : null}
-          <button className="btn-primary btn-sm hidden md:flex" onClick={openNew}>
-            <Plus size={16} />
-            New Quick Task
-          </button>
-          </div>
-        </div>
-      </div>
 
       <Tabs value={scope} onValueChange={(v) => setScope(v as ScopeFilter)} items={scopeTabs} variant="pill" className="mb-5">
         <TabsContent value={scope} className="mt-4">
@@ -429,6 +392,25 @@ export const QuickTasksPage: React.FC = () => {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+              {canImportQuickTasks && (
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => {
+                    resetImportState();
+                    setImportOpen(true);
+                  }}
+                >
+                  <Upload size={16} />
+                  <span>Import</span>
+                </button>
+              )}
+              <button className="btn-primary btn-sm" onClick={openNew}>
+                <Plus size={16} />
+                <span>New Quick Task</span>
+              </button>
             </div>
           </div>
 

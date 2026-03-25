@@ -13,6 +13,8 @@ import companiesRoutes from './modules/companies.routes.js';
 import settingsRoutes from './modules/settings.routes.js';
 import misRoutes from './modules/mis.routes.js';
 import reportsRoutes from './modules/reports.routes.js';
+import timelineRoutes from './modules/timeline.routes.js';
+
 
 const router = express.Router();
 
@@ -29,6 +31,8 @@ router.use('/activity', activityRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/mis', misRoutes);
 router.use('/reports', reportsRoutes);
+router.use('/timeline', timelineRoutes);
+
 
 export default router;
 

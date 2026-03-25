@@ -10,6 +10,8 @@ import { getQuickTaskModel } from '../models/QuickTask.js';
 import { getNotificationModel } from '../models/Notification.js';
 import { getActivityLogModel } from '../models/ActivityLog.js';
 import { getRefreshTokenModel } from '../models/RefreshToken.js';
+import { getProjectTimelineModel } from '../models/ProjectTimeline.js';
+
 
 const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'GT_TMS';
 const tenantDbCache = new Map();
@@ -89,6 +91,8 @@ export async function getTenantModels(companyId = null) {
     Notification: getNotificationModel(conn),
     ActivityLog: getActivityLogModel(conn),
     RefreshToken: getRefreshTokenModel(conn),
+    ProjectTimeline: getProjectTimelineModel(conn),
   };
 }
+
 

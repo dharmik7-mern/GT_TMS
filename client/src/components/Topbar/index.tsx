@@ -28,6 +28,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   'mis-entry': 'MIS Entry',
   'mis-manager': 'Manager Reviews',
   'mis-reports': 'MIS Reports',
+  'quick-tasks': 'Quick Tasks',
 };
 
 export const Topbar: React.FC = () => {
@@ -40,9 +41,11 @@ export const Topbar: React.FC = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const unread = unreadNotificationsCount();
-  const searchRef = useRef<HTMLDivElement>(null);
-  const profileRef = useRef<HTMLDivElement>(null);
+   const { conversations } = useAdminChatStore();
+   const unread = unreadNotificationsCount();
+   const hasUnreadChat = conversations.some(c => (c.unreadCount || 0) > 0);
+   const searchRef = useRef<HTMLDivElement>(null);
+    const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -76,7 +79,7 @@ export const Topbar: React.FC = () => {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 h-[60px] bg-white/90 dark:bg-surface-900/90 backdrop-blur-md border-b border-surface-100 dark:border-surface-800 z-20 flex items-center px-4 gap-3 transition-all duration-250',
+        'fixed top-0 right-0 h-[60px] bg-white dark:bg-surface-950 border-b border-surface-100 dark:border-surface-800 z-20 flex items-center px-4 gap-3 transition-all duration-250',
         sidebarCollapsed ? 'md:left-16' : 'md:left-[260px]',
         'left-0'
       )}
@@ -145,14 +148,16 @@ export const Topbar: React.FC = () => {
 
       {/* Messenger Toggle */}
       {user && (
-        <button
-          onClick={() => useAdminChatStore.getState().toggleSidebar()}
-          className="btn-ghost btn-sm w-9 h-9 rounded-xl flex-shrink-0 relative group"
-          title="Messenger"
-        >
-          <MessageCircle size={17} className="group-hover:text-brand-500 transition-colors" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full ring-2 ring-white dark:ring-surface-900 animate-pulse" />
-        </button>
+         <button
+           onClick={() => useAdminChatStore.getState().toggleSidebar()}
+           className="btn-ghost btn-sm w-9 h-9 rounded-xl flex-shrink-0 relative group"
+           title="Messenger"
+         >
+           <MessageCircle size={17} className="group-hover:text-brand-500 transition-colors" />
+           {hasUnreadChat && (
+             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full ring-2 ring-white dark:ring-surface-900 animate-pulse" />
+           )}
+         </button>
       )}
 
       {/* Notifications */}
@@ -177,6 +182,7 @@ export const Topbar: React.FC = () => {
       {user && (
         <div ref={profileRef} className="relative flex-shrink-0">
           <button
+
             type="button"
             onClick={() => setProfileOpen((prev) => !prev)}
             className="flex-shrink-0 hover:opacity-80 transition-opacity"
@@ -192,7 +198,7 @@ export const Topbar: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.16 }}
-                className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-lg dark:border-surface-700 dark:bg-surface-900"
+                className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-lg dark:border-surface-800 dark:bg-surface-900"
               >
                 <div className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">
                   <p className="text-sm font-semibold text-surface-900 dark:text-white">{user.name}</p>

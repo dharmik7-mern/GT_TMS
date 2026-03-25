@@ -1,7 +1,8 @@
 import React from 'react';
 import * as RadixTabs from '@radix-ui/react-tabs';
-import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronsUpDown } from 'lucide-react';
+import * as RadixDropdown from '@radix-ui/react-dropdown-menu';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronLeft, ChevronRight, ChevronsUpDown, ChevronDown } from 'lucide-react';
 import { cn } from '../../utils/helpers';
 
 // ─── Tabs ────────────────────────────────────────────────────────────────────
@@ -65,6 +66,85 @@ export const Tabs: React.FC<TabsProps> = ({
 );
 
 export const TabsContent = RadixTabs.Content;
+
+// ─── Dropdown ────────────────────────────────────────────────────────────────
+interface DropdownItem {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  color?: string;
+  className?: string;
+}
+
+interface DropdownProps {
+  value: string;
+  onChange: (v: string) => void;
+  items: DropdownItem[];
+  placeholder?: string;
+  label?: string;
+  className?: string;
+  triggerClassName?: string;
+  disabled?: boolean;
+}
+
+export const Dropdown: React.FC<DropdownProps> = ({
+  value, onChange, items, placeholder = 'Select...', label, className, triggerClassName, disabled
+}) => {
+  const selected = items.find(i => i.id === value);
+
+  return (
+    <div className={cn('flex flex-col gap-1', className)}>
+      {label && <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest ml-1">{label}</label>}
+      <RadixDropdown.Root>
+        <RadixDropdown.Trigger 
+          disabled={disabled}
+          className={cn(
+            "flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all outline-none text-xs font-semibold",
+            "bg-white dark:bg-surface-900 border-surface-100 dark:border-surface-800",
+            "hover:border-brand-300 dark:hover:border-surface-700 focus:ring-2 focus:ring-brand-500/20",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+            triggerClassName
+          )}
+        >
+          <span className={cn("truncate", !selected && "text-surface-400")}>
+            {selected ? (
+              <span className="flex items-center gap-2">
+                {selected.icon}
+                {selected.label}
+              </span>
+            ) : placeholder}
+          </span>
+          <ChevronDown size={14} className="text-surface-400 flex-shrink-0" />
+        </RadixDropdown.Trigger>
+
+        <RadixDropdown.Portal>
+          <RadixDropdown.Content 
+            align="start"
+            sideOffset={4}
+            className="z-[9999] min-w-[160px] bg-white dark:bg-surface-900 rounded-xl border border-surface-100 dark:border-surface-800 shadow-xl p-1 animate-in fade-in zoom-in-95 duration-100"
+          >
+            {items.map((item) => (
+              <RadixDropdown.Item
+                key={item.id}
+                onClick={() => onChange(item.id)}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg cursor-pointer outline-none transition-colors mb-0.5 last:mb-0",
+                  "text-surface-600 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-800 hover:text-brand-600 dark:hover:text-brand-400",
+                  value === item.id && "bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400 font-bold",
+                  item.className
+                )}
+              >
+                {item.icon}
+                <span className="flex-1">{item.label}</span>
+                {value === item.id && <div className="w-1.5 h-1.5 rounded-full bg-brand-500 shadow-sm" />}
+              </RadixDropdown.Item>
+            ))}
+          </RadixDropdown.Content>
+        </RadixDropdown.Portal>
+      </RadixDropdown.Root>
+    </div>
+  );
+};
 
 // ─── Table ────────────────────────────────────────────────────────────────────
 interface Column<T> {

@@ -26,15 +26,15 @@ export default function MISReports() {
   };
 
   const renderTabs = () => (
-    <div className="flex space-x-1 bg-gray-100/80 p-1 rounded-lg w-fit mb-4">
+     <div className="flex space-x-1 bg-gray-100/80 dark:bg-surface-800/50 p-1 rounded-lg w-fit mb-4">
       {['weekly', 'employee', 'project'].map((tab) => (
         <button
           key={tab}
           onClick={() => setActiveTab(tab as any)}
           className={`px-4 py-1.5 rounded-md text-sm font-semibold capitalize transition-colors ${
             activeTab === tab 
-              ? 'bg-white text-blue-600 shadow-sm' 
-              : 'text-gray-600 hover:text-gray-800'
+              ? 'bg-white dark:bg-surface-800 text-blue-600 dark:text-brand-400 shadow-sm' 
+              : 'text-gray-600 dark:text-surface-400 hover:text-gray-800 dark:hover:text-surface-200'
           }`}
         >
           {tab} Report
@@ -50,8 +50,8 @@ export default function MISReports() {
 
     if (activeTab === 'weekly') {
       return (
-        <table className="min-w-full divide-y divide-gray-200 text-xs text-left">
-          <thead className="bg-[#fcfdff] text-gray-500 font-semibold tracking-widest uppercase text-[10px] border-b border-gray-200">
+         <table className="min-w-full divide-y divide-gray-200 dark:divide-surface-800 text-xs text-left">
+          <thead className="bg-[#fcfdff] dark:bg-surface-950/50 text-gray-500 dark:text-surface-400 font-semibold tracking-widest uppercase text-[10px] border-b border-gray-200 dark:border-surface-800">
             <tr>
               <th className="px-4 py-2">Employee</th>
               <th className="px-4 py-2">Week</th>
@@ -61,23 +61,23 @@ export default function MISReports() {
               <th className="px-4 py-2">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
-            {data.map((row, i) => (
-              <tr key={i} className="hover:bg-gray-50/50 transition-colors group">
-                <td className="px-4 py-2.5 font-medium text-gray-800">
+          <tbody className="divide-y divide-gray-100 dark:divide-surface-800 bg-white dark:bg-surface-900">
+             {data.map((row, i) => (
+              <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-surface-800/50 transition-colors group">
+                <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-surface-100">
                    <div className="flex items-center space-x-2">
                      {row.avatar ? (
                        <img src={row.avatar} alt="avatar" className="w-5 h-5 rounded-full object-cover" />
                      ) : (
-                       <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 font-bold text-[10px]">
+                       <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-brand-950/40 flex items-center justify-center text-blue-800 dark:text-brand-400 font-bold text-[10px]">
                          {row.employeeName?.charAt(0) || 'U'}
                        </div>
                      )}
                      <span>{row.employeeName}</span>
                    </div>
                 </td>
-                <td className="px-4 py-2.5 text-gray-700 font-medium">{row.week}</td>
-                <td className="px-4 py-2.5 text-center text-gray-800 font-bold">{row.totalGoals}</td>
+                <td className="px-4 py-2.5 text-gray-700 dark:text-surface-300 font-medium">{row.week}</td>
+                <td className="px-4 py-2.5 text-center text-gray-800 dark:text-surface-100 font-bold">{row.totalGoals}</td>
                 <td className="px-4 py-2.5 text-center text-green-600 font-bold">{row.completedGoals}</td>
                 <td className="px-4 py-2.5 text-center text-red-500 font-bold">{row.pendingGoals}</td>
                 <td className="px-4 py-2.5">
@@ -100,8 +100,8 @@ export default function MISReports() {
 
     if (activeTab === 'employee') {
       return (
-        <table className="min-w-full divide-y divide-gray-200 text-xs text-left">
-          <thead className="bg-[#fcfdff] text-gray-500 font-semibold tracking-widest uppercase text-[10px] border-b border-gray-200">
+         <table className="min-w-full divide-y divide-gray-200 dark:divide-surface-800 text-xs text-left">
+          <thead className="bg-[#fcfdff] dark:bg-surface-950/50 text-gray-500 dark:text-surface-400 font-semibold tracking-widest uppercase text-[10px] border-b border-gray-200 dark:border-surface-800">
             <tr>
               <th className="px-4 py-2">Employee</th>
               <th className="px-4 py-2 text-center">Total Tasks</th>
@@ -110,7 +110,7 @@ export default function MISReports() {
               <th className="px-4 py-2 text-center">Efficiency %</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
+          <tbody className="divide-y divide-gray-100 dark:divide-surface-800 bg-white dark:bg-surface-900">
             {data.map((row, i) => (
               <tr key={i} className="hover:bg-gray-50/50 transition-colors group">
                 <td className="px-4 py-2.5 font-medium text-gray-800">
@@ -146,8 +146,8 @@ export default function MISReports() {
 
     if (activeTab === 'project') {
       return (
-        <table className="min-w-full divide-y divide-gray-200 text-xs text-left">
-          <thead className="bg-[#fcfdff] text-gray-500 font-semibold tracking-widest uppercase text-[10px] border-b border-gray-200">
+         <table className="min-w-full divide-y divide-gray-200 dark:divide-surface-800 text-xs text-left">
+          <thead className="bg-[#fcfdff] dark:bg-surface-950/50 text-gray-500 dark:text-surface-400 font-semibold tracking-widest uppercase text-[10px] border-b border-gray-200 dark:border-surface-800">
             <tr>
               <th className="px-4 py-2">Project</th>
               <th className="px-4 py-2">Employee Name</th>
@@ -156,7 +156,7 @@ export default function MISReports() {
               <th className="px-4 py-2 text-center">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
+          <tbody className="divide-y divide-gray-100 dark:divide-surface-800 bg-white dark:bg-surface-900">
             {data.map((row, i) => (
               <tr key={i} className="hover:bg-gray-50/50 transition-colors group">
                 <td className="px-4 py-2.5 font-medium text-brand-700">{row.projectName}</td>
@@ -190,15 +190,15 @@ export default function MISReports() {
     return null;
   };
 
-  return (
-    <div className="w-full font-sans pb-8">
-      {renderTabs()}
-
-      <div className="bg-white border text-gray-800 border-gray-200 rounded-lg overflow-hidden animate-in fade-in">
-        <div className="overflow-x-auto">
-          {renderTable()}
-        </div>
-      </div>
-    </div>
-  );
+   return (
+     <div className="w-full font-sans pb-8">
+       {renderTabs()}
+  
+       <div className="bg-white dark:bg-surface-900 border text-gray-800 dark:text-surface-100 border-gray-200 dark:border-surface-800 rounded-lg overflow-hidden animate-in fade-in">
+         <div className="overflow-x-auto">
+           {renderTable()}
+         </div>
+       </div>
+     </div>
+   );
 }

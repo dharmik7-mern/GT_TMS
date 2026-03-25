@@ -367,3 +367,37 @@ export interface Report {
   weeklyCompletion: { week: string; completed: number; total: number }[];
   memberPerformance: { userId: string; completed: number; inProgress: number }[];
 }
+
+export interface TimelineTask {
+  id: string;
+  taskName: string;
+  startDate: string; // Maintain backward compatibility (Legacy)
+  endDate: string;   // Maintain backward compatibility (Legacy)
+  duration: number;  // Maintain backward compatibility (Legacy)
+
+  // BASELINE (PLANNED)
+  plannedStartDate: string;
+  plannedEndDate: string;
+  plannedDuration: number;
+
+  // ACTUAL (REAL)
+  actualStartDate?: string;
+  actualEndDate?: string;
+  actualDuration?: number;
+
+  assignedRole?: string;
+  dependencyTaskId?: string;
+  progress: number;
+  status: 'not_started' | 'in_progress' | 'completed' | 'delayed';
+  
+  varianceDays?: number; // actualDuration - plannedDuration
+  delayDays?: number;    // if actualEndDate > plannedEndDate
+}
+
+export interface ProjectTimeline {
+  projectId: string;
+  tasks: TimelineTask[];
+  status: 'Draft' | 'Approved';
+  createdAt: string;
+  updatedAt: string;
+}

@@ -96,39 +96,39 @@ export default function MISManager() {
           <span className="text-lg leading-none">&larr;</span> Back to Pending List
         </button>
 
-        {/* Info Box */}
-        <div className="bg-gray-50/50 p-3 rounded-lg border border-gray-200 flex flex-wrap gap-4 items-center mb-6">
-          <div className="flex-1 min-w-[150px]">
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Employee</label>
+         {/* Info Box */}
+        <div className="bg-gray-50/50 dark:bg-surface-900/50 p-3 rounded-lg border border-gray-200 dark:border-surface-800 flex flex-wrap gap-4 items-center mb-6">
+           <div className="flex-1 min-w-[150px]">
+            <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-1">Employee</label>
             <div className="flex items-center space-x-2">
                {selectedMIS.employeeId?.avatar ? (
                  <img src={selectedMIS.employeeId.avatar} alt="avatar" className="w-5 h-5 rounded-full object-cover" />
                ) : (
-                 <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 font-bold text-[10px] uppercase">
+                 <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-brand-950/40 flex items-center justify-center text-blue-800 dark:text-brand-400 font-bold text-[10px] uppercase">
                    {selectedMIS.employeeId?.name?.charAt(0) || 'U'}
                  </div>
                )}
-               <span className="text-gray-900 font-semibold text-sm">{selectedMIS.employeeId?.name || 'Unknown'}</span>
+               <span className="text-gray-900 dark:text-surface-100 font-semibold text-sm">{selectedMIS.employeeId?.name || 'Unknown'}</span>
             </div>
           </div>
-          <div className="flex-1 min-w-[150px]">
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Week</label>
-            <div className="text-gray-900 font-semibold text-sm">{selectedMIS.week}</div>
+           <div className="flex-1 min-w-[150px]">
+            <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-1">Week</label>
+            <div className="text-gray-900 dark:text-surface-100 font-semibold text-sm">{selectedMIS.week}</div>
           </div>
           <div className="flex-1 min-w-[150px]">
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Project</label>
-            <div className="text-gray-900 font-semibold text-sm">{selectedMIS.projectId?.name || 'None'}</div>
+            <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-1">Project</label>
+            <div className="text-gray-900 dark:text-surface-100 font-semibold text-sm">{selectedMIS.projectId?.name || 'None'}</div>
           </div>
         </div>
 
-        {/* Section 1 */}
-        <div className="bg-white border text-gray-800 border-gray-200 rounded-lg overflow-hidden mb-5">
-          <div className="bg-[#fcfdff] px-3 py-2 border-b border-gray-200">
-             <h2 className="text-xs font-bold text-gray-700 uppercase tracking-widest">Business Goals</h2>
+         {/* Section 1 */}
+        <div className="bg-white dark:bg-surface-900 border text-gray-800 dark:text-surface-100 border-gray-200 dark:border-surface-800 rounded-lg overflow-hidden mb-5">
+          <div className="bg-[#fcfdff] dark:bg-surface-950/50 px-3 py-2 border-b border-gray-200 dark:border-surface-800">
+             <h2 className="text-xs font-bold text-gray-700 dark:text-surface-300 uppercase tracking-widest">Business Goals</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-               <thead className="bg-[#f9fafb] border-b border-gray-100 text-gray-500 font-semibold tracking-wide uppercase text-[10px]">
+               <thead className="bg-[#f9fafb] dark:bg-surface-900 border-b border-gray-100 dark:border-surface-800 text-gray-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px]">
                  <tr>
                    <th className="px-3 py-1.5 w-8 text-center">#</th>
                    <th className="px-3 py-1.5 min-w-[200px]">Goal / Target</th>
@@ -137,18 +137,18 @@ export default function MISManager() {
                    <th className="px-3 py-1.5 min-w-[150px]">Comment</th>
                  </tr>
                </thead>
-               <tbody className="divide-y divide-gray-100">
+               <tbody className="divide-y divide-gray-100 dark:divide-surface-800">
                  {selectedMIS.goals.map((g, idx) => (
-                   <tr key={idx} className="hover:bg-gray-50/50">
-                      <td className="px-3 py-2 text-center text-gray-400">{idx + 1}</td>
-                      <td className="px-3 py-2 text-gray-800">{g.target}</td>
-                      <td className="px-3 py-2 text-gray-800">{g.actual || '-'}</td>
-                      <td className="px-3 py-2">
-                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide
-                            ${g.status === 'Done' ? 'bg-green-100 text-green-700' : ''}
-                            ${g.status === 'In Progress' ? 'bg-yellow-100 text-yellow-700' : ''}
-                            ${g.status === 'Pending' ? 'bg-red-100 text-red-700' : ''}
-                         `}>
+                    <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-surface-800/50">
+                       <td className="px-3 py-2 text-center text-gray-400 dark:text-surface-500">{idx + 1}</td>
+                       <td className="px-3 py-2 text-gray-800 dark:text-surface-100">{g.target}</td>
+                       <td className="px-3 py-2 text-gray-800 dark:text-surface-100">{g.actual || '-'}</td>
+                       <td className="px-3 py-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide
+                             ${g.status === 'Done' ? 'bg-green-100 dark:bg-emerald-950/40 text-green-700 dark:text-emerald-400' : ''}
+                             ${g.status === 'In Progress' ? 'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400' : ''}
+                             ${g.status === 'Pending' ? 'bg-red-100 dark:bg-rose-950/40 text-red-700 dark:text-rose-400' : ''}
+                          `}>
                             {g.status}
                          </span>
                       </td>
@@ -160,20 +160,20 @@ export default function MISManager() {
           </div>
         </div>
 
-        {/* Section 2 */}
-        <div className="bg-white border text-gray-800 border-gray-200 rounded-lg overflow-hidden mb-5">
-          <div className="bg-[#fcfdff] px-3 py-2 border-b border-gray-200">
-             <h2 className="text-xs font-bold text-gray-700 uppercase tracking-widest">Learnings</h2>
+         {/* Section 2 */}
+        <div className="bg-white dark:bg-surface-900 border text-gray-800 dark:text-surface-100 border-gray-200 dark:border-surface-800 rounded-lg overflow-hidden mb-5">
+          <div className="bg-[#fcfdff] dark:bg-surface-950/50 px-3 py-2 border-b border-gray-200 dark:border-surface-800">
+             <h2 className="text-xs font-bold text-gray-700 dark:text-surface-300 uppercase tracking-widest">Learnings</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-               <thead className="bg-[#f9fafb] border-b border-gray-100 text-gray-500 font-semibold tracking-wide uppercase text-[10px]">
+               <thead className="bg-[#f9fafb] dark:bg-surface-900 border-b border-gray-100 dark:border-surface-800 text-gray-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px]">
                  <tr>
                    <th className="px-3 py-1.5 min-w-[250px]">Challenge Faced</th>
                    <th className="px-3 py-1.5 min-w-[250px]">Lesson Learned</th>
                  </tr>
                </thead>
-               <tbody className="divide-y divide-gray-100">
+               <tbody className="divide-y divide-gray-100 dark:divide-surface-800">
                  {selectedMIS.learnings.length > 0 ? selectedMIS.learnings.map((l, idx) => (
                    <tr key={idx} className="hover:bg-gray-50/50">
                       <td className="px-3 py-2 text-gray-800">{l.challenge}</td>
@@ -228,13 +228,13 @@ export default function MISManager() {
           </div>
         </div>
 
-        {/* Action Panel */}
-        <div className="bg-gray-50/50 rounded-lg p-4 border border-gray-200">
-           <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">Manager Feedback / Comments</label>
+         {/* Action Panel */}
+        <div className="bg-gray-50/50 dark:bg-surface-900/50 rounded-lg p-4 border border-gray-200 dark:border-surface-800">
+           <label className="block text-[11px] font-bold text-gray-500 dark:text-surface-400 uppercase tracking-widest mb-1.5">Manager Feedback / Comments</label>
            <textarea 
              value={comment}
              onChange={(e) => setComment(e.target.value)}
-             className="w-full px-3 py-2 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none disabled:bg-gray-100 text-gray-800 shadow-sm"
+             className="w-full px-3 py-2 border border-gray-200 dark:border-surface-700 bg-white dark:bg-surface-800 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none disabled:bg-gray-100 dark:disabled:bg-surface-900 text-gray-800 dark:text-surface-100 shadow-sm transition-all"
              rows={2}
              placeholder="Optional for Approval, Mandatory for Rejection..."
            />
@@ -242,7 +242,7 @@ export default function MISManager() {
               <button 
                 onClick={() => handleAction('reject')}
                 disabled={actionLoading}
-                className="px-5 py-1.5 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-colors disabled:opacity-50"
+                className="px-5 py-1.5 rounded border border-red-200 dark:border-rose-900 bg-red-50 dark:bg-rose-950/20 hover:bg-red-100 dark:hover:bg-rose-900/40 text-red-700 dark:text-rose-400 text-xs font-bold transition-colors disabled:opacity-50"
               >
                 Reject MIS
               </button>
@@ -269,10 +269,10 @@ export default function MISManager() {
         </button>
       </div>
 
-      <div className="bg-white border text-gray-800 border-gray-200 rounded-lg overflow-hidden">
+       <div className="bg-white dark:bg-surface-900 border text-gray-800 dark:text-surface-100 border-gray-200 dark:border-surface-800 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-[#fcfdff] text-gray-500 font-semibold text-[10px] tracking-widest uppercase border-b border-gray-200">
+            <thead className="bg-[#fcfdff] dark:bg-surface-950/50 text-gray-500 dark:text-surface-400 font-semibold text-[10px] tracking-widest uppercase border-b border-gray-200 dark:border-surface-800">
               <tr>
                 <th className="px-4 py-2">Employee</th>
                 <th className="px-4 py-2">Week</th>
@@ -282,24 +282,24 @@ export default function MISManager() {
                 <th className="px-4 py-2 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {pendingList.map(item => (
-                <tr key={item.id || item._id} className="hover:bg-gray-50/50 transition-colors">
+            <tbody className="divide-y divide-gray-100 dark:divide-surface-800">
+               {pendingList.map(item => (
+                <tr key={item.id || item._id} className="hover:bg-gray-50/50 dark:hover:bg-surface-800/50 transition-colors">
                    <td className="px-4 py-2.5">
                       <div className="flex items-center space-x-2">
                          {item.employeeId?.avatar ? (
                            <img src={item.employeeId.avatar} alt="avatar" className="w-6 h-6 rounded-full object-cover" />
                          ) : (
-                           <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 font-bold text-[10px]">
+                           <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-brand-950/40 flex items-center justify-center text-blue-800 dark:text-brand-400 font-bold text-[10px]">
                              {item.employeeId?.name?.charAt(0) || 'U'}
                            </div>
                          )}
-                         <span className="font-semibold text-gray-800">{item.employeeId?.name || 'Unknown'}</span>
+                         <span className="font-semibold text-gray-800 dark:text-surface-100">{item.employeeId?.name || 'Unknown'}</span>
                       </div>
                    </td>
-                   <td className="px-4 py-2.5 font-medium text-gray-700">{item.week}</td>
-                   <td className="px-4 py-2.5 text-gray-600">{item.projectId?.name || '-'}</td>
-                   <td className="px-4 py-2.5 text-gray-500">
+                   <td className="px-4 py-2.5 font-medium text-gray-700 dark:text-surface-300">{item.week}</td>
+                   <td className="px-4 py-2.5 text-gray-600 dark:text-surface-400">{item.projectId?.name || '-'}</td>
+                   <td className="px-4 py-2.5 text-gray-500 dark:text-surface-400">
                       {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'N/A'}
                    </td>
                    <td className="px-4 py-2.5 text-center">
