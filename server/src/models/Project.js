@@ -16,6 +16,14 @@ const projectSchema = new mongoose.Schema(
     chatId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminConversation', default: null },
     startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
+    budget: { type: Number, default: null, min: 0 },
+    budgetCurrency: { type: String, trim: true, maxlength: 8, default: 'INR' },
+    sdlcPlan: [{
+      name: { type: String, trim: true, maxlength: 120, required: true },
+      durationDays: { type: Number, min: 0, default: 0 },
+      notes: { type: String, trim: true, maxlength: 500, default: '' },
+    }],
+    totalPlannedDurationDays: { type: Number, default: 0, min: 0 },
     progress: { type: Number, default: 0, min: 0, max: 100 },
     tasksCount: { type: Number, default: 0, min: 0 },
     completedTasksCount: { type: Number, default: 0, min: 0 },
@@ -40,6 +48,15 @@ projectSchema.set('toJSON', {
     ret.updatedAt = ret.updatedAt?.toISOString?.() || ret.updatedAt;
     ret.startDate = ret.startDate ? new Date(ret.startDate).toISOString().split('T')[0] : undefined;
     ret.endDate = ret.endDate ? new Date(ret.endDate).toISOString().split('T')[0] : undefined;
+    ret.budget = typeof ret.budget === 'number' ? ret.budget : undefined;
+    ret.budgetCurrency = ret.budgetCurrency || 'INR';
+    ret.sdlcPlan = Array.isArray(ret.sdlcPlan)
+      ? ret.sdlcPlan.map((phase) => ({
+        name: phase.name,
+        durationDays: Number(phase.durationDays) || 0,
+        notes: phase.notes || '',
+      }))
+      : [];
     delete ret._id;
     delete ret.__v;
     delete ret.tenantId;

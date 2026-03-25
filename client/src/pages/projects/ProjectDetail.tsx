@@ -217,6 +217,15 @@ export const ProjectDetailPage: React.FC = () => {
               </div>
             )}
 
+            {typeof project.budget === 'number' && (
+              <div className="hidden md:block text-right">
+                <p className="text-xs text-surface-400 mb-1">Budget</p>
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                  {project.budgetCurrency || 'INR'} {project.budget.toLocaleString()}
+                </p>
+              </div>
+            )}
+
             <Link to={`/projects/${project.id}/todo`} className="btn-secondary btn-md">
               <ListTodo size={15} />
               To-do table
@@ -365,6 +374,29 @@ export const ProjectDetailPage: React.FC = () => {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="card p-5">
+              <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Delivery Planning</h3>
+              {project.sdlcPlan && project.sdlcPlan.length > 0 ? (
+                <div className="space-y-3">
+                  {project.sdlcPlan.map((phase) => (
+                    <div key={`${phase.name}-${phase.durationDays}`} className="flex items-center justify-between gap-3 rounded-xl bg-surface-50 px-4 py-3 dark:bg-surface-800/60">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-surface-800 dark:text-surface-200">{phase.name}</p>
+                        {phase.notes ? <p className="text-xs text-surface-400">{phase.notes}</p> : null}
+                      </div>
+                      <span className="badge-gray text-xs whitespace-nowrap">{phase.durationDays} days</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between border-t border-surface-100 pt-3 text-sm dark:border-surface-800">
+                    <span className="text-surface-500">Total planned duration</span>
+                    <span className="font-semibold text-surface-800 dark:text-surface-200">{project.totalPlannedDurationDays || 0} days</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-surface-400">No SDLC delivery plan has been defined for this project yet.</p>
+              )}
             </div>
 
             <div className="card p-5">

@@ -636,22 +636,23 @@ export const Sidebar: React.FC = () => {
 
         {/* User Profile */}
         {!isCollapsed && user && (
-          <div 
-            onClick={() => navigate('/profile')}
-            className="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors cursor-pointer group"
-          >
-            <UserAvatar name={user.name} avatar={user.avatar} color={user.color} size="sm" isOnline={true} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{user.name}</p>
-              <p className="text-xs text-surface-400 truncate capitalize">{user.role.replace('_', ' ')}</p>
+          <div className="space-y-2 rounded-xl px-2 py-2 hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors">
+            <div className="flex items-center gap-2">
+              <UserAvatar name={user.name} color={user.color} size="sm" isOnline={true} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{user.name}</p>
+                <p className="text-xs text-surface-400 truncate capitalize">{user.role.replace('_', ' ')}</p>
+              </div>
             </div>
-            <button
+            {/* <button
+              type="button"
               onClick={logout}
-              className="opacity-0 group-hover:opacity-100 p-1 text-surface-400 hover:text-rose-500 transition-all"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-surface-700 dark:text-surface-300 dark:hover:border-rose-900/50 dark:hover:bg-rose-950/20 dark:hover:text-rose-400"
               title="Logout"
             >
               <LogOut size={14} />
-            </button>
+              Logout
+            </button> */}
           </div>
         )}
 

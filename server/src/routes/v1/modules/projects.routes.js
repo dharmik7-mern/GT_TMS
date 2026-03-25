@@ -19,6 +19,13 @@ const projectCreateSchema = z.object({
   reportingPersonIds: z.array(z.string()).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  budget: z.number().min(0).optional().nullable(),
+  budgetCurrency: z.string().trim().max(8).optional(),
+  sdlcPlan: z.array(z.object({
+    name: z.string().trim().min(1).max(120),
+    durationDays: z.number().min(0).max(3650),
+    notes: z.string().trim().max(500).optional().or(z.literal('')),
+  })).max(20).optional(),
 });
 
 const projectUpdateSchema = projectCreateSchema.partial();

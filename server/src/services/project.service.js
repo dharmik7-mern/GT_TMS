@@ -14,6 +14,17 @@ function fileAgentLog(payload) {
   }
 }
 
+function normalizeSdlcPlan(input) {
+  const phases = Array.isArray(input) ? input : [];
+  return phases
+    .map((phase) => ({
+      name: String(phase?.name ?? '').trim(),
+      durationDays: Math.max(0, Number(phase?.durationDays ?? 0) || 0),
+      notes: String(phase?.notes ?? '').trim(),
+    }))
+    .filter((phase) => phase.name);
+}
+
 export async function listProjects({ companyId, workspaceId, status, department, q, page = 1, limit = 50 }) {
   const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
@@ -53,6 +64,8 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
       .filter((personId) => mongoose.Types.ObjectId.isValid(personId))
       .map(String)
   ));
+  const sdlcPlan = normalizeSdlcPlan(data.sdlcPlan);
+  const totalPlannedDurationDays = sdlcPlan.reduce((sum, phase) => sum + phase.durationDays, 0);
   const teamId = data.teamId && mongoose.Types.ObjectId.isValid(data.teamId) ? data.teamId : null;
 
   const project = await Project.create({
@@ -69,6 +82,10 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
     reportingPersonIds,
     startDate: data.startDate ? new Date(data.startDate) : null,
     endDate: data.endDate ? new Date(data.endDate) : null,
+    budget: Number.isFinite(data.budget) ? Number(data.budget) : null,
+    budgetCurrency: String(data.budgetCurrency || 'INR').trim().slice(0, 8) || 'INR',
+    sdlcPlan,
+    totalPlannedDurationDays,
     progress: 0,
     tasksCount: 0,
     completedTasksCount: 0,
@@ -139,6 +156,19 @@ export async function updateProject({ companyId, workspaceId, userId, projectId,
         .filter((personId) => mongoose.Types.ObjectId.isValid(personId))
         .map(String)
     ));
+  }
+
+  if (updates.budget !== undefined) {
+    normalizedUpdates.budget = Number.isFinite(updates.budget) ? Number(updates.budget) : null;
+  }
+
+  if (updates.budgetCurrency !== undefined) {
+    normalizedUpdates.budgetCurrency = String(updates.budgetCurrency || 'INR').trim().slice(0, 8) || 'INR';
+  }
+
+  if (updates.sdlcPlan !== undefined) {
+    normalizedUpdates.sdlcPlan = normalizeSdlcPlan(updates.sdlcPlan);
+    normalizedUpdates.totalPlannedDurationDays = normalizedUpdates.sdlcPlan.reduce((sum, phase) => sum + phase.durationDays, 0);
   }
 
   const project = await Project.findOneAndUpdate(

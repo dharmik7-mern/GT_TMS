@@ -14,7 +14,7 @@ import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar, EmptyState } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import type { Project, ProjectStatus } from '../../app/types';
+import type { Project, ProjectStatus, ProjectSdlcPhase } from '../../app/types';
 import { projectsService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 
@@ -40,7 +40,19 @@ interface ProjectFormData {
   startDate: string;
   endDate: string;
   department: string;
+  budget?: number;
+  budgetCurrency: string;
 }
+
+const DEFAULT_SDLC_PLAN: ProjectSdlcPhase[] = [
+  { name: 'Planning', durationDays: 3, notes: '' },
+  { name: 'Requirement Analysis', durationDays: 5, notes: '' },
+  { name: 'Design', durationDays: 4, notes: '' },
+  { name: 'Development', durationDays: 10, notes: '' },
+  { name: 'Testing', durationDays: 5, notes: '' },
+  { name: 'Deployment', durationDays: 2, notes: '' },
+  { name: 'Maintenance', durationDays: 3, notes: '' },
+];
 
 const ProjectCard = React.forwardRef<HTMLDivElement, {
   project: Project;
@@ -183,8 +195,29 @@ export const ProjectsPage: React.FC = () => {
   const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [selectedReportingPersons, setSelectedReportingPersons] = useState<string[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [reportingSearch, setReportingSearch] = useState('');
+  const [sdlcPlan, setSdlcPlan] = useState<ProjectSdlcPhase[]>(DEFAULT_SDLC_PLAN);
   const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ProjectFormData>();
+
+  const filteredAssignableUsers = users.filter((candidate) => {
+    const query = memberSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [candidate.name, candidate.email, candidate.jobTitle, candidate.department]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query));
+  });
+
+  const filteredReportingUsers = users.filter((candidate) => {
+    const query = reportingSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [candidate.name, candidate.email, candidate.jobTitle, candidate.department]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query));
+  });
+
+  const totalPlannedDurationDays = sdlcPlan.reduce((sum, phase) => sum + (Number(phase.durationDays) || 0), 0);
 
   const filtered = projects.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -196,6 +229,9 @@ export const ProjectsPage: React.FC = () => {
     setShowModal(false);
     setSelectedMembers([]);
     setSelectedReportingPersons([]);
+    setMemberSearch('');
+    setReportingSearch('');
+    setSdlcPlan(DEFAULT_SDLC_PLAN);
     reset();
   };
 
@@ -212,6 +248,9 @@ export const ProjectsPage: React.FC = () => {
         reportingPersonIds: selectedReportingPersons,
         startDate: data.startDate || new Date().toISOString().split('T')[0],
         endDate: data.endDate || undefined,
+        budget: typeof data.budget === 'number' && !Number.isNaN(data.budget) ? data.budget : undefined,
+        budgetCurrency: data.budgetCurrency || 'INR',
+        sdlcPlan: sdlcPlan.filter((phase) => phase.name.trim()),
       };
 
       const res = await projectsService.create(payload);
@@ -221,6 +260,9 @@ export const ProjectsPage: React.FC = () => {
       setShowModal(false);
       setSelectedMembers([]);
       setSelectedReportingPersons([]);
+      setMemberSearch('');
+      setReportingSearch('');
+      setSdlcPlan(DEFAULT_SDLC_PLAN);
       reset();
       emitSuccessToast('Project created successfully.');
       navigate(`/projects/${created.id}`);
@@ -447,10 +489,42 @@ export const ProjectsPage: React.FC = () => {
 
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Project budget</label>
+              <input
+                {...register('budget', { valueAsNumber: true })}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 250000"
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="label">Currency</label>
+              <select {...register('budgetCurrency')} defaultValue="INR" className="input">
+                <option value="INR">INR</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+              </select>
+            </div>
+          </div>
+
           <div>
             <label className="label">Assign Employees</label>
+            <div className="relative mb-2">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+              <input
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Search employees..."
+                className="input pl-9 h-9"
+              />
+            </div>
             <div className="max-h-40 overflow-y-auto border border-surface-100 dark:border-surface-800 rounded-xl p-2 space-y-1">
-              {users.map(u => (
+              {filteredAssignableUsers.map(u => (
                 <label key={u.id} className="flex items-center gap-3 p-2 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg cursor-pointer transition-colors">
                   <input
                     type="checkbox"
@@ -471,13 +545,23 @@ export const ProjectsPage: React.FC = () => {
                   </div>
                 </label>
               ))}
+              {filteredAssignableUsers.length === 0 && <p className="p-2 text-xs text-surface-400">No employees match this search.</p>}
             </div>
           </div>
 
           <div>
             <label className="label">Reporting Persons</label>
+            <div className="relative mb-2">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+              <input
+                value={reportingSearch}
+                onChange={(e) => setReportingSearch(e.target.value)}
+                placeholder="Search reporting persons..."
+                className="input pl-9 h-9"
+              />
+            </div>
             <div className="max-h-40 overflow-y-auto border border-surface-100 dark:border-surface-800 rounded-xl p-2 space-y-1">
-              {users.map(u => (
+              {filteredReportingUsers.map(u => (
                 <label key={`reporting-${u.id}`} className="flex items-center gap-3 p-2 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg cursor-pointer transition-colors">
                   <input
                     type="checkbox"
@@ -497,6 +581,49 @@ export const ProjectsPage: React.FC = () => {
                     <p className="text-[10px] text-surface-400 truncate">{u.jobTitle}</p>
                   </div>
                 </label>
+              ))}
+              {filteredReportingUsers.length === 0 && <p className="p-2 text-xs text-surface-400">No reporting persons match this search.</p>}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-surface-100 p-4 dark:border-surface-800">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="label mb-0">SDLC Planning</p>
+                <p className="text-xs text-surface-400">Define each delivery phase and its planned duration in days.</p>
+              </div>
+              <span className="badge-gray text-xs">{totalPlannedDurationDays} days planned</span>
+            </div>
+            <div className="space-y-3">
+              {sdlcPlan.map((phase, index) => (
+                <div key={`${phase.name}-${index}`} className="grid grid-cols-[minmax(0,1.5fr)_120px] gap-3">
+                  <div>
+                    <input
+                      value={phase.name}
+                      onChange={(e) => {
+                        const next = [...sdlcPlan];
+                        next[index] = { ...next[index], name: e.target.value };
+                        setSdlcPlan(next);
+                      }}
+                      className="input"
+                      placeholder="SDLC step name"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      value={phase.durationDays}
+                      onChange={(e) => {
+                        const next = [...sdlcPlan];
+                        next[index] = { ...next[index], durationDays: Math.max(0, Number(e.target.value) || 0) };
+                        setSdlcPlan(next);
+                      }}
+                      type="number"
+                      min="0"
+                      className="input"
+                      placeholder="Days"
+                    />
+                  </div>
+                </div>
               ))}
             </div>
           </div>

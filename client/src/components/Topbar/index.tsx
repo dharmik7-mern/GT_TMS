@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, Sun, Moon, Plus, Command, ChevronRight } from 'lucide-react';
+import { Search, Bell, Sun, Moon, User, Settings, LogOut } from 'lucide-react';
 import { cn } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
@@ -34,21 +34,26 @@ const BREADCRUMB_MAP: Record<string, string> = {
 export const Topbar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { darkMode, toggleDarkMode, sidebarCollapsed, unreadNotificationsCount, projects, tasks, users } = useAppStore();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
    const { conversations } = useAdminChatStore();
    const unread = unreadNotificationsCount();
    const hasUnreadChat = conversations.some(c => (c.unreadCount || 0) > 0);
    const searchRef = useRef<HTMLDivElement>(null);
+    const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setSearchOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -181,6 +186,77 @@ export const Topbar: React.FC = () => {
         >
           <UserAvatar name={user.name} avatar={user.avatar} color={user.color} size="sm" isOnline />
         </button>
+        <div ref={profileRef} className="relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => setProfileOpen((prev) => !prev)}
+            className="flex-shrink-0 hover:opacity-80 transition-opacity"
+            aria-label="Open profile menu"
+          >
+            <UserAvatar name={user.name} color={user.color} size="sm" isOnline />
+          </button>
+
+          <AnimatePresence>
+            {profileOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.16 }}
+                className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-lg dark:border-surface-700 dark:bg-surface-900"
+              >
+                <div className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">
+                  <p className="text-sm font-semibold text-surface-900 dark:text-white">{user.name}</p>
+                  <p className="text-xs text-surface-400">{user.email}</p>
+                </div>
+
+                <div className="p-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/settings');
+                      setProfileOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-surface-700 transition-colors hover:bg-surface-50 dark:text-surface-200 dark:hover:bg-surface-800"
+                  >
+                    <User size={15} />
+                    Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/settings');
+                      setProfileOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-surface-700 transition-colors hover:bg-surface-50 dark:text-surface-200 dark:hover:bg-surface-800"
+                  >
+                    <Settings size={15} />
+                    Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/notifications');
+                      setProfileOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-surface-700 transition-colors hover:bg-surface-50 dark:text-surface-200 dark:hover:bg-surface-800"
+                  >
+                    <Bell size={15} />
+                    Notifications
+                  </button>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                  >
+                    <LogOut size={15} />
+                    Logout
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       )}
 
       {/* Search Modal */}

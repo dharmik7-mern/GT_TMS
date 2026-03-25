@@ -199,6 +199,12 @@ export interface Workspace {
   };
 }
 
+export interface ProjectSdlcPhase {
+  name: string;
+  durationDays: number;
+  notes?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -215,6 +221,10 @@ export interface Project {
   chatId?: string;
   startDate?: string;
   endDate?: string;
+  budget?: number;
+  budgetCurrency?: string;
+  sdlcPlan?: ProjectSdlcPhase[];
+  totalPlannedDurationDays?: number;
   progress: number;
   tasksCount: number;
   completedTasksCount: number;
