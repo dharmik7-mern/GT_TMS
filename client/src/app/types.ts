@@ -255,6 +255,7 @@ export interface Task {
   comments?: Comment[];
   attachments?: Attachment[];
   completionReview?: CompletionReview;
+  activityHistory?: Activity[];
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -275,6 +276,7 @@ export interface QuickTask {
   attachments?: Attachment[];
   comments?: Comment[];
   completionReview?: CompletionReview;
+  activityHistory?: Activity[];
   createdAt: string;
   updatedAt: string;
 }

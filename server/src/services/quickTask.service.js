@@ -1,6 +1,7 @@
 import { getTenantModels } from '../config/tenantDb.js';
 import fs from 'fs';
 import path from 'path';
+import mongoose from 'mongoose';
 
 const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-e243b9.log');
 function fileAgentLog(payload) {
@@ -27,6 +28,51 @@ export async function listQuickTasks({ companyId, workspaceId, userId, role }) {
   }
 
   return QuickTask.find(filter).sort({ updatedAt: -1 });
+function mapQuickTaskWithActivity(task, activityHistory) {
+  const json = typeof task?.toJSON === 'function' ? task.toJSON() : task;
+  return {
+    ...json,
+    activityHistory: Array.isArray(activityHistory) ? activityHistory : [],
+  };
+}
+
+async function attachQuickTaskActivity({ companyId, workspaceId, tasks }) {
+  const { ActivityLog } = await getTenantModels(companyId);
+  const taskList = Array.isArray(tasks) ? tasks : [];
+
+  if (!taskList.length) {
+    return [];
+  }
+
+  const entityIds = taskList
+    .map((task) => task?._id)
+    .filter((value) => value && mongoose.Types.ObjectId.isValid(value));
+
+  const logs = await ActivityLog.find({
+    tenantId: companyId,
+    workspaceId,
+    entityType: 'quick_task',
+    entityId: { $in: entityIds },
+  }).sort({ createdAt: -1 });
+
+  const logsByTaskId = new Map();
+  for (const log of logs) {
+    const key = String(log.entityId);
+    const items = logsByTaskId.get(key) || [];
+    items.push(log.toJSON());
+    logsByTaskId.set(key, items);
+  }
+
+  return taskList.map((task) =>
+    mapQuickTaskWithActivity(task, logsByTaskId.get(String(task._id)) || [])
+  );
+}
+
+export async function listQuickTasks({ companyId, workspaceId }) {
+  const tenantId = companyId;
+  const { QuickTask } = await getTenantModels(companyId);
+  const tasks = await QuickTask.find({ tenantId, workspaceId }).sort({ updatedAt: -1 });
+  return attachQuickTaskActivity({ companyId, workspaceId, tasks });
 }
 
 export async function createQuickTask({ companyId, workspaceId, userId, data }) {
@@ -305,6 +351,17 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
 
   const previousStatus = existing.status;
   const nextStatus = updates.status ?? existing.status;
+  const previousPriority = existing.priority;
+  const previousDueDate = existing.dueDate ? new Date(existing.dueDate).toISOString().split('T')[0] : null;
+  const nextDueDate = updates.dueDate !== undefined
+    ? (updates.dueDate ? new Date(updates.dueDate).toISOString().split('T')[0] : null)
+    : previousDueDate;
+  const currentReview = existing.completionReview || {};
+  const nextCompletionRemark =
+    updates.completionRemark !== undefined
+      ? (updates.completionRemark || '')
+      : (currentReview.completionRemark || '');
+  const previousCompletionRemark = currentReview.completionRemark || '';
 
   const $set = {
     ...updates,
@@ -368,7 +425,7 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
   const qt = await QuickTask.findOneAndUpdate({ _id: id, tenantId, workspaceId }, { $set }, { new: true });
   if (!qt) return null;
 
-  await ActivityLog.create({
+  const activityEntries = [{
     tenantId,
     workspaceId,
     userId,
@@ -376,8 +433,97 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
     description: `Updated quick task "${qt.title}"`,
     entityType: 'quick_task',
     entityId: qt._id,
-    metadata: {},
-  });
+    metadata: {
+      changedFields: Object.keys(updates || {}),
+    },
+  }];
+
+  if (previousStatus !== qt.status) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'quick_task_status_changed',
+      description: `Changed status for "${qt.title}" from "${previousStatus}" to "${qt.status}"`,
+      entityType: 'quick_task',
+      entityId: qt._id,
+      metadata: {
+        from: previousStatus,
+        to: qt.status,
+      },
+    });
+  }
+
+  if (previousPriority !== qt.priority) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'quick_task_priority_changed',
+      description: `Changed priority for "${qt.title}" from "${previousPriority}" to "${qt.priority}"`,
+      entityType: 'quick_task',
+      entityId: qt._id,
+      metadata: {
+        from: previousPriority,
+        to: qt.priority,
+      },
+    });
+  }
+
+  if (previousDueDate !== nextDueDate) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'quick_task_due_date_changed',
+      description: nextDueDate
+        ? `Set due date for "${qt.title}" to ${nextDueDate}`
+        : `Cleared due date for "${qt.title}"`,
+      entityType: 'quick_task',
+      entityId: qt._id,
+      metadata: {
+        from: previousDueDate,
+        to: nextDueDate,
+      },
+    });
+  }
+
+  if (previousCompletionRemark !== nextCompletionRemark) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'quick_task_completion_remark_updated',
+      description: `Updated completion remark for "${qt.title}"`,
+      entityType: 'quick_task',
+      entityId: qt._id,
+      metadata: {
+        remark: nextCompletionRemark,
+      },
+    });
+  }
+
+  if (assigneeIds !== undefined) {
+    const before = beforeAssignees.map(String).sort();
+    const after = assigneeIds.map(String).sort();
+    if (before.join(',') !== after.join(',')) {
+      activityEntries.push({
+        tenantId,
+        workspaceId,
+        userId,
+        type: 'quick_task_assignees_changed',
+        description: `Updated assignees for "${qt.title}"`,
+        entityType: 'quick_task',
+        entityId: qt._id,
+        metadata: {
+          from: before,
+          to: after,
+        },
+      });
+    }
+  }
+
+  await ActivityLog.insertMany(activityEntries);
 
   if (assigneeIds !== undefined && assigneeIds.length) {
     const newlyAssigned = assigneeIds.filter((a) => !beforeAssignees.map(String).includes(String(a)));
@@ -418,7 +564,13 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
     }
   }
 
-  return qt;
+  return mapQuickTaskWithActivity(qt, activityEntries.map((entry) => ({
+    ...entry,
+    id: `local-${Math.random().toString(36).slice(2)}`,
+    entityId: String(qt._id),
+    userId: String(entry.userId),
+    createdAt: new Date().toISOString(),
+  })));
 }
 
 export async function reviewQuickTask({ companyId, workspaceId, userId, role, id, action, reviewRemark, rating }) {
@@ -482,7 +634,11 @@ export async function reviewQuickTask({ companyId, workspaceId, userId, role, id
         : `Requested changes for completed quick task "${qt.title}"`,
     entityType: 'quick_task',
     entityId: qt._id,
-    metadata: {},
+    metadata: {
+      action,
+      rating: action === 'approve' ? rating : null,
+      reviewRemark: reviewRemark || '',
+    },
   });
 
   const notifyUserIds = Array.from(
@@ -510,7 +666,7 @@ export async function reviewQuickTask({ companyId, workspaceId, userId, role, id
     );
   }
 
-  return qt;
+  return attachQuickTaskActivity({ companyId, workspaceId, tasks: [qt] }).then((items) => items[0] || mapQuickTaskWithActivity(qt, []));
 }
 
 export async function deleteQuickTask({ companyId, workspaceId, userId, id }) {
@@ -535,7 +691,7 @@ export async function deleteQuickTask({ companyId, workspaceId, userId, id }) {
 
 export async function addQuickTaskComment({ companyId, workspaceId, userId, role, taskId, content }) {
   const tenantId = companyId;
-  const { QuickTask, Notification } = await getTenantModels(companyId);
+  const { QuickTask, Notification, ActivityLog } = await getTenantModels(companyId);
 
   const qt = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
   if (!qt) return null;
@@ -560,6 +716,19 @@ export async function addQuickTaskComment({ companyId, workspaceId, userId, role
   await QuickTask.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { comments: comment } });
   const updated = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
 
+  await ActivityLog.create({
+    tenantId,
+    workspaceId,
+    userId,
+    type: 'quick_task_comment_added',
+    description: `Added a comment to "${updated?.title || 'quick task'}"`,
+    entityType: 'quick_task',
+    entityId: updated?._id || taskId,
+    metadata: {
+      content,
+    },
+  });
+
   // Notify other people involved (assignees + reporter) excluding the commenter.
   const notifyUserIds = Array.from(
     new Set([
@@ -583,12 +752,12 @@ export async function addQuickTaskComment({ companyId, workspaceId, userId, role
     );
   }
 
-  return updated;
+  return attachQuickTaskActivity({ companyId, workspaceId, tasks: updated ? [updated] : [] }).then((items) => items[0] || null);
 }
 
 export async function addQuickTaskAttachments({ companyId, workspaceId, userId, role, taskId, files, requestBaseUrl }) {
   const tenantId = companyId;
-  const { QuickTask } = await getTenantModels(companyId);
+  const { QuickTask, ActivityLog } = await getTenantModels(companyId);
 
   const qt = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
   if (!qt) return null;
@@ -618,6 +787,27 @@ export async function addQuickTaskAttachments({ companyId, workspaceId, userId, 
   }));
 
   await QuickTask.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { attachments } });
-  return QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
+  const updated = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
+
+  if (attachments.length) {
+    await ActivityLog.create({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'quick_task_attachments_added',
+      description: `Added ${attachments.length} attachment${attachments.length === 1 ? '' : 's'} to "${updated?.title || 'quick task'}"`,
+      entityType: 'quick_task',
+      entityId: updated?._id || taskId,
+      metadata: {
+        attachments: attachments.map((attachment) => ({
+          name: attachment.name,
+          type: attachment.type,
+          size: attachment.size,
+        })),
+      },
+    });
+  }
+
+  return attachQuickTaskActivity({ companyId, workspaceId, tasks: updated ? [updated] : [] }).then((items) => items[0] || null);
 }
 

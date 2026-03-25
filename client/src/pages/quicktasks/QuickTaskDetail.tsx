@@ -8,7 +8,7 @@ import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
 import { EmptyState } from '../../components/ui';
 import { QuickTaskModal } from '../../components/QuickTaskModal';
 import { quickTasksService } from '../../services/api';
-import type { Priority, QuickTaskStatus } from '../../app/types';
+import type { Activity, Priority, QuickTask, QuickTaskStatus } from '../../app/types';
 
 type ChecklistItem = { id: string; text: string; done: boolean };
 
@@ -32,6 +32,146 @@ function serializeChecklist(items: ChecklistItem[]) {
     .filter((item) => item.text.trim())
     .map((item) => `[${item.done ? 'x' : ' '}] ${item.text.trim()}`)
     .join('\n');
+}
+
+type TimelineItem = {
+  id: string;
+  createdAt: string;
+  actorId?: string;
+  title: string;
+  detail?: string;
+};
+
+function summarizeChecklist(value?: string) {
+  const lines = String(value || '')
+    .split('\n')
+    .map((line) => line.replace(/^\[(x|X|\s)\]\s*/, '').trim())
+    .filter(Boolean);
+
+  return lines.join(' | ');
+}
+
+function buildQuickTaskTimeline(task: QuickTask) {
+  const items: TimelineItem[] = [];
+  const seen = new Set<string>();
+  const hasCommentLogs = (task.activityHistory || []).some((activity) => activity.type === 'quick_task_comment_added');
+  const hasAttachmentLogs = (task.activityHistory || []).some((activity) => activity.type === 'quick_task_attachments_added');
+  const hasReviewLogs = (task.activityHistory || []).some((activity) =>
+    activity.type === 'quick_task_review_approved' || activity.type === 'quick_task_review_changes_requested'
+  );
+  const hasCompletionRemarkLogs = (task.activityHistory || []).some((activity) =>
+    activity.type === 'quick_task_completion_remark_updated'
+  );
+
+  const pushItem = (item: TimelineItem) => {
+    const key = `${item.createdAt}:${item.actorId || ''}:${item.title}:${item.detail || ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push(item);
+  };
+
+  (task.activityHistory || []).forEach((activity: Activity) => {
+    const metadata = (activity.metadata || {}) as Record<string, unknown>;
+    let title = activity.description;
+    let detail = '';
+
+    if (activity.type === 'quick_task_created') {
+      title = 'Created quick task';
+    } else if (activity.type === 'quick_task_comment_added') {
+      title = 'Added a comment';
+    } else if (activity.type === 'quick_task_review_approved') {
+      title = 'Approved the quick task';
+    } else if (activity.type === 'quick_task_review_changes_requested') {
+      title = 'Requested changes on the quick task';
+    } else if (activity.type === 'quick_task_completion_remark_updated') {
+      title = 'Updated completion remark';
+    }
+
+    if (typeof metadata.content === 'string' && metadata.content.trim()) {
+      detail = metadata.content;
+    } else if (typeof metadata.remark === 'string' && metadata.remark.trim()) {
+      detail = summarizeChecklist(metadata.remark);
+    } else if (typeof metadata.reviewRemark === 'string' && metadata.reviewRemark.trim()) {
+      detail = summarizeChecklist(metadata.reviewRemark);
+    } else if (typeof metadata.rating === 'number') {
+      detail = `Rating ${metadata.rating}/5`;
+    }
+
+    pushItem({
+      id: `log-${activity.id}`,
+      createdAt: activity.createdAt,
+      actorId: activity.userId,
+      title,
+      detail,
+    });
+  });
+
+  if (!hasCommentLogs) {
+    (task.comments || []).forEach((comment) => {
+      pushItem({
+        id: `comment-${comment.id}`,
+        createdAt: comment.createdAt,
+        actorId: comment.authorId,
+        title: 'Added a comment',
+        detail: comment.content,
+      });
+    });
+  }
+
+  if (!hasAttachmentLogs) {
+    (task.attachments || []).forEach((attachment) => {
+      pushItem({
+        id: `attachment-${attachment.id}`,
+        createdAt: attachment.createdAt,
+        actorId: attachment.uploadedBy,
+        title: `Added attachment "${attachment.name}"`,
+        detail: attachment.type,
+      });
+    });
+  }
+
+  if (task.completionReview?.completedAt) {
+    pushItem({
+      id: 'completion',
+      createdAt: task.completionReview.completedAt,
+      actorId: task.completionReview.completedBy,
+      title: 'Marked the quick task as completed',
+      detail: summarizeChecklist(task.completionReview.completionRemark),
+    });
+  } else if (task.completionReview?.completionRemark && !hasCompletionRemarkLogs) {
+    pushItem({
+      id: 'completion-remark',
+      createdAt: task.updatedAt,
+      actorId: task.completionReview.completedBy,
+      title: 'Updated completion remark',
+      detail: summarizeChecklist(task.completionReview.completionRemark),
+    });
+  }
+
+  if (task.completionReview?.reviewedAt && !hasReviewLogs) {
+    pushItem({
+      id: 'review',
+      createdAt: task.completionReview.reviewedAt,
+      actorId: task.completionReview.reviewedBy,
+      title:
+        task.completionReview.reviewStatus === 'approved'
+          ? 'Approved the quick task'
+          : 'Requested changes on the quick task',
+      detail: [
+        task.completionReview.rating ? `Rating ${task.completionReview.rating}/5` : '',
+        summarizeChecklist(task.completionReview.reviewRemark),
+      ].filter(Boolean).join(' | '),
+    });
+  }
+
+  pushItem({
+    id: 'created',
+    createdAt: task.createdAt,
+    actorId: task.reporterId,
+    title: 'Created quick task',
+  });
+
+  return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export const QuickTaskDetailPage: React.FC = () => {
@@ -76,6 +216,7 @@ export const QuickTaskDetailPage: React.FC = () => {
   const roleOk = Boolean(user && ['admin', 'super_admin', 'manager', 'team_leader'].includes(user.role || ''));
   const canComment = Boolean(user && (isAssignee || isReporter || roleOk));
   const canReview = Boolean(user && (isReporter || roleOk));
+  const activityItems = buildQuickTaskTimeline(task);
 
   const syncQuickTask = async (updates: Record<string, unknown>) => {
     try {
@@ -384,12 +525,43 @@ export const QuickTaskDetailPage: React.FC = () => {
             </div>
           )}
 
-          <div className="card p-5">
+          <div className="hidden">
             <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-2">Activity</h3>
             <p className="text-sm text-surface-400">Created {task.createdAt ? formatDate(task.createdAt) : '-'} · Updated {task.updatedAt ? formatDate(task.updatedAt) : '-'}</p>
             {task.completionReview?.completedAt && <p className="text-sm text-surface-400 mt-1">Completed {formatDate(task.completionReview.completedAt)}</p>}
             {task.completionReview?.reviewedAt && <p className="text-sm text-surface-400 mt-1">Reviewed {formatDate(task.completionReview.reviewedAt)}</p>}
             {task.completionReview?.rating ? <p className="text-sm text-surface-400 mt-1">Rating {task.completionReview.rating}/5</p> : null}
+          </div>
+          <div className="card p-5">
+            <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-3">Activity</h3>
+            <div className="space-y-3">
+              {activityItems.length ? activityItems.map((item) => {
+                const actor = item.actorId ? users.find((entry) => entry.id === item.actorId) : null;
+                const sentence = actor?.name
+                  ? `${actor.name} ${item.title.charAt(0).toLowerCase()}${item.title.slice(1)}`
+                  : item.title;
+
+                return (
+                  <div key={item.id} className="rounded-2xl border border-surface-200 bg-white px-4 py-3 dark:border-surface-700 dark:bg-surface-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-surface-900 dark:text-white">{sentence}</p>
+                        {item.detail ? (
+                          <p className="mt-1 text-xs text-surface-500 dark:text-surface-400 whitespace-pre-wrap break-words">
+                            {item.detail}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 text-[11px] text-surface-400">
+                        {item.createdAt ? formatDate(item.createdAt) : '-'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <p className="text-sm text-surface-400">No activity yet.</p>
+              )}
+            </div>
           </div>
         </div>
 

@@ -12,7 +12,7 @@ import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { UserAvatar } from '../UserAvatar';
 import { Modal } from '../Modal';
-import type { Task, Priority, TaskStatus, Comment } from '../../app/types';
+import type { Activity, Task, Priority, TaskStatus, Comment } from '../../app/types';
 import { tasksService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 
@@ -50,6 +50,102 @@ function serializeChecklist(items: ChecklistItem[]) {
     .join('\n');
 }
 
+type TimelineItem = {
+  id: string;
+  createdAt: string;
+  actorId?: string;
+  title: string;
+  detail?: string;
+};
+
+function summarizeChecklist(value?: string) {
+  return String(value || '')
+    .split('\n')
+    .map((line) => line.replace(/^\[(x|X|\s)\]\s*/, '').trim())
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function buildTaskTimeline(task: Task, comments: Comment[]) {
+  const items: TimelineItem[] = [];
+  const seen = new Set<string>();
+  const hasReviewLogs = (task.activityHistory || []).some((activity) =>
+    activity.type === 'task_review_approved' || activity.type === 'task_review_changes_requested'
+  );
+
+  const pushItem = (item: TimelineItem) => {
+    const key = `${item.createdAt}:${item.actorId || ''}:${item.title}:${item.detail || ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push(item);
+  };
+
+  (task.activityHistory || []).forEach((activity: Activity) => {
+    let title = activity.description;
+    let detail = '';
+
+    if (activity.type === 'task_created') {
+      title = 'Created task';
+    } else if (activity.type === 'task_status_changed') {
+      title = 'Changed task status';
+      const metadata = (activity.metadata || {}) as Record<string, unknown>;
+      if (typeof metadata.from === 'string' && typeof metadata.to === 'string') {
+        detail = `${metadata.from} -> ${metadata.to}`;
+      }
+    } else if (activity.type === 'task_review_approved') {
+      title = 'Approved the task';
+    } else if (activity.type === 'task_review_changes_requested') {
+      title = 'Requested changes on the task';
+    }
+
+    pushItem({
+      id: `log-${activity.id}`,
+      createdAt: activity.createdAt,
+      actorId: activity.userId,
+      title,
+      detail,
+    });
+  });
+
+  comments.forEach((comment) => {
+    pushItem({
+      id: `comment-${comment.id}`,
+      createdAt: comment.createdAt,
+      actorId: comment.authorId,
+      title: 'Added a comment',
+      detail: comment.content,
+    });
+  });
+
+  if (task.completionReview?.completedAt) {
+    pushItem({
+      id: 'completion',
+      createdAt: task.completionReview.completedAt,
+      actorId: task.completionReview.completedBy,
+      title: 'Marked the task as completed',
+      detail: summarizeChecklist(task.completionReview.completionRemark),
+    });
+  }
+
+  if (task.completionReview?.reviewedAt && !hasReviewLogs) {
+    pushItem({
+      id: 'review',
+      createdAt: task.completionReview.reviewedAt,
+      actorId: task.completionReview.reviewedBy,
+      title:
+        task.completionReview.reviewStatus === 'approved'
+          ? 'Approved the task'
+          : 'Requested changes on the task',
+      detail: [
+        task.completionReview.rating ? `Rating ${task.completionReview.rating}/5` : '',
+        summarizeChecklist(task.completionReview.reviewRemark),
+      ].filter(Boolean).join(' | '),
+    });
+  }
+
+  return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => {
   const { updateTask, deleteTask, projects, users, bootstrap } = useAppStore();
   const { user } = useAuthStore();
@@ -71,6 +167,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const statusCfg = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
   const completionReview = task.completionReview;
+  const activityItems = buildTaskTimeline(task, comments);
   const canReview = Boolean(
     user && (
       ['super_admin', 'admin', 'manager', 'team_leader'].includes(user.role) ||
@@ -410,17 +507,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
               </div>
             ) : (
               <div className="space-y-4">
-                {comments.map(comment => {
-                  const author = users.find(u => u.id === comment.authorId) || users[0];
+                {activityItems.map(item => {
+                  const author = item.actorId ? users.find(u => u.id === item.actorId) : null;
                   return (
-                    <motion.div key={comment.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
-                      <UserAvatar name={author.name} color={author.color} size="sm" />
+                    <motion.div key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
+                      <UserAvatar name={author?.name || 'System'} color={author?.color} size="sm" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium text-surface-800 dark:text-surface-200">{author.name}</span>
-                          <span className="text-xs text-surface-400">{formatRelativeTime(comment.createdAt)}</span>
+                          <span className="text-sm font-medium text-surface-800 dark:text-surface-200">
+                            {author?.name || 'System'}
+                          </span>
+                          <span className="text-xs text-surface-400">{formatRelativeTime(item.createdAt)}</span>
                         </div>
-                        <div className="bg-surface-50 dark:bg-surface-800 rounded-xl p-3 text-sm text-surface-700 dark:text-surface-300">{comment.content}</div>
+                        <div className="bg-surface-50 dark:bg-surface-800 rounded-xl p-3 text-sm text-surface-700 dark:text-surface-300">
+                          <p>{item.title}</p>
+                          {item.detail ? <p className="mt-1 text-xs text-surface-500 dark:text-surface-400 whitespace-pre-wrap">{item.detail}</p> : null}
+                        </div>
                       </div>
                     </motion.div>
                   );

@@ -125,6 +125,37 @@ function canReviewProjectTask({ role, userId, task, reviewerIds }) {
   return reviewerIds.includes(uid);
 }
 
+function mapTaskWithActivity(task, activityHistory) {
+  const json = typeof task?.toJSON === 'function' ? task.toJSON() : task;
+  return {
+    ...json,
+    activityHistory: Array.isArray(activityHistory) ? activityHistory : [],
+  };
+}
+
+async function attachTaskActivity({ companyId, workspaceId, tasks }) {
+  const { ActivityLog } = await getTenantModels(companyId);
+  const taskList = Array.isArray(tasks) ? tasks : [];
+  if (!taskList.length) return [];
+
+  const logs = await ActivityLog.find({
+    tenantId: companyId,
+    workspaceId,
+    entityType: 'task',
+    entityId: { $in: taskList.map((task) => task?._id).filter(Boolean) },
+  }).sort({ createdAt: -1 });
+
+  const logsByTaskId = new Map();
+  for (const log of logs) {
+    const key = String(log.entityId);
+    const items = logsByTaskId.get(key) || [];
+    items.push(log.toJSON());
+    logsByTaskId.set(key, items);
+  }
+
+  return taskList.map((task) => mapTaskWithActivity(task, logsByTaskId.get(String(task._id)) || []));
+}
+
  export async function assertProjectAccess({ tenantId, workspaceId, userId, role, projectId }) {
    if (!projectId) return true; // Allow access to workspace-level tasks that don't belong to a project
    const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
@@ -177,7 +208,7 @@ export async function listTasks({
     Task.find(filter).sort({ projectId: 1, status: 1, order: 1 }).skip(skip).limit(limit),
     Task.countDocuments(filter),
   ]);
-  return { items, total, page, limit };
+  return { items: await attachTaskActivity({ companyId, workspaceId, tasks: items }), total, page, limit };
 }
 
 export async function createTask({ companyId, workspaceId, userId, role, data }) {
@@ -243,7 +274,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     );
   }
 
-  return task;
+  return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
 }
 
  export async function getTaskById({ companyId, workspaceId, userId, role, taskId }) {
@@ -263,7 +294,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
    // Use the task's actual workspaceId for project access check
    const ok = await assertProjectAccess({ tenantId, workspaceId: task.workspaceId, userId, role, projectId: task.projectId });
    if (!ok) return null;
-   return task;
+   return (await attachTaskActivity({ companyId, workspaceId: task.workspaceId, tasks: [task] }))[0];
  }
 
  export async function getAnyTaskById({ companyId, workspaceId, userId, role, taskId }) {
@@ -316,6 +347,7 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
 
   const { subtasks, dueDate, startDate, completionRemark, ...rest } = updates;
   const nextStatus = rest.status ?? existing.status;
+  const previousStatus = existing.status;
   const $set = { ...rest };
   if (dueDate !== undefined) $set.dueDate = dueDate ? new Date(dueDate) : null;
   if (startDate !== undefined) $set.startDate = startDate ? new Date(startDate) : null;
@@ -333,7 +365,7 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   const task = await Task.findOneAndUpdate({ _id: taskId, tenantId, workspaceId }, { $set }, { new: true });
   if (!task) return null;
 
-  await ActivityLog.create({
+  const activityEntries = [{
     tenantId,
     workspaceId,
     userId,
@@ -342,7 +374,22 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     entityType: 'task',
     entityId: task._id,
     metadata: { projectId: task.projectId },
-  });
+  }];
+
+  if (previousStatus !== task.status) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'task_status_changed',
+      description: `Changed status for "${task.title}" from "${previousStatus}" to "${task.status}"`,
+      entityType: 'task',
+      entityId: task._id,
+      metadata: { projectId: task.projectId, from: previousStatus, to: task.status },
+    });
+  }
+
+  await ActivityLog.insertMany(activityEntries);
 
   if (existing.status !== 'done' && task.status === 'done') {
     const reviewerIds = (await getTaskReviewUsers({
@@ -364,7 +411,7 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
-  return task;
+  return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
 }
 
 export async function moveTaskStatus({ companyId, workspaceId, userId, role, taskId, status }) {
@@ -458,7 +505,7 @@ export async function reviewTaskCompletion({ companyId, workspaceId, userId, rol
     relatedId: task._id,
   });
 
-  return task;
+  return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
 }
 
 export async function deleteTask({ companyId, workspaceId, userId, role, taskId }) {
