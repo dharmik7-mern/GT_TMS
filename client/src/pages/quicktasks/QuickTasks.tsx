@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Zap, User, Calendar, CheckCircle2, Upload } from 'lucide-react';
+import { Plus, Search, Zap, User, Calendar, CheckCircle2, Upload, Lock } from 'lucide-react';
 import { cn, formatDate } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
@@ -194,7 +194,7 @@ export const QuickTasksPage: React.FC = () => {
   const { user } = useAuthStore();
   const { quickTasks, users, bootstrap } = useAppStore();
 
-  const [scope, setScope] = useState<ScopeFilter>('assigned_to_me');
+  const [scope, setScope] = useState<ScopeFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<QuickTask | null>(null);
@@ -344,9 +344,9 @@ export const QuickTasksPage: React.FC = () => {
   };
 
   const scopeTabs = [
+    { value: 'all', label: 'All' },
     { value: 'created_by_me', label: 'Created by me' },
     { value: 'assigned_to_me', label: 'Assigned to me' },
-    { value: 'all', label: 'All' },
   ];
 
   return (
@@ -423,7 +423,7 @@ export const QuickTasksPage: React.FC = () => {
             />
           ) : (
             <div className="space-y-2">
-              {filtered.map((t, i) => {
+              {filtered.map((t: QuickTask, i) => {
                 const assigneeIds = t.assigneeIds || [];
                 const assignees = assigneeIds
                   .map((id) => users.find((u) => u.id === id))
@@ -460,6 +460,12 @@ export const QuickTasksPage: React.FC = () => {
                           {isOverdue(t) && (
                             <span className="badge text-[10px] bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-300">
                               Overdue
+                            </span>
+                          )}
+                          {(t as any).isPrivate && (
+                            <span className="badge text-[10px] bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                              <Lock size={10} />
+                              Private
                             </span>
                           )}
                         </div>
