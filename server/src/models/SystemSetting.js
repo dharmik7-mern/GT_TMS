@@ -1,5 +1,45 @@
 import mongoose from 'mongoose';
 
+function defaultEmailTemplates() {
+  return {
+    welcomeMessage: {
+      enabled: true,
+      subject: 'Welcome to {{siteName}}',
+      body: 'Hi {{userName}},\n\nWelcome to {{siteName}}.\n\nYou can sign in here: {{loginUrl}}\n\nRegards,\n{{siteName}}',
+    },
+    forgotPassword: {
+      enabled: true,
+      subject: 'Reset your {{siteName}} password',
+      body: 'Hi {{userName}},\n\nWe received a request to reset your password.\n\nUse this link: {{resetUrl}}\n\nIf you did not request this, you can ignore this email.\n\nRegards,\n{{siteName}}',
+    },
+    loginAlert: {
+      enabled: true,
+      subject: 'New sign-in to your {{siteName}} account',
+      body: 'Hi {{userName}},\n\nYour account was accessed on {{loginTime}}.\n\nIf this was not you, contact the administrator immediately.\n\nRegards,\n{{siteName}}',
+    },
+    paymentReceipt: {
+      enabled: true,
+      subject: 'Payment receipt from {{siteName}}',
+      body: 'Hi {{userName}},\n\nWe received your payment of {{amount}}.\n\nReceipt ID: {{receiptId}}\n\nRegards,\n{{siteName}}',
+    },
+    taskAssigned: {
+      enabled: true,
+      subject: 'New task assigned: {{taskTitle}}',
+      body: 'Hi {{userName}},\n\nA task has been assigned to you.\n\nTask: {{taskTitle}}\nProject: {{projectName}}\nPriority: {{priority}}\nDue date: {{dueDate}}\nAssigned by: {{assignedBy}}\n\nOpen task: {{taskUrl}}\n\nRegards,\n{{siteName}}',
+    },
+    quickTaskAssigned: {
+      enabled: true,
+      subject: 'New quick task assigned: {{taskTitle}}',
+      body: 'Hi {{userName}},\n\nA quick task has been assigned to you.\n\nTask: {{taskTitle}}\nPriority: {{priority}}\nDue date: {{dueDate}}\nAssigned by: {{assignedBy}}\n\nOpen task: {{taskUrl}}\n\nRegards,\n{{siteName}}',
+    },
+    userCredentials: {
+      enabled: true,
+      subject: 'Your {{siteName}} account credentials',
+      body: 'Hi {{userName}},\n\nAn account has been created for you.\n\nUsername: {{email}}\nPassword: {{password}}\nRole: {{role}}\n\nSign in here: {{loginUrl}}\n\nPlease change your password after logging in.\n\nRegards,\n{{siteName}}',
+    },
+  };
+}
+
 const systemSettingSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, unique: true, trim: true, maxlength: 80 },
@@ -23,10 +63,8 @@ const systemSettingSchema = new mongoose.Schema(
       username: { type: String, default: 'apikey' },
       password: { type: String, default: '' },
       templates: {
-        welcomeMessage: { type: Boolean, default: true },
-        forgotPassword: { type: Boolean, default: true },
-        loginAlert: { type: Boolean, default: true },
-        paymentReceipt: { type: Boolean, default: true },
+        type: mongoose.Schema.Types.Mixed,
+        default: defaultEmailTemplates,
       },
     },
     infrastructure: {

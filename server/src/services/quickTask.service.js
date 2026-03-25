@@ -2,6 +2,7 @@ import { getTenantModels } from '../config/tenantDb.js';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
+import { sendTemplatedEmailSafe } from './mail.service.js';
 
 const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-e243b9.log');
 function fileAgentLog(payload) {
@@ -49,6 +50,47 @@ async function attachQuickTaskActivity({ companyId, workspaceId, tasks }) {
 
   return taskList.map((task) =>
     mapQuickTaskWithActivity(task, logsByTaskId.get(String(task._id)) || [])
+  );
+}
+
+function formatMailDate(value) {
+  if (!value) return 'Not set';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+async function sendQuickTaskAssignmentEmails({ tenantId, assigneeIds, actorId, quickTask }) {
+  const uniqueAssigneeIds = Array.from(new Set((assigneeIds || []).map(String))).filter(Boolean);
+  if (!uniqueAssigneeIds.length) return;
+
+  const { User } = await getTenantModels(tenantId);
+  const [users, actor] = await Promise.all([
+    User.find({ tenantId, _id: { $in: uniqueAssigneeIds } }).select('name email').lean(),
+    actorId ? User.findOne({ tenantId, _id: actorId }).select('name email').lean() : Promise.resolve(null),
+  ]);
+
+  await Promise.allSettled(
+    users
+      .filter((user) => user?.email)
+      .map((user) =>
+        sendTemplatedEmailSafe({
+          to: user.email,
+          templateKey: 'quickTaskAssigned',
+          variables: {
+            userName: user.name || 'User',
+            taskTitle: quickTask.title,
+            priority: quickTask.priority || 'medium',
+            dueDate: formatMailDate(quickTask.dueDate),
+            assignedBy: actor?.name || 'Administrator',
+            taskUrl: `/quick-tasks/${quickTask._id}`,
+          },
+        })
+      )
   );
 }
 
@@ -513,6 +555,12 @@ export async function updateQuickTask({ companyId, workspaceId, userId, id, upda
           relatedId: String(qt._id),
         }))
       );
+      await sendQuickTaskAssignmentEmails({
+        tenantId,
+        assigneeIds: newlyAssigned,
+        actorId: userId,
+        quickTask: qt,
+      });
     }
   }
 
@@ -616,6 +664,12 @@ export async function reviewQuickTask({ companyId, workspaceId, userId, role, id
         relatedId: String(qt._id),
       }))
     );
+    await sendQuickTaskAssignmentEmails({
+      tenantId,
+      assigneeIds,
+      actorId: userId,
+      quickTask: qt,
+    });
   }
 
   return attachQuickTaskActivity({ companyId, workspaceId, tasks: [qt] }).then((items) => items[0] || mapQuickTaskWithActivity(qt, []));

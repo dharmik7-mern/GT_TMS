@@ -217,11 +217,11 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
         <div
             ref={setWaitingListRef}
             className={cn(
-                'flex w-full flex-col border-t border-surface-200 dark:border-surface-800 bg-surface-50 dark:bg-surface-950 xl:w-[320px] xl:min-w-[320px] xl:border-l xl:border-t-0',
+                'flex w-full flex-col border-t border-surface-200 bg-surface-50 dark:border-surface-800 dark:bg-surface-950 xl:w-[320px] xl:min-w-[320px] xl:border-l xl:border-t-0',
                 isWaitingListOver && 'bg-brand-50/50 dark:bg-brand-900/10'
             )}
         >
-            <div className="flex items-center justify-between border-b border-surface-200 dark:border-surface-800 p-4 bg-white dark:bg-surface-900">
+            <div className="flex items-center justify-between border-b border-surface-200 bg-white p-4 dark:border-surface-800 dark:bg-surface-900">
                 <div className="flex items-center gap-2">
                     <h3 className="text-[15px] font-black text-surface-900 dark:text-white">Waiting list</h3>
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-100 dark:bg-surface-800 text-[11px] font-black text-surface-500 dark:text-surface-400">
@@ -229,11 +229,12 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                     </span>
                 </div>
                 <div className="flex items-center gap-2 text-surface-400 dark:text-surface-500">
-                    <button className="p-1 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-md transition-colors" onClick={() => setIsAddingInline(true)} title="Create task"><Plus size={16} strokeWidth={3} /></button>
-                    <button className="p-1 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-md transition-colors"><Search size={16} strokeWidth={3} /></button>
+                    <button className="rounded-lg p-2 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800" onClick={() => setIsAddingInline(true)} title="Create task"><Plus size={16} strokeWidth={3} /></button>
+                    <button className="rounded-lg p-2 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800 xl:hidden" onClick={() => setIsWaitingListOpen(false)} title="Hide waiting list"><X size={16} strokeWidth={2.5} /></button>
+                    <button className="rounded-lg p-2 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800 hidden xl:inline-flex"><Search size={16} strokeWidth={3} /></button>
                     <button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-surface-500 transition hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-800 dark:hover:text-surface-200 xl:inline-flex"
+                        className="hidden h-8 w-8 items-center justify-center rounded-xl text-surface-500 transition hover:bg-surface-100 hover:text-surface-800 dark:hover:bg-surface-800 dark:hover:text-surface-200 xl:inline-flex"
                         onClick={() => setIsWaitingListOpen(false)}
                         title="Close waiting list"
                     >
@@ -242,7 +243,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                 </div>
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-950">
+            <div className="max-h-[34vh] flex-1 space-y-3 overflow-y-auto bg-surface-50 p-3 dark:bg-surface-950 xl:max-h-none">
                 {/* ── INLINE TASK CREATION CARD ── */}
                 {isAddingInline && (
                     <div className="relative mb-3 flex flex-col gap-3 rounded-[12px] bg-white dark:bg-surface-900 p-3 shadow-lg ring-1 ring-surface-200 dark:ring-surface-800">
@@ -361,7 +362,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
     );
 
     const WaitingListCollapsed = () => (
-        <div className="hidden h-full items-center justify-center border-l border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 xl:flex xl:w-[60px] xl:min-w-[60px]">
+        <div className="hidden h-full items-center justify-center border-l border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900 xl:flex xl:w-[60px] xl:min-w-[60px]">
             <button
                 type="button"
                 onClick={() => setIsWaitingListOpen(true)}
@@ -383,7 +384,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                 <div className="flex flex-1 flex-col overflow-hidden">
                     {view === 'month' ? (
                         <div className="flex flex-col h-full overflow-hidden bg-surface-50 dark:bg-surface-950">
-                            <div className="grid shrink-0 grid-cols-7 border-b border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900">
+                            <div className="grid min-w-[700px] shrink-0 grid-cols-7 border-b border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
                                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label) => (
                                     <div key={label} className="py-3 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400 dark:text-surface-500">
                                         {label}
@@ -391,7 +392,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                                 ))}
                             </div>
 
-                            <div className="grid w-full min-w-0 flex-1 grid-cols-7 auto-rows-[1fr] overflow-y-auto bg-surface-100 dark:bg-surface-800 gap-px border-l border-surface-200 dark:border-surface-800">
+                            <div className="grid w-full min-w-[700px] flex-1 grid-cols-7 auto-rows-[1fr] overflow-auto gap-px border-l border-surface-200 bg-surface-100 dark:border-surface-800 dark:bg-surface-800">
                                 {calendarDays.map((day) => (
                                     <MonthDaySlot
                                         key={day.toISOString()}

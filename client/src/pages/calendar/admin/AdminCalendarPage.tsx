@@ -78,12 +78,11 @@ export const AdminCalendarPage: React.FC = () => {
 
     return (
         <div className="-m-6 flex h-[calc(100vh-60px)] min-h-[calc(100vh-60px)] w-[calc(100%+3rem)] flex-col bg-surface-50 dark:bg-surface-950 max-md:-m-4 max-md:mb-0 max-md:w-[calc(100%+2rem)] font-inter">
-            {/* Perfectly Aligned Bordio Header */}
-            <div className="z-20 border-b border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900 px-5 py-2.5 sm:px-6">
-                <div className="flex items-center justify-between w-full h-10">
-                    {/* Left: View Switcher + Navigator + Range */}
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center rounded-xl bg-surface-100 dark:bg-surface-800 p-1">
+            <div className="z-20 border-b border-surface-100 bg-white px-4 py-3 dark:border-surface-800 dark:bg-surface-900 sm:px-6">
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+                            <div className="flex w-full items-center rounded-2xl bg-surface-100 p-1 dark:bg-surface-800 sm:w-auto">
                             {['month', 'week', 'day'].map((v) => (
                                 <button
                                     key={v}
@@ -92,7 +91,7 @@ export const AdminCalendarPage: React.FC = () => {
                                         setView(v as any);
                                     }}
                                     className={cn(
-                                        'rounded-md px-4 py-1.5 text-[12px] font-black uppercase tracking-wider transition-all',
+                                        'flex-1 rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-wider transition-all sm:flex-none sm:px-4 sm:py-1.5',
                                         view === v
                                             ? 'bg-white dark:bg-surface-700 text-brand-600 dark:text-brand-400 shadow-sm ring-1 ring-surface-200 dark:ring-surface-600'
                                             : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'
@@ -101,31 +100,29 @@ export const AdminCalendarPage: React.FC = () => {
                                     {v}
                                 </button>
                             ))}
-                        </div>
+                            </div>
 
-                         <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1">
                             <button
                                 onClick={() => navigate('prev')}
-                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors"
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-surface-200 bg-white text-surface-500 transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-400 dark:hover:bg-surface-700"
                             >
                                 <ChevronLeft size={18} />
                             </button>
                             <button
                                 onClick={() => navigate('next')}
-                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-500 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors"
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-surface-200 bg-white text-surface-500 transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-400 dark:hover:bg-surface-700"
                             >
                                 <ChevronRight size={18} />
                             </button>
+                            </div>
+
+                            <h1 className="min-w-0 text-[16px] font-black tracking-tight text-surface-900 dark:text-white sm:text-[18px]">
+                                {rangeTitle}
+                            </h1>
                         </div>
 
-
-
-                        <h1 className="ml-2 text-[18px] font-black text-surface-900 dark:text-white tracking-tight">
-                            {rangeTitle}
-                        </h1>
-                    </div>
-
-                    <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <div className="relative hidden lg:block">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={15} />
                              <input
@@ -147,7 +144,7 @@ export const AdminCalendarPage: React.FC = () => {
                                 )}
                             >
                                 <LayoutGrid size={16} />
-                                <span className="hidden lg:inline text-[11px] font-black uppercase tracking-wide">Group</span>
+                                <span className="hidden sm:inline lg:inline text-[11px] font-black uppercase tracking-wide">Group</span>
                                 <ChevronDown size={12} className={cn("transition-transform", showGroupMenu && "rotate-180")} />
                             </button>
 
@@ -180,7 +177,7 @@ export const AdminCalendarPage: React.FC = () => {
                                 )}
                             >
                                 <Filter size={16} />
-                                <span className="hidden lg:inline text-[11px] font-black uppercase tracking-wide">Filter</span>
+                                <span className="hidden sm:inline lg:inline text-[11px] font-black uppercase tracking-wide">Filter</span>
                                 <ChevronDown size={12} className={cn("transition-transform", showFilterMenu && "rotate-180")} />
                             </button>
 
@@ -235,6 +232,18 @@ export const AdminCalendarPage: React.FC = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+
+                    <div className="relative lg:hidden">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={15} />
+                        <input
+                            type="text"
+                            placeholder="Search tasks, users, tags..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="h-11 w-full rounded-2xl border border-surface-200 bg-surface-50 pl-10 pr-4 text-[13px] font-medium text-surface-900 focus:border-brand-500 focus:bg-white focus:outline-none dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:focus:bg-surface-700"
+                        />
                     </div>
                 </div>
             </div>

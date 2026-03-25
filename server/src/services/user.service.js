@@ -2,6 +2,7 @@ import AuthLookup from '../models/AuthLookup.js';
 import { getTenantModels } from '../config/tenantDb.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { assertPasswordAllowed } from './settings.service.js';
+import { sendTemplatedEmailSafe } from './mail.service.js';
 
 function asDate(value) {
   if (!value) return null;
@@ -291,6 +292,19 @@ export async function createUser({ companyId, workspaceId, actorRole, input }) {
     { $setOnInsert: { role: input.role, status: 'active' } },
     { upsert: true }
   );
+
+  if (input.sendCredentialsEmail) {
+    void sendTemplatedEmailSafe({
+      to: email,
+      templateKey: 'userCredentials',
+      variables: {
+        userName: user.name,
+        email: user.email,
+        password: input.password,
+        role: user.role,
+      },
+    });
+  }
 
   return user;
 }

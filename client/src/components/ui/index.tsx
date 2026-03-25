@@ -27,7 +27,7 @@ export const Tabs: React.FC<TabsProps> = ({
 }) => (
   <RadixTabs.Root value={value} onValueChange={onValueChange} className={className}>
     <RadixTabs.List className={cn(
-      'flex',
+      'flex w-full overflow-x-auto pb-1 scrollbar-hide',
       variant === 'underline' && 'border-b border-surface-100 dark:border-surface-800 gap-1',
       variant === 'pill' && 'bg-surface-100 dark:bg-surface-800 p-1 rounded-xl gap-1'
     )}>
@@ -36,15 +36,15 @@ export const Tabs: React.FC<TabsProps> = ({
           key={item.value}
           value={item.value}
           className={cn(
-            'flex items-center gap-2 text-sm font-medium transition-all outline-none',
+            'flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium transition-all outline-none',
             variant === 'underline' && cn(
-              'px-4 py-2.5 border-b-2 -mb-px rounded-t-lg',
+              'rounded-t-lg border-b-2 px-3 py-2.5 text-xs sm:px-4 sm:text-sm -mb-px',
               value === item.value
                 ? 'text-brand-700 dark:text-brand-300 border-brand-600'
                 : 'text-surface-500 border-transparent hover:text-surface-700 dark:hover:text-surface-300'
             ),
             variant === 'pill' && cn(
-              'px-3 py-1.5 rounded-lg',
+              'rounded-lg px-3 py-1.5 text-xs sm:text-sm',
               value === item.value
                 ? 'bg-white dark:bg-surface-900 text-surface-900 dark:text-white shadow-sm'
                 : 'text-surface-500 hover:text-surface-700 dark:hover:text-surface-300'

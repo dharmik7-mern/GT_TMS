@@ -49,6 +49,7 @@ router.post(
       jobTitle: z.string().trim().max(120).optional(),
       department: z.string().trim().max(120).optional(),
       color: z.string().trim().max(32).optional(),
+      sendCredentialsEmail: z.boolean().optional(),
     })
   ),
   UsersController.create

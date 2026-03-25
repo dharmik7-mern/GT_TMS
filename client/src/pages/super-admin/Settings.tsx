@@ -10,6 +10,21 @@ const TAB_ITEMS = [
   { value: 'infrastructure', label: 'System Health', icon: <Server size={14} /> },
 ];
 
+type EmailTemplateKey =
+  | 'welcomeMessage'
+  | 'forgotPassword'
+  | 'loginAlert'
+  | 'paymentReceipt'
+  | 'taskAssigned'
+  | 'quickTaskAssigned'
+  | 'userCredentials';
+
+type EmailTemplateState = {
+  enabled: boolean;
+  subject: string;
+  body: string;
+};
+
 type SystemSettingsState = {
   general: {
     siteName: string;
@@ -31,10 +46,13 @@ type SystemSettingsState = {
     username: string;
     password: string;
     templates: {
-      welcomeMessage: boolean;
-      forgotPassword: boolean;
-      loginAlert: boolean;
-      paymentReceipt: boolean;
+      welcomeMessage: EmailTemplateState;
+      forgotPassword: EmailTemplateState;
+      loginAlert: EmailTemplateState;
+      paymentReceipt: EmailTemplateState;
+      taskAssigned: EmailTemplateState;
+      quickTaskAssigned: EmailTemplateState;
+      userCredentials: EmailTemplateState;
     };
   };
   infrastructure: {
@@ -61,6 +79,20 @@ type SystemSettingsState = {
   };
 };
 
+const EMAIL_TEMPLATE_ITEMS: Array<{
+  key: EmailTemplateKey;
+  label: string;
+  description: string;
+}> = [
+  { key: 'welcomeMessage', label: 'Welcome Message', description: 'Sent when a new user should receive a welcome email.' },
+  { key: 'forgotPassword', label: 'Forgot Password', description: 'Used for password reset emails.' },
+  { key: 'loginAlert', label: 'Login Alert', description: 'Used for suspicious or tracked login alerts.' },
+  { key: 'paymentReceipt', label: 'Payment Receipt', description: 'Used for payment and invoice receipts.' },
+  { key: 'taskAssigned', label: 'Task Assigned', description: 'Sent when a project task is assigned to a user.' },
+  { key: 'quickTaskAssigned', label: 'Quick Task Assigned', description: 'Sent when a quick task is assigned to a user.' },
+  { key: 'userCredentials', label: 'User Credentials', description: 'Sent when admin chooses to email new-user credentials.' },
+];
+
 const DEFAULT_SETTINGS: SystemSettingsState = {
   general: {
     siteName: 'Gitakshmi PMS',
@@ -82,10 +114,41 @@ const DEFAULT_SETTINGS: SystemSettingsState = {
     username: 'apikey',
     password: '',
     templates: {
-      welcomeMessage: true,
-      forgotPassword: true,
-      loginAlert: true,
-      paymentReceipt: true,
+      welcomeMessage: {
+        enabled: true,
+        subject: 'Welcome to {{siteName}}',
+        body: 'Hi {{userName}},\n\nWelcome to {{siteName}}.\n\nYou can sign in here: {{loginUrl}}\n\nRegards,\n{{siteName}}',
+      },
+      forgotPassword: {
+        enabled: true,
+        subject: 'Reset your {{siteName}} password',
+        body: 'Hi {{userName}},\n\nWe received a request to reset your password.\n\nUse this link: {{resetUrl}}\n\nIf you did not request this, you can ignore this email.\n\nRegards,\n{{siteName}}',
+      },
+      loginAlert: {
+        enabled: true,
+        subject: 'New sign-in to your {{siteName}} account',
+        body: 'Hi {{userName}},\n\nYour account was accessed on {{loginTime}}.\n\nIf this was not you, contact the administrator immediately.\n\nRegards,\n{{siteName}}',
+      },
+      paymentReceipt: {
+        enabled: true,
+        subject: 'Payment receipt from {{siteName}}',
+        body: 'Hi {{userName}},\n\nWe received your payment of {{amount}}.\n\nReceipt ID: {{receiptId}}\n\nRegards,\n{{siteName}}',
+      },
+      taskAssigned: {
+        enabled: true,
+        subject: 'New task assigned: {{taskTitle}}',
+        body: 'Hi {{userName}},\n\nA task has been assigned to you.\n\nTask: {{taskTitle}}\nProject: {{projectName}}\nPriority: {{priority}}\nDue date: {{dueDate}}\nAssigned by: {{assignedBy}}\n\nOpen task: {{taskUrl}}\n\nRegards,\n{{siteName}}',
+      },
+      quickTaskAssigned: {
+        enabled: true,
+        subject: 'New quick task assigned: {{taskTitle}}',
+        body: 'Hi {{userName}},\n\nA quick task has been assigned to you.\n\nTask: {{taskTitle}}\nPriority: {{priority}}\nDue date: {{dueDate}}\nAssigned by: {{assignedBy}}\n\nOpen task: {{taskUrl}}\n\nRegards,\n{{siteName}}',
+      },
+      userCredentials: {
+        enabled: true,
+        subject: 'Your {{siteName}} account credentials',
+        body: 'Hi {{userName}},\n\nAn account has been created for you.\n\nUsername: {{email}}\nPassword: {{password}}\nRole: {{role}}\n\nSign in here: {{loginUrl}}\n\nPlease change your password after logging in.\n\nRegards,\n{{siteName}}',
+      },
     },
   },
   infrastructure: {
@@ -154,7 +217,13 @@ export const SettingsPage: React.FC = () => {
         email: {
           ...DEFAULT_SETTINGS.email,
           ...(data.email || {}),
-          templates: { ...DEFAULT_SETTINGS.email.templates, ...(data.email?.templates || {}) },
+          templates: EMAIL_TEMPLATE_ITEMS.reduce((acc, item) => {
+            acc[item.key] = {
+              ...DEFAULT_SETTINGS.email.templates[item.key],
+              ...(data.email?.templates?.[item.key] || {}),
+            };
+            return acc;
+          }, {} as SystemSettingsState['email']['templates']),
         },
         infrastructure: { ...DEFAULT_SETTINGS.infrastructure, ...(data.infrastructure || {}) },
         idGeneration: {
@@ -281,6 +350,26 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const updateTemplateField = (
+    templateKey: keyof SystemSettingsState['email']['templates'],
+    field: keyof EmailTemplateState,
+    value: boolean | string
+  ) => {
+    setSettings((prev) => ({
+      ...prev,
+      email: {
+        ...prev.email,
+        templates: {
+          ...prev.email.templates,
+          [templateKey]: {
+            ...prev.email.templates[templateKey],
+            [field]: value,
+          },
+        },
+      },
+    }));
+  };
+
   const statRows = useMemo(() => [
     { label: 'Last Backup', value: settings.stats?.lastBackupText || 'Never' },
     { label: 'Storage Used', value: settings.stats?.storageUsedText || '0MB / 500GB' },
@@ -296,14 +385,14 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="page-header flex items-center justify-between">
+      <div className="page-header flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="page-title">Site Settings</h1>
           <p className="page-subtitle">Manage your platform info, security, and emails</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           {/* <button className="btn-secondary btn-sm" onClick={clearCache}>Clear Cache</button> */}
-          <button className="btn-primary btn-sm px-6" onClick={saveSettings} disabled={saving}>
+          <button className="btn-primary btn-md w-full sm:w-auto sm:px-6" onClick={saveSettings} disabled={saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
@@ -311,7 +400,7 @@ export const SettingsPage: React.FC = () => {
 
       {message && <div className="mb-4 rounded-xl bg-surface-50 px-4 py-3 text-sm text-surface-600 dark:bg-surface-800/60">{message}</div>}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} items={TAB_ITEMS} variant="underline">
+      <Tabs value={activeTab} onValueChange={setActiveTab} items={TAB_ITEMS} variant="underline" className="min-w-0">
         <TabsContent value="general" className="pt-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
@@ -451,31 +540,53 @@ export const SettingsPage: React.FC = () => {
                     <input type="password" value={settings.email.password} onChange={(e) => setSettings((prev) => ({ ...prev, email: { ...prev.email, password: e.target.value } }))} className="input" />
                   </div>
                 </div>
-                <div className="flex gap-2 border-t border-surface-100 pt-4 dark:border-surface-800">
-                  <button className="btn-secondary btn-sm flex-1" onClick={testEmail} disabled={testingEmail}>{testingEmail ? 'Testing...' : 'Test Connection'}</button>
-                  <button className="btn-primary btn-sm flex-1" onClick={saveSettings}>Apply Changes</button>
+                <div className="flex flex-col gap-2 border-t border-surface-100 pt-4 sm:flex-row dark:border-surface-800">
+                  <button className="btn-secondary btn-md flex-1" onClick={testEmail} disabled={testingEmail}>{testingEmail ? 'Testing...' : 'Test Connection'}</button>
+                  <button className="btn-primary btn-md flex-1" onClick={saveSettings}>Apply Changes</button>
                 </div>
               </div>
             </div>
 
             <div className="card p-6">
-              <h3 className="mb-4 font-display font-bold text-surface-900 dark:text-white">Automatic Emails</h3>
-              <div className="space-y-3">
-                {[
-                  ['welcomeMessage', 'Welcome Message'],
-                  ['forgotPassword', 'Forgot Password'],
-                  ['loginAlert', 'Login Alert'],
-                  // ['paymentReceipt', 'Payment Receipt'],
-                ].map(([key, label]) => (
-                  <div key={key} className="flex items-center justify-between rounded-xl border border-surface-50 p-3 dark:border-surface-800">
-                    <span className="text-sm font-medium text-surface-700 dark:text-surface-300">{label}</span>
-                    <button
-                      type="button"
-                      onClick={() => setSettings((prev) => ({ ...prev, email: { ...prev.email, templates: { ...prev.email.templates, [key]: !prev.email.templates[key as keyof typeof prev.email.templates] } } }))}
-                      className={`relative h-5 w-10 rounded-full transition-colors ${settings.email.templates[key as keyof typeof settings.email.templates] ? 'bg-brand-600' : 'bg-surface-200 dark:bg-surface-700'}`}
-                    >
-                      <span className={`absolute top-1 h-3 w-3 rounded-full bg-white shadow-sm transition-all ${settings.email.templates[key as keyof typeof settings.email.templates] ? 'right-1' : 'left-1'}`} />
-                    </button>
+              <h3 className="mb-2 font-display font-bold text-surface-900 dark:text-white">Email Templates</h3>
+              <p className="mb-4 text-sm text-surface-400">
+                Admin can control which emails are active and edit the subject/body with variables like
+                {' '}<code>{'{{userName}}'}</code>, <code>{'{{taskTitle}}'}</code>, <code>{'{{loginUrl}}'}</code>.
+              </p>
+              <div className="space-y-4">
+                {EMAIL_TEMPLATE_ITEMS.map((item) => (
+                  <div key={item.key} className="rounded-2xl border border-surface-100 p-4 dark:border-surface-800">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-surface-800 dark:text-surface-200">{item.label}</p>
+                        <p className="text-xs text-surface-400">{item.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateTemplateField(item.key, 'enabled', !settings.email.templates[item.key].enabled)}
+                        className={`relative h-5 w-10 rounded-full transition-colors ${settings.email.templates[item.key].enabled ? 'bg-brand-600' : 'bg-surface-200 dark:bg-surface-700'}`}
+                      >
+                        <span className={`absolute top-1 h-3 w-3 rounded-full bg-white shadow-sm transition-all ${settings.email.templates[item.key].enabled ? 'right-1' : 'left-1'}`} />
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="label">Subject</label>
+                        <input
+                          value={settings.email.templates[item.key].subject}
+                          onChange={(e) => updateTemplateField(item.key, 'subject', e.target.value)}
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Body</label>
+                        <textarea
+                          value={settings.email.templates[item.key].body}
+                          onChange={(e) => updateTemplateField(item.key, 'body', e.target.value)}
+                          className="input min-h-[144px] resize-y py-3"
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -529,9 +640,9 @@ export const SettingsPage: React.FC = () => {
             <div className="card p-6">
               <h3 className="mb-4 font-display font-bold text-surface-900 dark:text-white">Actions</h3>
               <div className="space-y-3">
-                <button className="btn-primary w-full" onClick={refreshSystemData}>Refresh System Data</button>
-                <button className="btn-secondary w-full" onClick={clearCache}>Clear Cache</button>
-                <button className="btn-secondary w-full" onClick={saveSettings}>Save Platform Settings</button>
+                <button className="btn-primary btn-md w-full" onClick={refreshSystemData}>Refresh System Data</button>
+                <button className="btn-secondary btn-md w-full" onClick={clearCache}>Clear Cache</button>
+                <button className="btn-secondary btn-md w-full" onClick={saveSettings}>Save Platform Settings</button>
                 <div className="rounded-xl bg-surface-50 p-4 text-sm text-surface-500 dark:bg-surface-800/50">
                   Current maintenance flag:
                   <span className="ml-2 font-medium text-surface-900 dark:text-white">

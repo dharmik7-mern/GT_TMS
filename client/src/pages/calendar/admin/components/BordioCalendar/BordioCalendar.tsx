@@ -180,7 +180,7 @@ export const BordioCalendar: React.FC<{ searchQuery?: string }> = ({ searchQuery
 
     // No left spacer — grid is just the day columns
     const gridTemplate = `repeat(${colCount}, 1fr)`;
-    const MIN_WIDTH    = 640;
+    const MIN_WIDTH    = view === 'day' ? 320 : groupBy === 'user' ? 560 : 520;
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-white dark:bg-surface-900">
@@ -222,11 +222,11 @@ export const BordioCalendar: React.FC<{ searchQuery?: string }> = ({ searchQuery
                                         <span className="absolute top-1.5 right-3 text-[9.5px] font-bold text-surface-400 dark:text-surface-500">{fmtTotal(totalMins)}</span>
                                     )}
 
-                                    <div className="flex items-baseline gap-1.5">
-                                        <span className={cn('text-[17px] font-black tracking-tight', today ? 'text-brand-600 dark:text-brand-400' : 'text-surface-900 dark:text-white')}>
+                                    <div className="flex flex-wrap items-baseline justify-center gap-1.5 px-2 text-center">
+                                        <span className={cn('text-[15px] font-black tracking-tight sm:text-[17px]', today ? 'text-brand-600 dark:text-brand-400' : 'text-surface-900 dark:text-white')}>
                                             {format(day, 'd')}
                                         </span>
-                                        <span className={cn('text-[13px] font-medium', today ? 'text-brand-600 dark:text-brand-400' : 'text-surface-500 dark:text-surface-400')}>
+                                        <span className={cn('text-[11px] font-medium sm:text-[13px]', today ? 'text-brand-600 dark:text-brand-400' : 'text-surface-500 dark:text-surface-400')}>
                                             {format(day, 'EEE')}
                                         </span>
                                     </div>
@@ -238,11 +238,10 @@ export const BordioCalendar: React.FC<{ searchQuery?: string }> = ({ searchQuery
 
                     {/* ════ BODY ════════════════════════════════════════════ */}
                     <div
-                        className="overflow-y-auto bg-white dark:bg-surface-900"
+                        className="h-[calc(100vh-300px)] overflow-y-auto bg-white dark:bg-surface-900 lg:h-[calc(100vh-220px)]"
                         style={{
                             display: 'grid',
                             gridTemplateColumns: gridTemplate,         // exactly matches header
-                            height: 'calc(100vh - 220px)',
                         }}
                     >
                         {columns.map((item: any, idx) => {

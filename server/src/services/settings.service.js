@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import SystemSetting from '../models/SystemSetting.js';
 import Company from '../models/Company.js';
 import { getTenantModels } from '../config/tenantDb.js';
+import { DEFAULT_TEMPLATE_MAP, normalizeEmailSettings, verifyMailSettings } from './mail.service.js';
 
 const SETTINGS_KEY = 'system';
 const DEFAULT_SECURITY_SETTINGS = {
@@ -18,6 +19,11 @@ const DEFAULT_COMPANY_ID_CONFIG = {
   digits: 4,
   nextSequence: 1,
 };
+const DEFAULT_EMAIL_SETTINGS = normalizeEmailSettings({}, {
+  siteName: 'Gitakshmi PMS',
+  supportEmail: 'gitakshmi@support.com',
+  adminEmail: 'admin@gmail.com',
+});
 
 function normalizeIdConfig(config, fallback = DEFAULT_COMPANY_ID_CONFIG) {
   return {
@@ -52,6 +58,13 @@ async function ensureSystemSettings() {
     item = await SystemSetting.create({ key: SETTINGS_KEY });
   }
   return item;
+}
+
+function getNormalizedEmailSettingsFromDoc(settingsDoc) {
+  return normalizeEmailSettings(
+    settingsDoc?.email?.toObject?.() || settingsDoc?.email || {},
+    settingsDoc?.general?.toObject?.() || settingsDoc?.general || {}
+  );
 }
 
 function getSecuritySettingsFromDoc(settingsDoc) {
@@ -132,8 +145,10 @@ async function buildSystemStats(settings) {
 export async function getSystemSettings() {
   const settings = await ensureSystemSettings();
   const stats = await buildSystemStats(settings.toJSON());
+  const normalizedEmail = getNormalizedEmailSettingsFromDoc(settings);
   return {
     ...settings.toJSON(),
+    email: normalizedEmail,
     idGeneration: {
       company: normalizeIdConfig(settings.idGeneration?.company, DEFAULT_COMPANY_ID_CONFIG),
     },
@@ -143,10 +158,14 @@ export async function getSystemSettings() {
 
 export async function updateSystemSettings({ updates, userId }) {
   const current = await ensureSystemSettings();
+  const currentEmail = getNormalizedEmailSettingsFromDoc(current);
   const merged = {
     general: deepMerge(current.general?.toObject?.() || current.general || {}, updates.general || {}),
     security: deepMerge(current.security?.toObject?.() || current.security || {}, updates.security || {}),
-    email: deepMerge(current.email?.toObject?.() || current.email || {}, updates.email || {}),
+    email: normalizeEmailSettings(
+      deepMerge(currentEmail, updates.email || {}),
+      deepMerge(current.general?.toObject?.() || current.general || {}, updates.general || {})
+    ),
     infrastructure: deepMerge(current.infrastructure?.toObject?.() || current.infrastructure || {}, updates.infrastructure || {}),
     idGeneration: {
       company: normalizeIdConfig(
@@ -242,11 +261,14 @@ export async function refreshSystemData() {
 }
 
 export async function testEmailSettings({ email }) {
-  const hasMinimumConfig = Boolean(email?.smtpHost && email?.smtpPort && email?.username);
-  return {
-    ok: hasMinimumConfig,
-    message: hasMinimumConfig
-      ? 'SMTP settings look valid. No live email was sent from this test endpoint.'
-      : 'SMTP host, port, and username are required.',
-  };
+  const candidate = normalizeEmailSettings(email || DEFAULT_EMAIL_SETTINGS, {
+    siteName: 'Gitakshmi PMS',
+    supportEmail: email?.username || 'gitakshmi@support.com',
+    adminEmail: 'admin@gmail.com',
+  });
+  return verifyMailSettings(candidate);
+}
+
+export function getDefaultEmailTemplateMap() {
+  return DEFAULT_TEMPLATE_MAP;
 }

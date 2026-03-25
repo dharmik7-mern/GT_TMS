@@ -34,6 +34,7 @@ export const UsersPage: React.FC = () => {
     password: string;
     companyId: string;
     role: 'super_admin' | 'admin' | 'manager' | 'team_leader' | 'team_member';
+    sendCredentialsEmail: boolean;
   }>({
     defaultValues: {
       name: '',
@@ -41,6 +42,7 @@ export const UsersPage: React.FC = () => {
       password: '',
       companyId: '',
       role: 'team_member',
+      sendCredentialsEmail: true,
     },
   });
 
@@ -66,6 +68,7 @@ export const UsersPage: React.FC = () => {
         password: '',
         companyId: selectedUser.tenantId || selectedUser.companyId || companies[0]?.id || '',
         role: selectedUser.role || 'team_member',
+        sendCredentialsEmail: true,
       });
       return;
     }
@@ -76,6 +79,7 @@ export const UsersPage: React.FC = () => {
       password: '',
       companyId: companies[0]?.id || '',
       role: 'team_member',
+      sendCredentialsEmail: true,
     });
   }, [companies, reset, selectedUser, showModal]);
 
@@ -85,7 +89,7 @@ export const UsersPage: React.FC = () => {
     return matchSearch && matchRole;
   });
 
-  const onSubmitUser = async (data: { name: string; email: string; password: string; companyId: string; role: 'super_admin' | 'admin' | 'manager' | 'team_leader' | 'team_member' }) => {
+  const onSubmitUser = async (data: { name: string; email: string; password: string; companyId: string; role: 'super_admin' | 'admin' | 'manager' | 'team_leader' | 'team_member'; sendCredentialsEmail: boolean }) => {
     setSaving(true);
     try {
       if (selectedUser) {
@@ -103,6 +107,7 @@ export const UsersPage: React.FC = () => {
           password: data.password,
           role: data.role,
           companyId: data.companyId || undefined,
+          sendCredentialsEmail: data.sendCredentialsEmail,
         });
         const createdUser = response.data.data ?? response.data;
         addUser(createdUser);
@@ -118,6 +123,7 @@ export const UsersPage: React.FC = () => {
         password: '',
         companyId: companies[0]?.id || '',
         role: 'team_member',
+        sendCredentialsEmail: true,
       });
     } catch {
       // Shared API interceptor handles error toasts.
@@ -303,6 +309,16 @@ export const UsersPage: React.FC = () => {
                   placeholder="Create a strong password"
                 />
               </div>
+            ) : null}
+            {!selectedUser ? (
+              <label className="col-span-2 flex items-start gap-3 rounded-2xl border border-surface-100 px-4 py-3 text-sm text-surface-600 dark:border-surface-800 dark:text-surface-300">
+                <input
+                  type="checkbox"
+                  {...register('sendCredentialsEmail')}
+                  className="mt-1 h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span>Send username and password to this user by email after creation.</span>
+              </label>
             ) : null}
             <div className="col-span-2">
               <label className="label">Company</label>

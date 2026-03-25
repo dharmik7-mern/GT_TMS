@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getTenantModels } from '../config/tenantDb.js';
+import { sendTemplatedEmailSafe } from './mail.service.js';
 
 function strId(x) {
   return x ? String(x) : '';
@@ -124,6 +125,48 @@ async function notifyUsers({ tenantId, workspaceId, userIds, type, title, messag
   );
 }
 
+function formatMailDate(value) {
+  if (!value) return 'Not set';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+async function sendTaskAssignmentEmails({ tenantId, assigneeIds, actorId, task, projectName }) {
+  const uniqueAssigneeIds = Array.from(new Set(mapIdList(assigneeIds))).filter(Boolean);
+  if (!uniqueAssigneeIds.length) return;
+
+  const { User } = await getTenantModels(tenantId);
+  const [users, actor] = await Promise.all([
+    User.find({ tenantId, _id: { $in: uniqueAssigneeIds } }).select('name email').lean(),
+    actorId ? User.findOne({ tenantId, _id: actorId }).select('name email').lean() : Promise.resolve(null),
+  ]);
+
+  await Promise.allSettled(
+    users
+      .filter((user) => user?.email)
+      .map((user) =>
+        sendTemplatedEmailSafe({
+          to: user.email,
+          templateKey: 'taskAssigned',
+          variables: {
+            userName: user.name || 'User',
+            taskTitle: task.title,
+            projectName: projectName || 'Workspace task',
+            priority: task.priority || 'medium',
+            dueDate: formatMailDate(task.dueDate),
+            assignedBy: actor?.name || 'Administrator',
+            taskUrl: `/tasks/${task._id}`,
+          },
+        })
+      )
+  );
+}
+
 function canReviewProjectTask({ role, userId, task, reviewerIds }) {
   if (isAdminRole(role) || ['manager', 'team_leader'].includes(role)) return true;
   const uid = strId(userId);
@@ -228,6 +271,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
   }
 
   const { Task, Project, ActivityLog, Notification } = await getTenantModels(companyId);
+  const project = await Project.findOne({ _id: data.projectId, tenantId, workspaceId }).select('name').lean();
   const task = await Task.create({
     tenantId,
     workspaceId,
@@ -278,6 +322,13 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
         relatedId: String(task._id),
       }))
     );
+    await sendTaskAssignmentEmails({
+      tenantId,
+      assigneeIds: task.assigneeIds,
+      actorId: userId,
+      task,
+      projectName: project?.name || 'Untitled Project',
+    });
   }
 
   return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
@@ -332,7 +383,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
 
 export async function updateTask({ companyId, workspaceId, userId, role, taskId, updates }) {
   const tenantId = companyId;
-   const { Task, ActivityLog } = getTenantModels();
+   const { Task, ActivityLog, Notification, Project } = getTenantModels(tenantId);
    let existing = await Task.findOne({ _id: taskId, tenantId, workspaceId });
    
    if (!existing && (role === 'admin' || role === 'super_admin')) {
@@ -348,12 +399,16 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   }
 
   const { subtasks, dueDate, startDate, completionRemark, ...rest } = updates;
+  const beforeAssigneeIds = mapIdList(existing.assigneeIds);
   const nextStatus = rest.status ?? existing.status;
   const previousStatus = existing.status;
   const $set = { ...rest };
   if (dueDate !== undefined) $set.dueDate = dueDate ? new Date(dueDate) : null;
   if (startDate !== undefined) $set.startDate = startDate ? new Date(startDate) : null;
   if (subtasks !== undefined) $set.subtasks = subtasks;
+  if (rest.assigneeIds !== undefined) {
+    $set.assigneeIds = Array.isArray(rest.assigneeIds) ? rest.assigneeIds : [];
+  }
   if (completionRemark !== undefined || rest.status !== undefined) {
     $set.completionReview = buildCompletionState({
       existingReview: existing.completionReview,
@@ -391,7 +446,46 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
+  const afterAssigneeIds = mapIdList(task.assigneeIds);
+  if (beforeAssigneeIds.join(',') !== afterAssigneeIds.join(',')) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'task_assignees_changed',
+      description: `Updated assignees for "${task.title}"`,
+      entityType: 'task',
+      entityId: task._id,
+      metadata: { from: beforeAssigneeIds, to: afterAssigneeIds, projectId: task.projectId },
+    });
+  }
+
   await ActivityLog.insertMany(activityEntries);
+
+  const newlyAssignedIds = afterAssigneeIds.filter((assigneeId) => !beforeAssigneeIds.includes(assigneeId));
+  if (newlyAssignedIds.length) {
+    await Notification.insertMany(
+      newlyAssignedIds.map((assignee) => ({
+        tenantId,
+        workspaceId,
+        userId: assignee,
+        type: 'task_assigned',
+        title: 'Task assigned to you',
+        message: `You were assigned "${task.title}"`,
+        isRead: false,
+        relatedId: String(task._id),
+      }))
+    );
+
+    const project = await Project.findOne({ _id: task.projectId, tenantId, workspaceId: task.workspaceId || workspaceId }).select('name').lean();
+    await sendTaskAssignmentEmails({
+      tenantId,
+      assigneeIds: newlyAssignedIds,
+      actorId: userId,
+      task,
+      projectName: project?.name || 'Untitled Project',
+    });
+  }
 
   if (existing.status !== 'done' && task.status === 'done') {
     const reviewerIds = (await getTaskReviewUsers({

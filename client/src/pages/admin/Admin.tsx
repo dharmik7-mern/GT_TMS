@@ -212,6 +212,7 @@ export const AdminUsersPage: React.FC = () => {
     role: 'team_member' as Role,
     jobTitle: '',
     department: '',
+    sendCredentialsEmail: true,
   });
   const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -240,7 +241,10 @@ export const AdminUsersPage: React.FC = () => {
 
   const CREATE_ROLE_OPTIONS: Role[] = ['admin', 'manager', 'team_leader', 'team_member'];
 
-  const handleCreateChange = (field: keyof typeof createForm, value: string) => {
+  const handleCreateChange = (
+    field: Exclude<keyof typeof createForm, 'sendCredentialsEmail'>,
+    value: string
+  ) => {
     setCreateForm(prev => ({ ...prev, [field]: value }));
   };
 
@@ -252,6 +256,7 @@ export const AdminUsersPage: React.FC = () => {
       role: 'team_member',
       jobTitle: '',
       department: '',
+      sendCredentialsEmail: true,
     });
     setCreateError('');
     setIsCreating(false);
@@ -659,6 +664,19 @@ export const AdminUsersPage: React.FC = () => {
             <div className="sm:col-span-2">
               <label className="label">Department</label>
               <input value={createForm.department} onChange={e => handleCreateChange('department', e.target.value)} className="input" placeholder="e.g. Operations" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-start gap-3 rounded-2xl border border-surface-100 px-4 py-3 text-sm text-surface-600 dark:border-surface-800 dark:text-surface-300">
+                <input
+                  type="checkbox"
+                  checked={createForm.sendCredentialsEmail}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, sendCredentialsEmail: e.target.checked }))}
+                  className="mt-1 h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span>
+                  Send username and temporary password by email to this user after creation.
+                </span>
+              </label>
             </div>
           </div>
 
