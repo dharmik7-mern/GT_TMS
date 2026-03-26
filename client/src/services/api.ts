@@ -12,6 +12,13 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
+    const method = String(config.method || 'get').toUpperCase();
+    if (method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+      config.headers = config.headers || {};
+      config.headers['X-HTTP-Method-Override'] = method;
+      config.method = 'post';
+    }
+
     const token = localStorage.getItem('flowboard-auth');
     if (token) {
       try {

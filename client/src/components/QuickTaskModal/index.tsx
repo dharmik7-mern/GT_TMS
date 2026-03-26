@@ -56,6 +56,18 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
   const [assigneeQuery, setAssigneeQuery] = useState('');
   const assigneeRef = useRef<HTMLDivElement | null>(null);
 
+  const selectedAssigneeIds = watch('assigneeIds') || [];
+
+  const assignableUsers = useMemo(() => {
+    return users.filter(u => u.isActive && ASSIGNABLE_ROLES.includes(u.role));
+  }, [users]);
+
+  const selectedAssignees = useMemo(() => {
+    return selectedAssigneeIds
+      .map((id) => assignableUsers.find((u) => u.id === id))
+      .filter((u): u is NonNullable<typeof u> => !!u);
+  }, [selectedAssigneeIds, assignableUsers]);
+
   useEffect(() => {
     reset({
       title: task?.title ?? '',
@@ -69,6 +81,19 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
   }, [task, reset, open]);
 
   useEffect(() => {
+    // For new tasks, auto-toggle private if self-assigned
+    if (!task && user) {
+      const isSelf = selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === user.id;
+      const hasOthers = selectedAssigneeIds.length > 0 && !isSelf;
+      if (isSelf) {
+        setValue('isPrivate', true);
+      } else if (hasOthers) {
+        setValue('isPrivate', false);
+      }
+    }
+  }, [selectedAssigneeIds, task, user, setValue]);
+
+  useEffect(() => {
     setAssigneeOpen(false);
     setAssigneeQuery('');
     setFiles([]);
@@ -76,13 +101,11 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
 
   useEffect(() => {
     if (!assigneeOpen) return;
-
     const handlePointerDown = (event: MouseEvent) => {
       if (assigneeRef.current?.contains(event.target as Node)) return;
       setAssigneeOpen(false);
       setAssigneeQuery('');
     };
-
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [assigneeOpen]);
@@ -109,7 +132,6 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
   const filteredAssignableUsers = useMemo(() => {
     const query = assigneeQuery.trim().toLowerCase();
     if (!query) return assignableUsers;
-
     return assignableUsers.filter((u) => {
       const roleLabel = u.role.replace(/_/g, ' ');
       return (
@@ -121,7 +143,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
   }, [assignableUsers, assigneeQuery]);
 
   const assigneeLabel = selectedAssignees.length
-    ? `${selectedAssignees.map((u) => u!.name).slice(0, 2).join(', ')}${selectedAssignees.length > 2 ? ` +${selectedAssignees.length - 2}` : ''}`
+    ? `${selectedAssignees.map((u) => u.name).slice(0, 2).join(', ')}${selectedAssignees.length > 2 ? ` +${selectedAssignees.length - 2}` : ''}`
     : 'Unassigned';
 
   const toggleAssignee = (assigneeId: string) => {
@@ -146,10 +168,8 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
         dueDate: data.dueDate || undefined,
         isPrivate: data.isPrivate,
       };
-
       try {
         let qtId: string | undefined;
-
         if (task) {
           const res = await quickTasksService.update(task.id, payload);
           qtId = res.data?.data?.id ?? task.id;
@@ -157,11 +177,9 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
           const res = await quickTasksService.create(payload);
           qtId = res.data?.data?.id;
         }
-
         if (qtId && files.length) {
           await quickTasksService.uploadAttachments(qtId, files);
         }
-
         await bootstrap();
         onClose();
       } catch {
@@ -247,14 +265,12 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
                 </span>
               </div>
             </div>
-
             <div>
               <label className="label">Due date</label>
               <div className="relative">
                 <input type="date" {...register('dueDate')} className="input pr-10" min={new Date().toISOString().split('T')[0]} />
                 <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
               </div>
-
             </div>
           </div>
 
@@ -416,4 +432,3 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
 };
 
 export default QuickTaskModal;
-

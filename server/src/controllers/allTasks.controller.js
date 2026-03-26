@@ -33,11 +33,12 @@ export async function getOverview(req, res, next) {
     const isAdmin = ['super_admin', 'admin'].includes(role);
     const qtFilter = { ...filter };
     if (!isAdmin) {
+      const uid = new mongoose.Types.ObjectId(userId);
       const privacyOr = [
         { isPrivate: false },
         { isPrivate: { $exists: false } },
-        { createdBy: userId },
-        { reporterId: userId }
+        { createdBy: uid },
+        { reporterId: uid }
       ];
       if (qtFilter.$or) {
         const involvedOr = qtFilter.$or;
@@ -120,11 +121,12 @@ export async function getAllTasks(req, res, next) {
     const isAdmin = ['super_admin', 'admin'].includes(role);
     const qtBaseFilter = { ...baseFilter };
     if (!isAdmin) {
+      const uid = new mongoose.Types.ObjectId(userId);
       const privacyOr = [
         { isPrivate: false },
         { isPrivate: { $exists: false } },
-        { createdBy: userId },
-        { reporterId: userId }
+        { createdBy: uid },
+        { reporterId: uid }
       ];
       if (qtBaseFilter.$or) {
         const involvedOr = qtBaseFilter.$or;
