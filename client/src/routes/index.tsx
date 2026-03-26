@@ -1,4 +1,6 @@
 import React from 'react';
+import Error500Page from '../pages/errors/Error500Page';
+import NotFound404 from '../pages/errors/NotFound404';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
 import AuthLayout from '../layouts/AuthLayout';

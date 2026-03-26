@@ -108,7 +108,7 @@ const STATS = [
   { label: "Blame Assigned", value: "Not me™", color: "#22c55e" },
 ];
 
-function Ember({ style }) {
+function Ember({ style }: { style: React.CSSProperties }) {
   return (
     <div
       style={{
@@ -119,7 +119,7 @@ function Ember({ style }) {
         background: `hsl(${Math.random() * 30 + 10}, 100%, 60%)`,
         animation: `ember ${Math.random() * 1.5 + 1}s ease-out infinite`,
         animationDelay: Math.random() * 2 + "s",
-        "--drift": (Math.random() - 0.5) * 60 + "px",
+        ["--drift" as any]: (Math.random() - 0.5) * 60 + "px",
         ...style,
       }}
     />
@@ -167,10 +167,10 @@ function ServerIcon() {
 
 export default function Error500Page() {
   const navigate = useNavigate();
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [glitching, setGlitching] = useState(false);
   const [shaking, setShaking] = useState(false);
-  const logRef = useRef(null);
+  const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     LOG_LINES.forEach(({ delay, level, msg }) => {
@@ -201,7 +201,7 @@ export default function Error500Page() {
     }
   }, [logs]);
 
-  const levelColor = {
+  const levelColor: Record<string, string> = {
     FATAL: "#ef4444",
     ERROR: "#f97316",
     WARN: "#eab308",
@@ -485,8 +485,8 @@ export default function Error500Page() {
                 transition: "all 0.2s",
                 animation: "pulse-red 2s infinite",
               }}
-              onMouseEnter={(e) => (e.target.style.background = "#dc2626")}
-              onMouseLeave={(e) => (e.target.style.background = "#ef4444")}
+              onMouseEnter={(e) => ((e.target as HTMLButtonElement).style.background = "#dc2626")}
+              onMouseLeave={(e) => ((e.target as HTMLButtonElement).style.background = "#ef4444")}
             >
               RETRY (PROBABLY WON&apos;T HELP)
             </button>
@@ -506,12 +506,14 @@ export default function Error500Page() {
                 transition: "all 0.2s",
               }}
               onMouseEnter={(e) => {
-                e.target.style.borderColor = "#4b4b4b";
-                e.target.style.color = "#9ca3af";
+                const target = e.target as HTMLButtonElement;
+                target.style.borderColor = "#4b4b4b";
+                target.style.color = "#9ca3af";
               }}
               onMouseLeave={(e) => {
-                e.target.style.borderColor = "#1f1f1f";
-                e.target.style.color = "#6b7280";
+                const target = e.target as HTMLButtonElement;
+                target.style.borderColor = "#1f1f1f";
+                target.style.color = "#6b7280";
               }}
             >
               GO HOME

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 const NUM_STARS = 120;
 const NUM_PARTICLES = 18;
 
-function randomBetween(a, b) {
+function randomBetween(a: number, b: number) {
   return a + Math.random() * (b - a);
 }
 
@@ -165,7 +165,7 @@ function Astronaut() {
   );
 }
 
-function GlitchText({ text }) {
+function GlitchText({ text }: { text: string }) {
   const [glitching, setGlitching] = useState(false);
 
   useEffect(() => {
