@@ -58,9 +58,15 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
 
   const selectedAssigneeIds = watch('assigneeIds') || [];
 
-  const assignableUsers = useMemo(() => {
-    return users.filter(u => u.isActive && ASSIGNABLE_ROLES.includes(u.role));
-  }, [users]);
+  const assignableUsers = useMemo(
+    () => users.filter((u) => u.isActive && ASSIGNABLE_ROLES.includes(u.role)),
+    [users]
+  );
+
+  const currentUserId = String(user?.id || (user as { _id?: string } | null)?._id || '');
+  const canUsePrivateTask =
+    selectedAssigneeIds.length === 1 &&
+    String(selectedAssigneeIds[0] || '') === currentUserId;
 
   const selectedAssignees = useMemo(() => {
     return selectedAssigneeIds
@@ -82,8 +88,10 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
 
   useEffect(() => {
     // For new tasks, auto-toggle private if self-assigned
-    if (!task && user) {
-      const isSelf = selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === user.id;
+    if (!task && currentUserId) {
+      const isSelf =
+        selectedAssigneeIds.length === 1 &&
+        String(selectedAssigneeIds[0] || '') === currentUserId;
       const hasOthers = selectedAssigneeIds.length > 0 && !isSelf;
       if (isSelf) {
         setValue('isPrivate', true);
@@ -91,7 +99,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
         setValue('isPrivate', false);
       }
     }
-  }, [selectedAssigneeIds, task, user, setValue]);
+  }, [selectedAssigneeIds, task, currentUserId, setValue]);
 
   useEffect(() => {
     setAssigneeOpen(false);
@@ -109,19 +117,6 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [assigneeOpen]);
-
-  const assignableUsers = users
-    .filter(u => u.isActive)
-    .filter(u => ASSIGNABLE_ROLES.includes(u.role));
-
-  const selectedAssigneeIds = watch('assigneeIds') || [];
-  const currentUserId = String(user?.id || (user as { _id?: string } | null)?._id || '');
-  const canUsePrivateTask =
-    selectedAssigneeIds.length === 1 &&
-    String(selectedAssigneeIds[0] || '') === currentUserId;
-  const selectedAssignees = selectedAssigneeIds
-    .map((id) => assignableUsers.find((u) => u.id === id))
-    .filter(Boolean);
 
   useEffect(() => {
     if (!canUsePrivateTask) {

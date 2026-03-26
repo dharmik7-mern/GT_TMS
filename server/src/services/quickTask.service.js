@@ -2,16 +2,6 @@ import mongoose from 'mongoose';
 import { getTenantModels } from '../config/tenantDb.js';
 import { sendTemplatedEmailSafe } from './mail.service.js';
 
-const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-e243b9.log');
-
-function fileAgentLog(payload) {
-  try {
-    fs.appendFileSync(DEBUG_LOG_FILE, JSON.stringify(payload) + '\n');
-  } catch {
-    // ignore logging errors
-  }
-}
-
 function strId(value) {
   return value ? String(value) : '';
 }
@@ -71,135 +61,8 @@ function canViewQuickTask({ role, userId, task }) {
   }
 
   if (isPrivilegedRole(role)) return true;
-  return (
-    isOwner
-  );
+  return isOwner;
 }
-
-export async function listQuickTasks({ companyId, workspaceId, userId, role }) {
-  const tenantId = companyId;
-  const { QuickTask } = await getTenantModels(companyId);
-
-  const filter = { tenantId, workspaceId };
-
-  if (role !== 'admin' && role !== 'super_admin') {
-    const uid = new mongoose.Types.ObjectId(userId);
-    filter.$or = [
-      { isPrivate: false },
-      { isPrivate: { $exists: false } },
-      { $and: [{ isPrivate: true }, { createdBy: uid }] },
-      { $and: [{ isPrivate: true }, { reporterId: uid }] },
-    ];
-  }
-
-  const tasks = await QuickTask.find(filter).sort({ updatedAt: -1 });
-  return attachQuickTaskActivity({ companyId, workspaceId, tasks });
-}
-
-export async function createQuickTask({ companyId, workspaceId, userId, data }) {
-  const tenantId = companyId;
-  const { QuickTask, ActivityLog, Notification } = await getTenantModels(companyId);
-
-  const assigneeIds = Array.isArray(data.assigneeIds)
-    ? data.assigneeIds
-    : data.assigneeId
-      ? [data.assigneeId]
-      : [];
-
-  const reporterId = data.reporterId || userId;
-  const migrationMode = Boolean(data.migrationMode);
-
-  const primaryAssigneeId = assigneeIds.length === 1 ? assigneeIds[0] : null;
-
-  // Private logic: Auto-privatize if assigned ONLY to self.
-  // Force public if assigned to anyone else.
-  const isSelfAssigned = primaryAssigneeId && String(primaryAssigneeId) === String(reporterId) && assigneeIds.length === 1;
-  let isPrivate = data.isPrivate !== undefined ? Boolean(data.isPrivate) : isSelfAssigned;
-
-  if (assigneeIds.length > 0 && !isSelfAssigned) {
-    isPrivate = false;
-  } else if (isSelfAssigned) {
-    isPrivate = true;
-  }
-
-  let qt = await QuickTask.create({
-    tenantId,
-    workspaceId,
-    title: data.title,
-    description: data.description,
-    status: data.status || 'todo',
-    priority: data.priority || 'medium',
-    assigneeIds,
-    reporterId,
-    dueDate: data.dueDate ? new Date(data.dueDate) : null,
-    isPrivate,
-    createdBy: reporterId,
-    assignedTo: primaryAssigneeId,
-  });
-
-  if (data.createdAt || data.updatedAt) {
-    await QuickTask.updateOne(
-      { _id: qt._id },
-      {
-        $set: {
-          ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
-          ...(data.updatedAt ? { updatedAt: new Date(data.updatedAt) } : {}),
-        },
-      },
-      { timestamps: false }
-    );
-    qt = await QuickTask.findById(qt._id);
-  }
-
-  if (!migrationMode) {
-    await ActivityLog.create({
-      tenantId,
-      workspaceId,
-      userId,
-      type: 'quick_task_created',
-      description: `Created quick task "${qt.title}"`,
-      entityType: 'quick_task',
-      entityId: qt._id,
-      metadata: {},
-    });
-  }
-
-  if (!migrationMode && assigneeIds.length) {
-    await Notification.insertMany(
-      assigneeIds.map((assignee) => ({
-        tenantId,
-        workspaceId,
-        userId: assignee,
-        type: 'task_assigned',
-        title: 'Task assigned to you',
-        message: `You were assigned quick task "${qt.title}"`,
-        isRead: false,
-        relatedId: String(qt._id),
-      }))
-    );
-  }
-
-  return qt;
-}
-
-export async function updateQuickTask({ companyId, workspaceId, userId, id, updates }) {
-  const tenantId = companyId;
-  const { QuickTask, ActivityLog, Notification } = await getTenantModels(companyId);
-
-  const existing = await QuickTask.findOne({ _id: id, tenantId, workspaceId });
-  if (!existing) return null;
-
-  const beforeAssignees = existing.assigneeIds || [];
-
-  const assigneeIds =
-    updates.assigneeIds !== undefined
-      ? updates.assigneeIds
-      : (updates.assigneeId !== undefined ? [updates.assigneeId] : undefined);
-
-  const previousStatus = existing.status;
-  const nextStatus = updates.status ?? existing.status;
-  const previousPriority = existing.priority;
-  const previousDueDate = existing.dueDate ? new Date(existing.dueDate).toISOString().split('T')[0] : null;
 
 function canModifyQuickTask({ role, userId, task }) {
   return canViewQuickTask({ role, userId, task });
@@ -263,112 +126,6 @@ function normalizeAssigneeIds(data) {
   if (Array.isArray(data?.assigneeIds)) return data.assigneeIds.filter(Boolean);
   if (data?.assigneeId) return [data.assigneeId];
   return [];
-}
-
-export async function listQuickTasks({ companyId, workspaceId, userId, role }) {
-  const tenantId = companyId;
-  const { QuickTask } = await getTenantModels(companyId);
-
-  const filter = { tenantId, workspaceId };
-  if (isAdminRole(role)) {
-    // admins can see all quick tasks including private
-  } else if (['manager', 'team_leader'].includes(role)) {
-    filter.$or = [
-      { isPrivate: false },
-      { isPrivate: { $exists: false } },
-      { assigneeIds: userId },
-      { reporterId: userId },
-      { createdBy: userId },
-    ];
-  } else {
-    filter.$or = [
-      { assigneeIds: userId },
-      { reporterId: userId },
-      { createdBy: userId },
-    ];
-  }
-
-  const tasks = await QuickTask.find(filter).sort({ updatedAt: -1 });
-  return attachQuickTaskActivity({ companyId, workspaceId, tasks });
-}
-
-export async function createQuickTask({ companyId, workspaceId, userId, data }) {
-  const tenantId = companyId;
-  const { QuickTask, ActivityLog, Notification } = await getTenantModels(companyId);
-
-  const assigneeIds = normalizeAssigneeIds(data);
-  const reporterId = data.reporterId || userId;
-  const migrationMode = Boolean(data.migrationMode);
-  const primaryAssigneeId = assigneeIds.length === 1 ? assigneeIds[0] : null;
-  const isSelfAssigned = primaryAssigneeId && strId(primaryAssigneeId) === strId(reporterId) && assigneeIds.length === 1;
-  const isPrivate = assigneeIds.length > 0 && !isSelfAssigned
-    ? false
-    : Boolean(data.isPrivate);
-
-  let quickTask = await QuickTask.create({
-    tenantId,
-    workspaceId,
-    title: data.title,
-    description: data.description,
-    status: data.status || 'todo',
-    priority: data.priority || 'medium',
-    assigneeIds,
-    reporterId,
-    dueDate: data.dueDate ? new Date(data.dueDate) : null,
-    isPrivate,
-    createdBy: reporterId,
-    assignedTo: primaryAssigneeId,
-  });
-
-  if (data.createdAt || data.updatedAt) {
-    await QuickTask.updateOne(
-      { _id: quickTask._id },
-      {
-        $set: {
-          ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
-          ...(data.updatedAt ? { updatedAt: new Date(data.updatedAt) } : {}),
-        },
-      },
-      { timestamps: false }
-    );
-    quickTask = await QuickTask.findById(quickTask._id);
-  }
-
-  if (!migrationMode) {
-    await ActivityLog.create({
-      tenantId,
-      workspaceId,
-      userId,
-      type: 'quick_task_created',
-      description: `Created quick task "${quickTask.title}"`,
-      entityType: 'quick_task',
-      entityId: quickTask._id,
-      metadata: {},
-    });
-  }
-
-  if (!migrationMode && assigneeIds.length) {
-    await Notification.insertMany(
-      assigneeIds.map((assigneeId) => ({
-        tenantId,
-        workspaceId,
-        userId: assigneeId,
-        type: 'task_assigned',
-        title: 'Task assigned to you',
-        message: `You were assigned quick task "${quickTask.title}"`,
-        isRead: false,
-        relatedId: String(quickTask._id),
-      }))
-    );
-    await sendQuickTaskAssignmentEmails({
-      tenantId,
-      assigneeIds,
-      actorId: userId,
-      quickTask,
-    });
-  }
-
-  return (await attachQuickTaskActivity({ companyId, workspaceId, tasks: [quickTask] }))[0];
 }
 
 function normalizeUserIdentifier(value) {
@@ -450,6 +207,116 @@ async function resolveSingleUserIdFromIdentifier({ companyId, identifier, fieldL
   return values[0] || null;
 }
 
+export async function listQuickTasks({ companyId, workspaceId, userId, role }) {
+  const tenantId = companyId;
+  const { QuickTask } = await getTenantModels(companyId);
+
+  const filter = { tenantId, workspaceId };
+  if (isAdminRole(role)) {
+    // admins can see all quick tasks
+  } else if (['manager', 'team_leader'].includes(role)) {
+    filter.$or = [
+      { isPrivate: false },
+      { isPrivate: { $exists: false } },
+      { assigneeIds: userId },
+      { reporterId: userId },
+      { createdBy: userId },
+    ];
+  } else {
+    filter.$or = [
+      { assigneeIds: userId },
+      { reporterId: userId },
+      { createdBy: userId },
+    ];
+  }
+
+  const tasks = await QuickTask.find(filter).sort({ updatedAt: -1 });
+  return attachQuickTaskActivity({ companyId, workspaceId, tasks });
+}
+
+export async function createQuickTask({ companyId, workspaceId, userId, data }) {
+  const tenantId = companyId;
+  const { QuickTask, ActivityLog, Notification } = await getTenantModels(companyId);
+
+  const assigneeIds = normalizeAssigneeIds(data);
+  const reporterId = data.reporterId || userId;
+  const migrationMode = Boolean(data.migrationMode);
+  const primaryAssigneeId = assigneeIds.length === 1 ? assigneeIds[0] : null;
+  const isSelfAssigned =
+    primaryAssigneeId &&
+    strId(primaryAssigneeId) === strId(reporterId) &&
+    assigneeIds.length === 1;
+
+  const isPrivate = assigneeIds.length > 0 && !isSelfAssigned
+    ? false
+    : Boolean(data.isPrivate);
+
+  let quickTask = await QuickTask.create({
+    tenantId,
+    workspaceId,
+    title: data.title,
+    description: data.description,
+    status: data.status || 'todo',
+    priority: data.priority || 'medium',
+    assigneeIds,
+    reporterId,
+    dueDate: data.dueDate ? new Date(data.dueDate) : null,
+    isPrivate,
+    createdBy: reporterId,
+    assignedTo: primaryAssigneeId,
+  });
+
+  if (data.createdAt || data.updatedAt) {
+    await QuickTask.updateOne(
+      { _id: quickTask._id },
+      {
+        $set: {
+          ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
+          ...(data.updatedAt ? { updatedAt: new Date(data.updatedAt) } : {}),
+        },
+      },
+      { timestamps: false }
+    );
+    quickTask = await QuickTask.findById(quickTask._id);
+  }
+
+  if (!migrationMode) {
+    await ActivityLog.create({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'quick_task_created',
+      description: `Created quick task "${quickTask.title}"`,
+      entityType: 'quick_task',
+      entityId: quickTask._id,
+      metadata: {},
+    });
+  }
+
+  if (!migrationMode && assigneeIds.length) {
+    await Notification.insertMany(
+      assigneeIds.map((assigneeId) => ({
+        tenantId,
+        workspaceId,
+        userId: assigneeId,
+        type: 'task_assigned',
+        title: 'Task assigned to you',
+        message: `You were assigned quick task "${quickTask.title}"`,
+        isRead: false,
+        relatedId: String(quickTask._id),
+      }))
+    );
+    await sendQuickTaskAssignmentEmails({
+      tenantId,
+      assigneeIds,
+      actorId: userId,
+      quickTask,
+    });
+  }
+
+  return (await attachQuickTaskActivity({ companyId, workspaceId, tasks: [quickTask] }))[0];
+}
+
 export async function importQuickTasksBulk({ companyId, workspaceId, userId, actorRole, rows }) {
   if (!['super_admin', 'admin', 'manager', 'team_leader'].includes(actorRole)) {
     const err = new Error('Only admins, managers, or team leaders can import quick tasks');
@@ -478,7 +345,11 @@ export async function importQuickTasksBulk({ companyId, workspaceId, userId, act
     ];
 
     try {
-      const assigneeIds = await resolveUserIdsFromIdentifiers({ companyId, identifiers: assigneeIdentifiers, fieldLabel: 'Assignees' });
+      const assigneeIds = await resolveUserIdsFromIdentifiers({
+        companyId,
+        identifiers: assigneeIdentifiers,
+        fieldLabel: 'Assignees',
+      });
       const reporterIdentifier = row.reporterEmail || row.reporterName;
       const reporterId = reporterIdentifier
         ? await resolveSingleUserIdFromIdentifier({ companyId, identifier: reporterIdentifier, fieldLabel: 'Reporter' })
@@ -557,30 +428,9 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     ...(updates.dueDate !== undefined ? { dueDate: updates.dueDate ? new Date(updates.dueDate) : null } : {}),
   };
 
-  const currentAssigneeIds = assigneeIds !== undefined ? assigneeIds : (existing.assigneeIds || []);
-  const primaryAssigneeId = currentAssigneeIds.length === 1 ? currentAssigneeIds[0] : null;
-
-  if (assigneeIds !== undefined) {
-    $set.assigneeIds = assigneeIds;
-    delete $set.assigneeId;
-    $set.assignedTo = primaryAssigneeId;
-  }
-
-  // Enforce Privacy Rules on Update
-  const isSelfAssigned = primaryAssigneeId && String(primaryAssigneeId) === String(existing.reporterId) && currentAssigneeIds.length === 1;
-  if (currentAssigneeIds.length > 0 && !isSelfAssigned) {
-    $set.isPrivate = false;
-  } else if (isSelfAssigned) {
-    $set.isPrivate = updates.isPrivate !== undefined ? Boolean(updates.isPrivate) : true;
-  } else if (updates.isPrivate !== undefined) {
-    $set.isPrivate = Boolean(updates.isPrivate);
-  }
-
-  if (updates.completionRemark !== undefined || updates.status !== undefined) {
-    const current = existing.completionReview || {};
   delete $set.assigneeId;
 
-  const currentAssigneeIds = assigneeIdsProvided ? assigneeIds : beforeAssignees;
+  const currentAssigneeIds = assigneeIdsProvided ? assigneeIds : (existing.assigneeIds || []).map(String);
   const primaryAssigneeId = currentAssigneeIds.length === 1 ? currentAssigneeIds[0] : null;
 
   if (assigneeIdsProvided) {
@@ -588,7 +438,11 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     $set.assignedTo = primaryAssigneeId;
   }
 
-  const isSelfAssigned = primaryAssigneeId && strId(primaryAssigneeId) === strId(existing.reporterId) && currentAssigneeIds.length === 1;
+  const isSelfAssigned =
+    primaryAssigneeId &&
+    strId(primaryAssigneeId) === strId(existing.reporterId) &&
+    currentAssigneeIds.length === 1;
+
   if (currentAssigneeIds.length > 0 && !isSelfAssigned) {
     $set.isPrivate = false;
   } else if (updates.isPrivate !== undefined) {
@@ -600,32 +454,6 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     const movedAwayFromDone = previousStatus === 'done' && nextStatus !== 'done';
 
     if (movedAwayFromDone) {
-      $set.completionReview = {
-        completedAt: null,
-        completedBy: null,
-        completionRemark: '',
-        reviewStatus: 'pending',
-        rating: null,
-        reviewRemark: '',
-        reviewedAt: null,
-        reviewedBy: null,
-      };
-    } else {
-      $set.completionReview = {
-        completedAt: movedToDone ? new Date() : (current.completedAt || null),
-        completedBy: movedToDone ? userId : (current.completedBy || null),
-        completionRemark: updates.completionRemark !== undefined ? (updates.completionRemark || '') : (current.completionRemark || ''),
-        reviewStatus: movedToDone ? 'pending' : (current.reviewStatus || 'pending'),
-        rating: movedToDone ? null : (typeof current.rating === 'number' ? current.rating : null),
-        reviewRemark: movedToDone ? '' : (current.reviewRemark || ''),
-        reviewedAt: movedToDone ? null : (current.reviewedAt || null),
-        reviewedBy: movedToDone ? null : (current.reviewedBy || null),
-      };
-    }
-  }
-
-  const qt = await QuickTask.findOneAndUpdate({ _id: id, tenantId, workspaceId }, { $set }, { new: true });
-  if (!qt) return null;
       $set.completionReview = buildDefaultCompletionReview();
     } else {
       $set.completionReview = {
@@ -641,7 +469,11 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     }
   }
 
-  const quickTask = await QuickTask.findOneAndUpdate({ _id: id, tenantId, workspaceId }, { $set }, { new: true });
+  const quickTask = await QuickTask.findOneAndUpdate(
+    { _id: id, tenantId, workspaceId },
+    { $set },
+    { new: true }
+  );
   if (!quickTask) return null;
 
   const activityEntries = [{
@@ -649,15 +481,6 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     workspaceId,
     userId,
     type: 'quick_task_updated',
-    description: `Updated quick task "${qt.title}"`,
-    entityType: 'quick_task',
-    entityId: qt._id,
-    metadata: {
-      changedFields: Object.keys(updates || {}),
-    },
-  }];
-
-  if (previousStatus !== qt.status) {
     description: `Updated quick task "${quickTask.title}"`,
     entityType: 'quick_task',
     entityId: quickTask._id,
@@ -670,318 +493,6 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
       workspaceId,
       userId,
       type: 'quick_task_status_changed',
-      description: `Changed status for "${qt.title}" from "${previousStatus}" to "${qt.status}"`,
-      entityType: 'quick_task',
-      entityId: qt._id,
-      metadata: { from: previousStatus, to: qt.status },
-    });
-  }
-
-  await ActivityLog.insertMany(activityEntries);
-
-  if (assigneeIds !== undefined && assigneeIds.length) {
-    const newlyAssigned = assigneeIds.filter((a) => !beforeAssignees.map(String).includes(String(a)));
-    if (newlyAssigned.length) {
-      await Notification.insertMany(
-        newlyAssigned.map((assignee) => ({
-          tenantId,
-          workspaceId,
-          userId: assignee,
-          type: 'task_assigned',
-          title: 'Task assigned to you',
-          message: `You were assigned quick task "${qt.title}"`,
-          isRead: false,
-          relatedId: String(qt._id),
-        }))
-      );
-    }
-  }
-
-  return mapQuickTaskWithActivity(qt, activityEntries);
-}
-
-export async function reviewQuickTask({ companyId, workspaceId, userId, role, id, action, reviewRemark, rating }) {
-  const tenantId = companyId;
-  const { QuickTask, ActivityLog, Notification } = await getTenantModels(companyId);
-  const qt = await QuickTask.findOne({ _id: id, tenantId, workspaceId });
-  if (!qt) return null;
-
-  const uid = String(userId || '');
-  const isAdmin = role === 'super_admin' || role === 'admin';
-  const isCreator = String(qt.reporterId) === uid || String(qt.createdBy) === uid;
-
-  if (qt.isPrivate && !isAdmin && !isCreator) {
-    const err = new Error('Forbidden: This is a private task');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN';
-    throw err;
-  }
-
-  const canReview = isCreator || isAdmin || role === 'manager' || role === 'team_leader';
-
-  if (!canReview) {
-    const err = new Error('Forbidden');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN';
-    throw err;
-  }
-
-  if (qt.status !== 'done') {
-    const err = new Error('Only completed quick tasks can be reviewed');
-    err.statusCode = 400;
-    err.code = 'INVALID_STATE';
-    throw err;
-  }
-
-  if (action === 'approve' && !(typeof rating === 'number' && rating >= 1 && rating <= 5)) {
-    const err = new Error('A rating between 1 and 5 is required to approve a completed quick task');
-    err.statusCode = 400;
-    err.code = 'RATING_REQUIRED';
-    throw err;
-  }
-
-  qt.completionReview = {
-    ...(qt.completionReview?.toObject?.() || qt.completionReview || {}),
-    reviewStatus: action === 'approve' ? 'approved' : 'changes_requested',
-    rating: action === 'approve' ? rating : null,
-    reviewRemark: reviewRemark || '',
-    reviewedAt: new Date(),
-    reviewedBy: userId,
-  };
-
-  if (action === 'changes_requested') {
-    qt.status = 'in_progress';
-  }
-
-  await qt.save();
-
-  await ActivityLog.create({
-    tenantId,
-    workspaceId,
-    userId,
-    type: action === 'approve' ? 'quick_task_review_approved' : 'quick_task_review_changes_requested',
-    description: action === 'approve' ? `Approved quick task "${qt.title}"` : `Requested changes for "${qt.title}"`,
-    entityType: 'quick_task',
-    entityId: qt._id,
-    metadata: { action, rating, reviewRemark },
-  });
-
-  return attachQuickTaskActivity({ companyId, workspaceId, tasks: [qt] }).then((items) => items[0] || mapQuickTaskWithActivity(qt, []));
-}
-
-export async function deleteQuickTask({ companyId, workspaceId, userId, id }) {
-  const tenantId = companyId;
-  const { QuickTask, ActivityLog } = await getTenantModels(companyId);
-  const qt = await QuickTask.findOneAndDelete({ _id: id, tenantId, workspaceId });
-  if (!qt) return null;
-
-  await ActivityLog.create({
-    tenantId,
-    workspaceId,
-    userId,
-    type: 'quick_task_deleted',
-    description: `Deleted quick task "${qt.title}"`,
-    entityType: 'quick_task',
-    entityId: qt._id,
-    metadata: {},
-  });
-
-  return qt;
-}
-
-export async function addQuickTaskComment({ companyId, workspaceId, userId, role, taskId, content }) {
-  const tenantId = companyId;
-  const { QuickTask, Notification, ActivityLog } = await getTenantModels(companyId);
-
-  const qt = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
-  if (!qt) return null;
-
-  const uid = userId ? String(userId) : '';
-  const isAdmin = role === 'super_admin' || role === 'admin';
-  const isCreator = String(qt.reporterId) === uid || String(qt.createdBy) === uid;
-
-  if (qt.isPrivate && !isAdmin && !isCreator) {
-    const err = new Error('Forbidden: This is a private task');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN';
-    throw err;
-  }
-
-  const reporterOk = isCreator;
-  const assigneeOk = (qt.assigneeIds || []).some((a) => String(a) === uid);
-  const roleOk = isAdmin || role === 'manager' || role === 'team_leader';
-
-  if (!roleOk && !reporterOk && !assigneeOk) {
-    const err = new Error('Forbidden');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN';
-    throw err;
-  }
-
-  const comment = { content, authorId: userId };
-  await QuickTask.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { comments: comment } });
-  const updated = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
-
-  await ActivityLog.create({
-    tenantId,
-    workspaceId,
-    userId,
-    type: 'quick_task_comment_added',
-    description: `Added a comment to "${updated?.title || 'quick task'}"`,
-    entityType: 'quick_task',
-    entityId: updated?._id || taskId,
-    metadata: { content },
-  });
-
-  return attachQuickTaskActivity({ companyId, workspaceId, tasks: updated ? [updated] : [] }).then((items) => items[0] || null);
-}
-
-export async function addQuickTaskAttachments({ companyId, workspaceId, userId, role, taskId, files, requestBaseUrl }) {
-  const tenantId = companyId;
-  const { QuickTask, ActivityLog } = await getTenantModels(companyId);
-
-  const qt = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
-  if (!qt) return null;
-
-  const uid = userId ? String(userId) : '';
-  const isAdmin = role === 'super_admin' || role === 'admin';
-  const isCreator = String(qt.reporterId) === uid || String(qt.createdBy) === uid;
-
-  if (qt.isPrivate && !isAdmin && !isCreator) {
-    const err = new Error('Forbidden: This is a private task');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN';
-    throw err;
-  }
-
-  const can = isAdmin || role === 'manager' || role === 'team_leader' || isCreator || (qt.assigneeIds || []).some((a) => String(a) === uid);
-
-  if (!can) {
-    const err = new Error('Forbidden');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN';
-    throw err;
-  }
-
-  const attachments = (files || []).map((f) => ({
-    name: f.originalname,
-    url: `${requestBaseUrl}/uploads/${f.filename}`,
-    size: f.size,
-    type: f.mimetype,
-    uploadedBy: userId,
-  }));
-
-  await QuickTask.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { attachments } });
-  const updated = await QuickTask.findOne({ _id: taskId, tenantId, workspaceId });
-
-  if (attachments.length) {
-    await ActivityLog.create({
-      tenantId,
-      workspaceId,
-      userId,
-      type: 'quick_task_attachments_added',
-      description: `Added ${attachments.length} attachments to "${updated?.title || 'quick task'}"`,
-      entityType: 'quick_task',
-      entityId: updated?._id || taskId,
-      metadata: { count: attachments.length },
-    });
-  }
-
-  return attachQuickTaskActivity({ companyId, workspaceId, tasks: updated ? [updated] : [] }).then((items) => items[0] || null);
-}
-
-/** Helper Functions for Import **/
-function normalizeUserIdentifier(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
-function normalizeUserName(value) {
-  return normalizeUserIdentifier(value).replace(/\s+/g, ' ');
-}
-
-async function buildUserDirectory(companyId) {
-  const { User } = await getTenantModels(companyId);
-  const users = await User.find({ tenantId: companyId, isActive: true }).select('_id email name employeeId').lean();
-  const byEmail = new Map();
-  const byEmployeeId = new Map();
-  const byName = new Map();
-
-  for (const user of users) {
-    const userId = String(user._id);
-    const email = normalizeUserIdentifier(user.email);
-    const employeeId = normalizeUserIdentifier(user.employeeId);
-    const name = normalizeUserName(user.name);
-    if (email) byEmail.set(email, userId);
-    if (employeeId) byEmployeeId.set(employeeId, userId);
-    if (name) {
-      const items = byName.get(name) || [];
-      items.push({ id: userId, name: user.name, email: user.email, employeeId: user.employeeId || '' });
-      byName.set(name, items);
-    }
-  }
-  return { byEmail, byEmployeeId, byName };
-}
-
-async function resolveUserIdsFromIdentifiers({ companyId, identifiers, fieldLabel }) {
-  const normalizedIdentifiers = Array.from(new Set((Array.isArray(identifiers) ? identifiers : []).map(id => String(id || '').trim()).filter(Boolean)));
-  if (!normalizedIdentifiers.length) return [];
-  const directory = await buildUserDirectory(companyId);
-  
-  return normalizedIdentifiers.map(identifier => {
-    const normalized = normalizeUserIdentifier(identifier);
-    if (directory.byEmail.has(normalized)) return directory.byEmail.get(normalized);
-    if (directory.byEmployeeId.has(normalized)) return directory.byEmployeeId.get(normalized);
-    const normalizedName = normalizeUserName(identifier);
-    const nameMatches = directory.byName.get(normalizedName) || [];
-    if (nameMatches.length === 1) return nameMatches[0].id;
-    return null;
-  }).filter(Boolean);
-}
-
-async function resolveSingleUserIdFromIdentifier({ companyId, identifier, fieldLabel }) {
-  const ids = await resolveUserIdsFromIdentifiers({ companyId, identifiers: [identifier], fieldLabel });
-  return ids[0] || null;
-}
-
-export async function importQuickTasksBulk({ companyId, workspaceId, userId, actorRole, rows }) {
-  if (!['super_admin', 'admin', 'manager', 'team_leader'].includes(actorRole)) {
-    const err = new Error('Only admins, managers, or team leaders can import quick tasks');
-    err.statusCode = 403;
-    throw err;
-  }
-  const normalizedRows = Array.isArray(rows) ? rows : [];
-  const createdTasks = [];
-  const failures = [];
-
-  for (let index = 0; index < normalizedRows.length; index++) {
-    const row = normalizedRows[index] || {};
-    try {
-      const assigneeIdentifiers = [...String(row.assigneeEmails || '').split(/[;,]/), ...String(row.assigneeNames || '').split(/[;,]/)].map(s => s.trim()).filter(Boolean);
-      const assigneeIds = await resolveUserIdsFromIdentifiers({ companyId, identifiers: assigneeIdentifiers, fieldLabel: 'Assignees' });
-      const reporterIdentifier = row.reporterEmail || row.reporterName;
-      const reporterId = reporterIdentifier ? await resolveSingleUserIdFromIdentifier({ companyId, identifier: reporterIdentifier, fieldLabel: 'Reporter' }) : userId;
-
-      const task = await createQuickTask({
-        companyId,
-        workspaceId,
-        userId,
-        data: {
-          title: String(row.title || '').trim(),
-          description: String(row.description || '').trim(),
-          priority: row.priority,
-          status: row.status,
-          dueDate: row.dueDate,
-          reporterId,
-          migrationMode: true,
-          assigneeIds
-        }
-      });
-      createdTasks.push(task);
-    } catch (err) {
-      failures.push({ rowNumber: index + 2, title: row.title, message: err.message });
-    }
-  }
-  return { totalRows: normalizedRows.length, createdCount: createdTasks.length, failedCount: failures.length, createdTasks, failures };
       description: `Changed status for "${quickTask.title}" from "${previousStatus}" to "${quickTask.status}"`,
       entityType: 'quick_task',
       entityId: quickTask._id,
@@ -1183,7 +694,11 @@ export async function deleteQuickTask({ companyId, workspaceId, userId, role, id
   const existing = await QuickTask.findOne({ _id: id, tenantId, workspaceId });
   if (!existing) return null;
 
-  const canDelete = isPrivilegedRole(role) || strId(existing.reporterId) === strId(userId) || strId(existing.createdBy) === strId(userId);
+  const canDelete =
+    isPrivilegedRole(role) ||
+    strId(existing.reporterId) === strId(userId) ||
+    strId(existing.createdBy) === strId(userId);
+
   if (!canDelete) {
     const err = new Error('Forbidden');
     err.statusCode = 403;
