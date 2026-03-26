@@ -5,7 +5,7 @@ import {
   LayoutDashboard, FolderKanban, Calendar, Users, BarChart3, ListTodo,
   Bell, Settings, ChevronDown, Plus, Search, LogOut,
   Building2, Shield, Briefcase, UserCircle, ChevronsLeft,
-  ChevronsRight, Hash, Zap, Activity
+  ChevronsRight, Hash, Zap, Activity, Sparkles
 } from 'lucide-react';
 import { cn } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
@@ -24,6 +24,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'Projects', icon: FolderKanban, path: '/projects' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
@@ -44,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'Projects', icon: FolderKanban, path: '/projects' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
@@ -64,6 +66,7 @@ const SUPER_ADMIN_NAV: NavItem[] = [
 
 const PLATFORM_ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
   { label: 'Companies', icon: Building2, path: '/companies' },
   { label: 'Users List', icon: UserCircle, path: '/users' },

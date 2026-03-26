@@ -200,3 +200,12 @@ export const timelineService = {
   lock: (projectId: string) => api.patch(`/timeline/${projectId}/lock`),
   unlock: (projectId: string) => api.patch(`/timeline/${projectId}/unlock`),
 };
+
+export const personalTasksService = {
+  getAll: () => api.get('/personal-tasks'),
+  getStats: () => api.get('/personal-tasks/stats'),
+  create: (data: unknown) => api.post('/personal-tasks', data),
+  update: (id: string, data: unknown) => api.put(`/personal-tasks/${id}`, data),
+  delete: (id: string) => api.delete(`/personal-tasks/${id}`),
+  togglePinned: (id: string) => api.patch(`/personal-tasks/${id}/toggle-pinned`),
+};

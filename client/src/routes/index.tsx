@@ -27,8 +27,7 @@ import MISManager from '../pages/mis/MISManager';
 import MISReports from '../pages/mis/MISReports';
 import NotificationsPage from '../pages/notifications/Notifications';
 import UserSettingsPage from '../pages/settings/Settings';
-import NotFound404 from '../pages/errors/NotFound404.jsx';
-import Error500Page from '../pages/errors/Error500Page.jsx';
+import PlannerPage from '../pages/planner/Planner';
 
 // Admin pages
 import {
@@ -147,6 +146,7 @@ export const router = createBrowserRouter([
       { path: 'admin/users', element: <AdminUsersPage /> },
       { path: 'admin/permissions', element: <AdminPermissionsPage /> },
       { path: 'admin/billing', element: <AdminBillingPage /> },
+      { path: 'planner', element: <PlannerPage /> },
 
     ],
   },

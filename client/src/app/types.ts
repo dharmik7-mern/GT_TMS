@@ -285,6 +285,28 @@ export interface QuickTask {
   updatedAt: string;
 }
 
+export interface PersonalTask {
+  id: string;
+  userId: string;
+  tenantId: string;
+  title: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'done';
+  priority: 'low' | 'medium' | 'high';
+  dueDate?: string;
+  dueTime?: string;
+  labels: string[];
+  reminder?: {
+    enabled: boolean;
+    at?: string;
+  };
+  isPinned: boolean;
+  completedAt?: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Comment {
   id: string;
   content: string;
