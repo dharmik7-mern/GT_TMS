@@ -49,6 +49,7 @@ router.post(
       jobTitle: z.string().trim().max(120).optional(),
       department: z.string().trim().max(120).optional(),
       color: z.string().trim().max(32).optional(),
+      canUsePrivateQuickTasks: z.boolean().optional(),
       sendCredentialsEmail: z.boolean().optional(),
     })
   ),
@@ -68,6 +69,7 @@ router.post(
           jobTitle: z.string().trim().max(120).optional(),
           department: z.string().trim().max(120).optional(),
           color: z.string().trim().max(32).optional(),
+          canUsePrivateQuickTasks: z.boolean().optional(),
         })
       ).min(1).max(200),
     })
@@ -85,6 +87,7 @@ router.put(
       department: z.string().trim().max(120).optional(),
       isActive: z.boolean().optional(),
       color: z.string().trim().max(32).optional(),
+      canUsePrivateQuickTasks: z.boolean().optional(),
     })
   ),
   UsersController.update

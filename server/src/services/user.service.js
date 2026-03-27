@@ -269,6 +269,7 @@ export async function createUser({ companyId, workspaceId, actorRole, input }) {
     jobTitle: input.jobTitle?.trim() || '',
     department: input.department?.trim() || '',
     isActive: true,
+    canUsePrivateQuickTasks: Boolean(input.canUsePrivateQuickTasks),
     color: input.color?.trim() || '#3366ff',
   });
 
@@ -338,6 +339,7 @@ export async function importUsersBulk({ companyId, workspaceId, actorRole, rows 
       jobTitle: String(row.jobTitle ?? '').trim(),
       department: String(row.department ?? '').trim(),
       color: typeof row.color === 'string' ? row.color.trim() : undefined,
+      canUsePrivateQuickTasks: Boolean(row.canUsePrivateQuickTasks),
     };
 
     const rowNumber = Number(row.rowNumber) > 0 ? Number(row.rowNumber) : index + 2;
@@ -428,6 +430,7 @@ export async function updateUser({ companyId, workspaceId, actorRole, userId, ta
   if (typeof updates.department === 'string') user.department = updates.department.trim();
   if (typeof updates.isActive === 'boolean') user.isActive = updates.isActive;
   if (typeof updates.color === 'string') user.color = updates.color.trim();
+  if (typeof updates.canUsePrivateQuickTasks === 'boolean') user.canUsePrivateQuickTasks = updates.canUsePrivateQuickTasks;
 
   await user.save();
 

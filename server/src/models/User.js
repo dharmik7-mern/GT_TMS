@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
     department: { type: String, trim: true, maxlength: 120 },
     avatar: { type: String, trim: true, maxlength: 2048 },
     isActive: { type: Boolean, default: true },
+    canUsePrivateQuickTasks: { type: Boolean, default: false },
     color: { type: String, trim: true, maxlength: 32 },
     preferences: {
       notifications: {

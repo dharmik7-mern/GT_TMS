@@ -14,6 +14,26 @@ function isAdminRole(role) {
   return role === 'super_admin' || role === 'admin';
 }
 
+function userHasPrivateQuickTaskAccess(user, role) {
+  return isAdminRole(role) || Boolean(user?.canUsePrivateQuickTasks);
+}
+
+async function assertActorCanAssignPrivateQuickTasks({ companyId, userId, role }) {
+  if (isAdminRole(role)) return;
+
+  const { User } = await getTenantModels(companyId);
+  const actor = await User.findOne({ tenantId: companyId, _id: userId })
+    .select('_id role canUsePrivateQuickTasks')
+    .lean();
+
+  if (!userHasPrivateQuickTaskAccess(actor, actor?.role || role)) {
+    const err = new Error('You are not enabled to assign private quick tasks');
+    err.statusCode = 400;
+    err.code = 'PRIVATE_QUICK_TASK_ASSIGN_PERMISSION_REQUIRED';
+    throw err;
+  }
+}
+
 function mapQuickTaskWithActivity(task, activityHistory) {
   const json = typeof task?.toJSON === 'function' ? task.toJSON() : task;
   return {
@@ -234,7 +254,7 @@ export async function listQuickTasks({ companyId, workspaceId, userId, role }) {
   return attachQuickTaskActivity({ companyId, workspaceId, tasks });
 }
 
-export async function createQuickTask({ companyId, workspaceId, userId, data }) {
+export async function createQuickTask({ companyId, workspaceId, userId, data, role }) {
   const tenantId = companyId;
   const { QuickTask, ActivityLog, Notification } = await getTenantModels(companyId);
 
@@ -247,9 +267,11 @@ export async function createQuickTask({ companyId, workspaceId, userId, data }) 
     strId(primaryAssigneeId) === strId(reporterId) &&
     assigneeIds.length === 1;
 
-  const isPrivate = assigneeIds.length > 0 && !isSelfAssigned
-    ? false
-    : Boolean(data.isPrivate);
+  const isPrivate = Boolean(data.isPrivate);
+
+  if (isPrivate) {
+    await assertActorCanAssignPrivateQuickTasks({ companyId, userId, role });
+  }
 
   let quickTask = await QuickTask.create({
     tenantId,
@@ -359,6 +381,7 @@ export async function importQuickTasksBulk({ companyId, workspaceId, userId, act
         companyId,
         workspaceId,
         userId,
+        role: actorRole,
         data: {
           title: String(row.title ?? '').trim(),
           description: String(row.description ?? '').trim(),
@@ -438,15 +461,13 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     $set.assignedTo = primaryAssigneeId;
   }
 
-  const isSelfAssigned =
-    primaryAssigneeId &&
-    strId(primaryAssigneeId) === strId(existing.reporterId) &&
-    currentAssigneeIds.length === 1;
+  const nextIsPrivate = updates.isPrivate !== undefined ? Boolean(updates.isPrivate) : Boolean(existing.isPrivate);
+  if (updates.isPrivate !== undefined) {
+    $set.isPrivate = nextIsPrivate;
+  }
 
-  if (currentAssigneeIds.length > 0 && !isSelfAssigned) {
-    $set.isPrivate = false;
-  } else if (updates.isPrivate !== undefined) {
-    $set.isPrivate = Boolean(updates.isPrivate);
+  if (updates.isPrivate === true) {
+    await assertActorCanAssignPrivateQuickTasks({ companyId, userId, role });
   }
 
   if (updates.completionRemark !== undefined || updates.status !== undefined) {

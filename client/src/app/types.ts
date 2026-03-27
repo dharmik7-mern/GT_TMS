@@ -89,6 +89,7 @@ export interface User {
   workspaceId: string;
   createdAt: string;
   isActive: boolean;
+  canUsePrivateQuickTasks?: boolean;
   color?: string;
   preferences?: {
     notifications?: {

@@ -37,6 +37,7 @@ export async function getOverview(req, res, next) {
       const privacyOr = [
         { isPrivate: false },
         { isPrivate: { $exists: false } },
+        { assigneeIds: uid },
         { createdBy: uid },
         { reporterId: uid }
       ];
@@ -125,6 +126,7 @@ export async function getAllTasks(req, res, next) {
       const privacyOr = [
         { isPrivate: false },
         { isPrivate: { $exists: false } },
+        { assigneeIds: uid },
         { createdBy: uid },
         { reporterId: uid }
       ];

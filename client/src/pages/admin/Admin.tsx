@@ -221,6 +221,7 @@ export const AdminUsersPage: React.FC = () => {
     jobTitle: '',
     department: '',
     isActive: true,
+    canUsePrivateQuickTasks: false,
   });
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -229,6 +230,7 @@ export const AdminUsersPage: React.FC = () => {
     role: 'team_member' as Role,
     jobTitle: '',
     department: '',
+    canUsePrivateQuickTasks: false,
     sendCredentialsEmail: true,
   });
   const [createError, setCreateError] = useState('');
@@ -273,6 +275,7 @@ export const AdminUsersPage: React.FC = () => {
       role: 'team_member',
       jobTitle: '',
       department: '',
+      canUsePrivateQuickTasks: false,
       sendCredentialsEmail: true,
     });
     setCreateError('');
@@ -294,6 +297,7 @@ export const AdminUsersPage: React.FC = () => {
       jobTitle: selectedUser.jobTitle || '',
       department: selectedUser.department || '',
       isActive: selectedUser.isActive,
+      canUsePrivateQuickTasks: Boolean(selectedUser.canUsePrivateQuickTasks),
     });
   }, [selectedUser]);
 
@@ -509,6 +513,21 @@ export const AdminUsersPage: React.FC = () => {
                 <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform', editForm.isActive ? 'left-5' : 'left-1')} />
               </button>
             </div>
+            <div className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-800 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-300">Private Quick Tasks</p>
+                <p className="text-xs text-surface-400">
+                  Allow this user to assign and manage private quick tasks from their own account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditForm(prev => ({ ...prev, canUsePrivateQuickTasks: !prev.canUsePrivateQuickTasks }))}
+                className={cn('relative w-10 h-6 rounded-full transition-colors', editForm.canUsePrivateQuickTasks ? 'bg-brand-600' : 'bg-surface-200')}
+              >
+                <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform', editForm.canUsePrivateQuickTasks ? 'left-5' : 'left-1')} />
+              </button>
+            </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setSelectedUser(null)} className="btn-secondary btn-md flex-1">Cancel</button>
               <button onClick={() => { void handleSaveUser(); }} disabled={isSavingUser} className="btn-primary btn-md flex-1">{isSavingUser ? 'Saving...' : 'Save changes'}</button>
@@ -681,6 +700,19 @@ export const AdminUsersPage: React.FC = () => {
             <div className="sm:col-span-2">
               <label className="label">Department</label>
               <input value={createForm.department} onChange={e => handleCreateChange('department', e.target.value)} className="input" placeholder="e.g. Operations" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-start gap-3 rounded-2xl border border-surface-100 px-4 py-3 text-sm text-surface-600 dark:border-surface-800 dark:text-surface-300">
+                <input
+                  type="checkbox"
+                  checked={createForm.canUsePrivateQuickTasks}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, canUsePrivateQuickTasks: e.target.checked }))}
+                  className="mt-1 h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span>
+                  Enable private quick tasks for this user so they can assign private quick tasks from their own account.
+                </span>
+              </label>
             </div>
             <div className="sm:col-span-2">
               <label className="flex items-start gap-3 rounded-2xl border border-surface-100 px-4 py-3 text-sm text-surface-600 dark:border-surface-800 dark:text-surface-300">

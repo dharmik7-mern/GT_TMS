@@ -19,7 +19,7 @@ type QuickTaskFormData = {
   isPrivate: boolean;
 };
 
-const ASSIGNABLE_ROLES: Role[] = ['manager', 'team_leader', 'team_member'];
+const ASSIGNABLE_ROLES: Role[] = ['manager', 'team_leader', 'team_member', 'admin'];
 
 interface QuickTaskModalProps {
   open: boolean;
@@ -63,10 +63,8 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
     [users]
   );
 
-  const currentUserId = String(user?.id || (user as { _id?: string } | null)?._id || '');
-  const canUsePrivateTask =
-    selectedAssigneeIds.length === 1 &&
-    String(selectedAssigneeIds[0] || '') === currentUserId;
+  const canCurrentUserUsePrivateTask =
+    ['super_admin', 'admin'].includes(user?.role || '') || Boolean(user?.canUsePrivateQuickTasks);
 
   const selectedAssignees = useMemo(() => {
     return selectedAssigneeIds
@@ -87,21 +85,6 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
   }, [task, reset, open]);
 
   useEffect(() => {
-    // For new tasks, auto-toggle private if self-assigned
-    if (!task && currentUserId) {
-      const isSelf =
-        selectedAssigneeIds.length === 1 &&
-        String(selectedAssigneeIds[0] || '') === currentUserId;
-      const hasOthers = selectedAssigneeIds.length > 0 && !isSelf;
-      if (isSelf) {
-        setValue('isPrivate', true);
-      } else if (hasOthers) {
-        setValue('isPrivate', false);
-      }
-    }
-  }, [selectedAssigneeIds, task, currentUserId, setValue]);
-
-  useEffect(() => {
     setAssigneeOpen(false);
     setAssigneeQuery('');
     setFiles([]);
@@ -119,10 +102,10 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
   }, [assigneeOpen]);
 
   useEffect(() => {
-    if (!canUsePrivateTask) {
+    if (!canCurrentUserUsePrivateTask) {
       setValue('isPrivate', false, { shouldDirty: true });
     }
-  }, [canUsePrivateTask, setValue]);
+  }, [canCurrentUserUsePrivateTask, setValue]);
 
   const filteredAssignableUsers = useMemo(() => {
     const query = assigneeQuery.trim().toLowerCase();
@@ -161,7 +144,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
         priority: data.priority,
         assigneeIds: data.assigneeIds || [],
         dueDate: data.dueDate || undefined,
-        isPrivate: data.isPrivate,
+        ...(canCurrentUserUsePrivateTask ? { isPrivate: data.isPrivate } : {}),
       };
       try {
         let qtId: string | undefined;
@@ -372,19 +355,21 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
             </div>
           </div>
 
-          <div className="flex items-center gap-2 p-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-800/30">
-            <Lock size={14} className="text-amber-500" />
-            <div className="flex-1">
-              <p className="text-xs font-medium text-surface-800 dark:text-surface-200">Private Task</p>
-              <p className="text-[10px] text-surface-400">
-                Only self-assigned private tasks are allowed. Only you and admins can see them.
-              </p>
+          {canCurrentUserUsePrivateTask && (
+            <div className="flex items-center gap-2 rounded-xl border border-surface-200 bg-surface-50/50 p-3 dark:border-surface-700 dark:bg-surface-800/30">
+              <Lock size={14} className="text-amber-500" />
+              <div className="flex-1">
+                <p className="text-xs font-medium text-surface-800 dark:text-surface-200">Private Task</p>
+                <p className="text-[10px] text-surface-400">
+                  Private quick tasks are only visible to the creator, assigned users, and admins.
+                </p>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input type="checkbox" {...register('isPrivate')} className="sr-only peer" />
+                <div className="w-9 h-5 bg-surface-200 peer-focus:outline-none rounded-full peer dark:bg-surface-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
+              </label>
             </div>
-            <label className={cn("relative inline-flex items-center", canUsePrivateTask ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
-              <input type="checkbox" {...register('isPrivate')} disabled={!canUsePrivateTask} className="sr-only peer" />
-              <div className="w-9 h-5 bg-surface-200 peer-focus:outline-none rounded-full peer dark:bg-surface-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
-            </label>
-          </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
