@@ -183,6 +183,7 @@ export async function addSubtask(req, res, next) {
       role,
       taskId: req.params.id,
       title: req.body.title,
+      isCompleted: req.body.isCompleted,
     });
     if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
     return res.status(200).json({ success: true, data: task });

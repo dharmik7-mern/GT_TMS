@@ -681,7 +681,7 @@ export async function deleteTask({ companyId, workspaceId, userId, role, taskId 
   return task;
 }
 
-export async function addSubtask({ companyId, workspaceId, userId, role, taskId, title }) {
+export async function addSubtask({ companyId, workspaceId, userId, role, taskId, title, isCompleted }) {
   const tenantId = companyId;
   const { Task } = await getTenantModels(companyId);
   const task = await Task.findOne({
@@ -697,7 +697,7 @@ export async function addSubtask({ companyId, workspaceId, userId, role, taskId,
   }
 
   const order = (task.subtasks?.length || 0) + 1;
-  task.subtasks.push({ title, isCompleted: false, order });
+  task.subtasks.push({ title, isCompleted: Boolean(isCompleted), order });
   await task.save();
   return task;
 }

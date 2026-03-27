@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   Calendar, Clock, Flag, Tag, Users, Paperclip,
   Plus, Edit3, Trash2,
-  ChevronDown, X, Send, AlertTriangle
+  ChevronDown, X, Send, AlertTriangle, ListTodo
 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, generateId } from '../../utils/helpers';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -157,6 +157,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const [reviewChecklist, setReviewChecklist] = useState<ChecklistItem[]>(parseChecklist(task?.completionReview?.reviewRemark));
   const [rating, setRating] = useState<number>(task?.completionReview?.rating || 0);
   const { register, handleSubmit } = useForm<{ title: string }>();
+  const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [isEditingPriority, setIsEditingPriority] = useState(false);
 
   if (!task) return null;
 
@@ -168,6 +171,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
   const completionReview = task.completionReview;
   const activityItems = buildTaskTimeline(task, comments);
+  
+  const totalSubtasks = (task.subtasks || []).length;
+  const completedSubtasks = (task.subtasks || []).filter(s => s.isCompleted).length;
+  const subtaskProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
   const canReview = Boolean(
     user && (
       ['super_admin', 'admin', 'manager', 'team_leader'].includes(user.role) ||
@@ -265,6 +272,32 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
         emitErrorToast(message, 'Delete failed');
       }
     })();
+  };
+
+  const handleAddSubtask = async () => {
+    if (!subtaskTitle.trim()) return;
+    try {
+      const response = await tasksService.addSubtask(task.id, { 
+        title: subtaskTitle.trim(),
+        isCompleted: false 
+      } as any);
+      updateTask(task.id, response.data.data ?? response.data);
+      setSubtaskTitle('');
+      setIsAddingSubtask(false);
+      await bootstrap();
+    } catch (err: any) {
+      emitErrorToast(err?.response?.data?.message || 'Failed to add subtask', 'Error');
+    }
+  };
+
+  const handleToggleSubtask = async (subtaskId: string, isCompleted: boolean) => {
+    try {
+      const response = await tasksService.patchSubtask(task.id, subtaskId, { isCompleted });
+      updateTask(task.id, response.data.data ?? response.data);
+      await bootstrap();
+    } catch (err: any) {
+      emitErrorToast(err?.response?.data?.message || 'Failed to update subtask', 'Error');
+    }
   };
 
   return (
@@ -461,20 +494,80 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="label mb-0">Subtasks</label>
-                    <button className="btn-ghost btn-sm text-xs">
-                      <Plus size={12} />
-                      Add
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <label className="label mb-0">Subtasks</label>
+                      {totalSubtasks > 0 && (
+                        <span className={cn(
+                          "text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-colors",
+                          completedSubtasks === totalSubtasks && totalSubtasks > 0
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : "text-surface-400 bg-surface-100 dark:bg-surface-800"
+                        )}>
+                          {completedSubtasks}/{totalSubtasks}
+                        </span>
+                      )}
+                    </div>
+                    {!isAddingSubtask && (
+                      <button onClick={() => setIsAddingSubtask(true)} className="btn-ghost btn-sm text-xs">
+                        <Plus size={12} />
+                        Add
+                      </button>
+                    )}
                   </div>
+
+                  {totalSubtasks > 0 && (
+                    <div className="mb-4 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-black text-surface-400">
+                        <span>Progress</span>
+                        <span>{subtaskProgress}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${subtaskProgress}%` }}
+                          className="h-full bg-brand-500 rounded-full"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
+                    {isAddingSubtask && (
+                      <div className="flex items-center gap-2 p-1.5 rounded-xl border border-brand-500/30 bg-brand-50/10 dark:bg-brand-500/5 mb-3">
+                        <input 
+                          autoFocus
+                          value={subtaskTitle}
+                          onChange={e => setSubtaskTitle(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleAddSubtask();
+                            if (e.key === 'Escape') setIsAddingSubtask(false);
+                          }}
+                          placeholder="What needs to be done?"
+                          className="flex-1 bg-transparent text-sm px-2 outline-none dark:text-surface-200"
+                        />
+                        <button onClick={handleAddSubtask} className="btn-primary btn-sm h-7 px-3 text-[10px] font-bold uppercase">Add</button>
+                        <button onClick={() => setIsAddingSubtask(false)} className="btn-ghost btn-sm h-7 w-7 p-0 text-surface-400 hover:text-surface-600"><X size={14} /></button>
+                      </div>
+                    )}
                     {(task.subtasks || []).map(sub => (
-                      <div key={sub.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-50 dark:bg-surface-800 border border-surface-100 dark:border-surface-700">
-                        <input type="checkbox" checked={sub.isCompleted} readOnly className="rounded" />
-                        <span className={cn('text-sm flex-1', sub.isCompleted && 'line-through text-surface-400')}>{sub.title}</span>
+                      <div key={sub.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-50 dark:bg-surface-800 border border-surface-100 dark:border-surface-700 transition-all hover:border-surface-200 dark:hover:border-surface-600 group">
+                        <input 
+                          type="checkbox" 
+                          checked={sub.isCompleted} 
+                          onChange={(e) => handleToggleSubtask(sub.id, e.target.checked)}
+                          className="rounded-md border-surface-300 text-brand-600 focus:ring-brand-500 dark:border-surface-700 dark:bg-surface-900 cursor-pointer h-4 w-4" 
+                        />
+                        <span className={cn('text-sm flex-1 transition-all', sub.isCompleted ? 'line-through text-surface-400 font-normal' : 'text-surface-700 dark:text-surface-200 font-medium')}>
+                          {sub.title}
+                        </span>
                       </div>
                     ))}
-                    {(!task.subtasks || task.subtasks.length === 0) && <p className="text-sm text-surface-400 italic">No subtasks yet</p>}
+                    {(!isAddingSubtask && (!task.subtasks || task.subtasks.length === 0)) && (
+                      <div className="py-6 text-center border-2 border-dashed border-surface-100 dark:border-surface-800 rounded-2xl">
+                         <ListTodo size={24} className="mx-auto text-surface-200 mb-2" />
+                         <p className="text-sm text-surface-400 italic">No subtasks yet. Break it down!</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -558,15 +651,48 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           </div>
 
           <div>
-            <label className="label">Priority</label>
-            <div className="flex gap-1.5 flex-wrap">
-              {(Object.entries(PRIORITY_CONFIG) as [Priority, typeof PRIORITY_CONFIG.low][]).map(([key, cfg]) => (
-                <button key={key} onClick={() => { void persistTaskUpdate({ priority: key }, 'Priority update failed'); }} className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border', task.priority === key ? `${cfg.bg} ${cfg.text} border-current` : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300')}>
-                  <Flag size={10} style={{ color: cfg.color }} />
-                  {cfg.label}
+            <div className="flex items-center justify-between mb-2">
+              <label className="label mb-0">Priority</label>
+              {!isEditingPriority && (
+                <button 
+                  onClick={() => setIsEditingPriority(true)}
+                  className="p-1 rounded-md text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 transition-colors"
+                >
+                  <Edit3 size={13} />
                 </button>
-              ))}
+              )}
             </div>
+            
+            <motion.div layout className="flex gap-1.5 flex-wrap">
+              {isEditingPriority ? (
+                (Object.entries(PRIORITY_CONFIG) as [Priority, typeof PRIORITY_CONFIG.low][]).map(([key, cfg]) => (
+                  <button 
+                    key={key} 
+                    onClick={async () => { 
+                      await persistTaskUpdate({ priority: key }, 'Priority update failed'); 
+                      setIsEditingPriority(false);
+                    }} 
+                    className={cn(
+                      'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border', 
+                      task.priority === key 
+                        ? `${cfg.bg} ${cfg.text} border-current ring-1 ring-current/20` 
+                        : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300 bg-white dark:bg-surface-900'
+                    )}
+                  >
+                    <Flag size={10} style={{ color: cfg.color }} />
+                    {cfg.label}
+                  </button>
+                ))
+              ) : (
+                <div className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all',
+                  priority.bg, priority.text, 'border-current/30 shadow-sm shadow-black/5'
+                )}>
+                  <Flag size={11} style={{ color: priority.color }} fill="currentColor" />
+                  <span className="uppercase tracking-wider">{priority.label}</span>
+                </div>
+              )}
+            </motion.div>
           </div>
 
           <div>

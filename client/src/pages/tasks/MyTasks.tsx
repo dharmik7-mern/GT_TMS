@@ -25,7 +25,8 @@ export const MyTasksPage: React.FC = () => {
   const { user } = useAuthStore();
   const { tasks, quickTasks, projects } = useAppStore();
   const [filter, setFilter] = useState<typeof FILTERS[0]['value']>('all');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
 
   const myTasks = tasks.filter(t => t.assigneeIds.includes(user?.id || ''));
   const myQuickTasks = quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || ''));
@@ -201,7 +202,7 @@ export const MyTasksPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <TaskCard task={task} onClick={() => setSelectedTask(task)} />
+                    <TaskCard task={task} onClick={() => setSelectedTaskId(task.id)} />
                   </motion.div>
                 );
               })}
@@ -210,7 +211,7 @@ export const MyTasksPage: React.FC = () => {
         </div>
       )}
 
-      <TaskModal task={selectedTask} open={!!selectedTask} onClose={() => setSelectedTask(null)} />
+      <TaskModal task={selectedTask} open={!!selectedTaskId} onClose={() => setSelectedTaskId(null)} />
     </div>
   );
 };
