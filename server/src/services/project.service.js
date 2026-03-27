@@ -133,6 +133,36 @@ function buildProjectAccessFilter({ role, userId }) {
   };
 }
 
+export async function syncProjectStats(companyId, workspaceId, projectId) {
+  if (!projectId) return null;
+
+  const tenantId = companyId;
+  const { Project, Task } = await getTenantModels(companyId);
+  const project = await Project.findOne({ _id: projectId, tenantId, workspaceId });
+  if (!project) return null;
+
+  const taskFilter = {
+    tenantId,
+    workspaceId,
+    projectId,
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+  };
+
+  const [tasksCount, completedTasksCount] = await Promise.all([
+    Task.countDocuments(taskFilter),
+    Task.countDocuments({ ...taskFilter, status: 'done' }),
+  ]);
+
+  const progress = tasksCount > 0 ? Math.round((completedTasksCount / tasksCount) * 100) : 0;
+
+  project.tasksCount = tasksCount;
+  project.completedTasksCount = completedTasksCount;
+  project.progress = progress;
+  await project.save();
+
+  return project;
+}
+
 export async function listProjects({ companyId, workspaceId, userId, role, status, department, q, page = 1, limit = 50 }) {
   const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
