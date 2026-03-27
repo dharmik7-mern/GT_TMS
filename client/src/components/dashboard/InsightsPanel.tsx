@@ -14,28 +14,29 @@ interface Props {
 }
 
 export const InsightsPanel: React.FC<Props> = ({ data, loading }) => {
-  const rows = loading ? Array.from({ length: 3 }) : data;
+  const rows: Array<Insight | null> = loading ? Array.from({ length: 3 }, () => null) : data;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card p-4 sm:p-5 border border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900"
+      className="card border border-surface-100 bg-white p-4 dark:border-surface-800 dark:bg-surface-900 sm:p-5"
     >
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display font-semibold text-surface-900 dark:text-white">Quick Insights</h3>
         <span className="text-[11px] text-surface-400">Today</span>
       </div>
       <div className="space-y-3">
         {rows.map((item, idx) => (
-          <div key={loading ? `skeleton-${idx}` : item.key} className="flex items-center justify-between">
+          <div key={item?.key || `skeleton-${idx}`} className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-surface-800 dark:text-surface-200">
-                {loading ? '···' : item.label}
+                {item?.label || '...'}
               </p>
-              <p className="text-[11px] text-surface-400">{loading ? 'Loading' : item.helper || '—'}</p>
+              <p className="text-[11px] text-surface-400">{item?.helper || (loading ? 'Loading' : '-')}</p>
             </div>
             <div className="text-xl font-bold text-surface-900 dark:text-white">
-              {loading ? '—' : item.value}
+              {item?.value ?? '-'}
             </div>
           </div>
         ))}

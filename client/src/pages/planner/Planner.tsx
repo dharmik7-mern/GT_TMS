@@ -116,137 +116,84 @@ const PlannerPage: React.FC = () => {
         </button>
       </header>
 
-      {/* compact control bar */}
-      <div className="px-6 py-3 space-y-3 bg-surface-50/20 dark:bg-surface-900/10 border-b border-surface-100 dark:border-surface-800 flex-shrink-0">
-         <div className="flex items-center justify-between gap-4">
-            <div className="bg-white dark:bg-surface-900 p-0.5 rounded-lg flex items-center gap-0.5 border border-surface-100 dark:border-surface-800">
-      {/* 1. Header Row */}
-      <div className="px-6 py-4 flex items-center justify-between border-b border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-950 flex-shrink-0 gap-6">
-         <div className="flex items-center gap-6">
-            <div className="bg-surface-50 dark:bg-surface-900 p-0.5 rounded-lg flex items-center gap-0.5 border border-surface-100 dark:border-surface-800">
+      <div className="border-b border-surface-100 bg-surface-50/20 px-6 py-3 dark:border-surface-800 dark:bg-surface-900/10">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-0.5 rounded-lg border border-surface-100 bg-white p-0.5 dark:border-surface-800 dark:bg-surface-900">
               {[
                 { id: 'all', label: 'All' },
                 { id: 'today', label: 'Today' },
                 { id: 'upcoming', label: 'Upcoming' },
-              ].map(f => (
+              ].map((item) => (
                 <button
-                  key={f.id}
-                  onClick={() => { setFilter(f.id as any); setCurrentPage(1); }}
+                  key={item.id}
+                  onClick={() => { setFilter(item.id as any); setCurrentPage(1); }}
                   className={cn(
-                    "px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all",
-                    filter === f.id 
-                      ? "bg-white text-surface-900 dark:bg-surface-800 shadow-sm" 
-                      : "text-surface-500 hover:text-surface-800 dark:text-surface-400"
+                    'rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all',
+                    filter === item.id ? 'bg-surface-900 text-white dark:bg-surface-800' : 'text-surface-500 hover:text-surface-800 dark:text-surface-400'
                   )}
                 >
-                  {f.label}
+                  {item.label}
                 </button>
               ))}
             </div>
+            <button
+              id="priority-filter-trigger"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const event = new CustomEvent('open-priority-menu', { detail: { x: rect.left, y: rect.bottom + 8 } });
+                window.dispatchEvent(event);
+              }}
+              className={cn(
+                'flex items-center gap-2 rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all',
+                ['high', 'medium', 'low'].includes(filter)
+                  ? 'border border-surface-100 bg-white text-brand-600 shadow-sm dark:border-surface-700 dark:bg-surface-800'
+                  : 'text-surface-500 hover:text-surface-800 dark:text-surface-400'
+              )}
+            >
+              <span>Priority</span>
+              <ChevronDown size={12} />
+            </button>
+          </div>
 
-            <div className="w-px h-4 bg-surface-200 dark:bg-surface-800 mx-1" />
-
-            <div className="flex items-center">
-              <button
-                id="priority-filter-trigger"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const event = new CustomEvent('open-priority-menu', { detail: { x: rect.left, y: rect.bottom + 8 } });
-                  window.dispatchEvent(event);
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2",
-                  ['high', 'medium', 'low'].includes(filter)
-                    ? "bg-white text-brand-600 dark:bg-surface-800 shadow-sm border border-surface-100 dark:border-surface-700"
-                    : "text-surface-500 hover:text-surface-800 dark:text-surface-400"
-                )}
-              >
-                <span>Priority</span>
-                {['high', 'medium', 'low'].includes(filter) && (
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    filter === 'high' ? "bg-rose-500" : filter === 'medium' ? "bg-amber-500" : "bg-surface-400"
-                  )} />
-                )}
-                <ChevronDown size={12} className={cn("transition-transform", ['high', 'medium', 'low'].includes(filter) ? "rotate-180" : "")} />
-              </button>
-            </div>
-            <div className="w-px h-4 bg-surface-200 dark:bg-surface-800" />
-            <PlannerStats stats={stats} />
-         </div>
-
-         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="relative">
-               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-               <input 
-                 type="text"
-                 placeholder="Search tasks..."
-                 value={search}
-                 onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                 className="w-48 bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-lg py-1.5 pl-8 pr-3 text-[11px] focus:outline-none focus:w-64 transition-all font-semibold"
-               />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                className="w-48 rounded-lg border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[11px] font-semibold transition-all focus:outline-none dark:border-surface-800 dark:bg-surface-900"
+              />
             </div>
-
-            <div className="flex items-center bg-surface-50 dark:bg-surface-900 p-0.5 rounded-lg border border-surface-100 dark:border-surface-800">
+            <div className="flex items-center rounded-lg border border-surface-100 bg-white p-0.5 dark:border-surface-800 dark:bg-surface-900">
               {[
                 { id: 'list', icon: Rows },
                 { id: 'kanban', icon: LayoutGrid },
                 { id: 'calendar', icon: CalendarIcon }
-              ].map(v => (
+              ].map((item) => (
                 <button
-                  key={v.id}
-                  onClick={() => setView(v.id as any)}
+                  key={item.id}
+                  onClick={() => setView(item.id as any)}
                   className={cn(
-                    "p-1.5 rounded-md transition-all",
-                    view === v.id 
-                      ? "bg-white dark:bg-surface-800 text-brand-600 shadow-sm" 
-                      : "text-surface-400 hover:text-surface-600"
+                    'rounded-md p-1.5 transition-all',
+                    view === item.id ? 'bg-surface-100 text-brand-600 shadow-sm dark:bg-surface-800' : 'text-surface-400 hover:text-surface-600'
                   )}
                 >
-                  <v.icon size={14} />
+                  <item.icon size={14} />
                 </button>
               ))}
             </div>
-
-            <button 
-              onClick={() => setShowPanel(!showPanel)}
-              className={cn(
-                "p-1.5 rounded-md transition-all border border-surface-100 dark:border-surface-800",
-                showPanel ? "bg-brand-600 text-white shadow-sm shadow-brand-500/20" : "text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-900"
-              )}
-            >
-              <PanelRight size={18} />
-            </button>
-         </div>
+          </div>
+        </div>
       </div>
 
-      {/* 2. Quick Add Area */}
-      <div className="px-6 py-6 bg-surface-50/10 dark:bg-surface-900/5 border-b border-surface-100 dark:border-surface-800">
-         <div className="max-w-4xl">
-           <div className="flex flex-col gap-4">
-              <div className="flex-1">
-                 <h2 className="text-[10px] font-black tracking-widest text-surface-400 uppercase mb-3 px-1">Quick Add Task</h2>
-                 <SmartInput ref={smartInputRef} onAdd={handleAddTask} />
-              </div>
-              
-              <div className="flex flex-col gap-2">
-                 <h3 className="text-[10px] font-bold text-surface-400 uppercase tracking-widest px-1">Common Labels</h3>
-                 <div className="flex flex-wrap gap-2">
-                    {['Urgent', 'Today', 'Work', 'Personal', 'Meeting', 'Call'].map(l => (
-                      <button 
-                        key={l}
-                        onClick={() => {
-                          smartInputRef.current?.addValue('#' + l.toLowerCase());
-                        }}
-                        className="text-[10px] font-black uppercase tracking-tight px-3 py-1 rounded-full bg-white dark:bg-surface-800 border-2 border-surface-100 dark:border-surface-800 text-surface-500 hover:border-brand-500 hover:text-brand-600 transition-all shadow-sm"
-                      >
-                        #{l}
-                      </button>
-                    ))}
-                 </div>
-              </div>
-           </div>
-         </div>
+      <div className="border-b border-surface-100 bg-surface-50/10 px-6 py-6 dark:border-surface-800 dark:bg-surface-900/5">
+        <div className="max-w-4xl">
+          <h2 className="mb-3 px-1 text-[10px] font-black uppercase tracking-widest text-surface-400">Quick Add Task</h2>
+          <SmartInput ref={smartInputRef} onAdd={handleAddTask} />
+        </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
