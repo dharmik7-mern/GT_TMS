@@ -60,6 +60,7 @@ function toAuthUser(user, workspaceId) {
     workspaceId: workspaceId ? String(workspaceId) : '',
     createdAt: user.createdAt?.toISOString?.() || new Date().toISOString(),
     isActive: user.isActive,
+    canUsePrivateQuickTasks: Boolean(user.canUsePrivateQuickTasks),
     color: user.color,
     preferences: user.preferences,
   };
