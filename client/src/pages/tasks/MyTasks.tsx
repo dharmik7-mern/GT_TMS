@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckSquare, Clock, AlertTriangle, Filter, SortAsc } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn, formatDate } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
@@ -22,11 +22,15 @@ const FILTERS: { value: TaskStatus | 'all' | 'overdue'; label: string; color?: s
 
 export const MyTasksPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
   const { tasks, quickTasks, projects } = useAppStore();
-  const [filter, setFilter] = useState<typeof FILTERS[0]['value']>('all');
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
+  const [filter, setFilter] = useState<typeof FILTERS[0]['value']>(() => {
+    const incoming = searchParams.get('filter');
+    return FILTERS.some((item) => item.value === incoming) ? incoming as typeof FILTERS[0]['value'] : 'all';
+  });
+ const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const myTasks = tasks.filter(t => t.assigneeIds.includes(user?.id || ''));
   const myQuickTasks = quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || ''));
@@ -51,6 +55,16 @@ export const MyTasksPage: React.FC = () => {
     + myQuickTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length;
   const doneCount = myTasks.filter(t => t.status === 'done').length;
 
+  React.useEffect(() => {
+    const next = filter === 'all' ? null : filter;
+    const current = searchParams.get('filter');
+    if ((current || null) === next) return;
+    const updatedParams = new URLSearchParams(searchParams);
+    if (next) updatedParams.set('filter', next);
+    else updatedParams.delete('filter');
+    setSearchParams(updatedParams, { replace: true });
+  }, [filter, searchParams, setSearchParams]);
+
   return (
     <div className="max-w-full mx-auto">
       <div className="page-header">
@@ -63,23 +77,50 @@ export const MyTasksPage: React.FC = () => {
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="card p-4 text-center">
+        <button
+          type="button"
+          onClick={() => setFilter('done')}
+          className={cn(
+            'card p-4 text-center transition-all border',
+            filter === 'done'
+              ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
+              : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+          )}
+        >
           <CheckSquare size={20} className="mx-auto text-brand-600 mb-2" />
           <p className="font-display font-bold text-xl text-surface-900 dark:text-white">{doneCount}</p>
           <p className="text-xs text-surface-400">Project completed</p>
-        </div>
-        <div className="card p-4 text-center">
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('in_progress')}
+          className={cn(
+            'card p-4 text-center transition-all border',
+            filter === 'in_progress'
+              ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
+              : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+          )}
+        >
           <Clock size={20} className="mx-auto text-amber-500 mb-2" />
           <p className="font-display font-bold text-xl text-surface-900 dark:text-white">
             {myTasks.filter(t => t.status === 'in_progress').length + myQuickTasks.filter(t => t.status === 'in_progress').length}
           </p>
           <p className="text-xs text-surface-400">In progress</p>
-        </div>
-        <div className="card p-4 text-center">
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('overdue')}
+          className={cn(
+            'card p-4 text-center transition-all border',
+            filter === 'overdue'
+              ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
+              : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+          )}
+        >
           <AlertTriangle size={20} className={cn('mx-auto mb-2', overdueCount > 0 ? 'text-rose-500' : 'text-surface-300')} />
           <p className={cn('font-display font-bold text-xl', overdueCount > 0 ? 'text-rose-600' : 'text-surface-900 dark:text-white')}>{overdueCount}</p>
           <p className="text-xs text-surface-400">Overdue</p>
-        </div>
+        </button>
       </div>
 
       {/* Filter tabs */}

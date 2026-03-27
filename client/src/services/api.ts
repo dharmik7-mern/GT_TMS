@@ -73,6 +73,7 @@ export const projectsService = {
   getAll: () => api.get('/projects'),
   getById: (id: string) => api.get(`/projects/${id}`),
   create: (data: unknown) => api.post('/projects', data),
+  importBulk: (rows: unknown[]) => api.post('/projects/import', { rows }),
   update: (id: string, data: unknown) => api.put(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),
 };
@@ -122,6 +123,7 @@ export const teamsService = {
   getById: (id: string) => api.get(`/teams/${id}`),
   create: (data: unknown) => api.post('/teams', data),
   update: (id: string, data: unknown) => api.put(`/teams/${id}`, data),
+  delete: (id: string) => api.delete(`/teams/${id}`),
 };
 
 export const workspacesService = {

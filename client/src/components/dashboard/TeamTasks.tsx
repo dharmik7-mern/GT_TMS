@@ -18,71 +18,71 @@ interface Props {
 }
 
 export const TeamTasks: React.FC<Props> = ({ tasks, loading, onRowClick }) => {
-  const rows = loading ? Array.from({ length: 6 }) : tasks;
+  const rows: Array<TeamTaskRow | null> = loading ? Array.from({ length: 6 }, () => null) : tasks;
+
   return (
-    <div className="card overflow-hidden flex flex-col h-full border border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900">
-      <div className="bg-surface-50 dark:bg-surface-950/50 px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between">
-        <h3 className="text-xs font-bold text-surface-700 dark:text-surface-300 uppercase tracking-widest">Team Tasks Overview</h3>
-        <span className="text-[10px] text-brand-600 dark:text-brand-400 font-semibold bg-brand-50 dark:bg-brand-950/30 px-2 py-0.5 rounded-full">
-          {loading ? 'Loading…' : `${tasks.length} items`}
+    <div className="card flex h-full flex-col overflow-hidden border border-surface-100 bg-white dark:border-surface-800 dark:bg-surface-900">
+      <div className="flex items-center justify-between border-b border-surface-100 bg-surface-50 px-4 py-3 dark:border-surface-800 dark:bg-surface-950/50">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-surface-700 dark:text-surface-300">Team Tasks Overview</h3>
+        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-600 dark:bg-brand-950/30 dark:text-brand-400">
+          {loading ? 'Loading...' : `${tasks.length} items`}
         </span>
       </div>
-      <div className="overflow-x-auto max-h-[260px] overflow-y-auto scrollbar-hide">
-        <table className="w-full text-xs text-left">
-          <thead className="bg-surface-50 dark:bg-surface-900 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px] sticky top-0 border-b border-surface-100 dark:border-surface-800">
+      <div className="scrollbar-hide max-h-[260px] overflow-x-auto overflow-y-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 border-b border-surface-100 bg-surface-50 text-[10px] font-semibold uppercase tracking-wide text-surface-500 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-400">
             <tr>
               <th className="px-3 py-2 font-semibold">Employee</th>
               <th className="px-3 py-2 font-semibold">Task</th>
-              <th className="px-3 py-2 font-semibold hidden sm:table-cell">Project</th>
-              <th className="px-3 py-2 font-semibold hidden md:table-cell">Type</th>
-              <th className="px-3 py-2 font-semibold text-center">Status</th>
-              <th className="px-3 py-2 font-semibold text-right hidden lg:table-cell">Due</th>
+              <th className="hidden px-3 py-2 font-semibold sm:table-cell">Project</th>
+              <th className="hidden px-3 py-2 font-semibold md:table-cell">Type</th>
+              <th className="px-3 py-2 text-center font-semibold">Status</th>
+              <th className="hidden px-3 py-2 text-right font-semibold lg:table-cell">Due</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-50 dark:divide-surface-800">
             {rows.map((task, idx) => (
               <tr
-                key={loading ? `skeleton-${idx}` : task.id}
+                key={task?.id || `skeleton-${idx}`}
                 className={cn(
                   'transition-colors',
-                  !loading && 'hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer',
-                  loading && 'animate-pulse select-none'
+                  task ? 'cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800/50' : 'animate-pulse select-none'
                 )}
-                onClick={() => !loading && task.id && onRowClick?.(task.id)}
+                onClick={() => task?.id && onRowClick?.(task.id)}
               >
-                <td className="px-3 py-2.5 font-medium text-surface-800 dark:text-surface-200 whitespace-nowrap">
-                  {loading ? '···' : task.assignee}
+                <td className="whitespace-nowrap px-3 py-2.5 font-medium text-surface-800 dark:text-surface-200">
+                  {task?.assignee || '...'}
                 </td>
-                <td className="px-3 py-2.5 text-surface-800 dark:text-surface-200 font-medium truncate max-w-[140px] sm:max-w-[180px]">
-                  {loading ? 'Loading...' : task.title}
+                <td className="max-w-[140px] truncate px-3 py-2.5 font-medium text-surface-800 dark:text-surface-200 sm:max-w-[180px]">
+                  {task?.title || 'Loading...'}
                 </td>
-                <td className="px-3 py-2.5 text-surface-500 dark:text-surface-400 truncate max-w-[100px] hidden sm:table-cell">
-                  {loading ? '—' : task.projectName || '—'}
+                <td className="hidden max-w-[100px] truncate px-3 py-2.5 text-surface-500 dark:text-surface-400 sm:table-cell">
+                  {task?.projectName || '-'}
                 </td>
-                <td className="px-3 py-2.5 text-surface-500 dark:text-surface-400 capitalize hidden md:table-cell">
-                  {loading ? '—' : task.type || 'general'}
+                <td className="hidden px-3 py-2.5 capitalize text-surface-500 dark:text-surface-400 md:table-cell">
+                  {task?.type || (task ? 'general' : '-')}
                 </td>
                 <td className="px-3 py-2.5 text-center">
-                  {loading ? (
-                    <span className="inline-block h-2 w-12 bg-surface-100 dark:bg-surface-800 rounded" />
-                  ) : (
+                  {task ? (
                     <span
                       className={cn(
-                        'px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wide border',
+                        'rounded-[4px] border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                         task.status === 'in_progress' &&
-                          'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50',
+                          'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-400',
                         (task.status === 'done' || task.status === 'completed') &&
-                          'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
+                          'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400',
                         (task.status === 'todo' || task.status === 'pending' || task.status === 'backlog') &&
-                          'bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-300 border-surface-200 dark:border-surface-700'
+                          'border-surface-200 bg-surface-100 text-surface-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-300'
                       )}
                     >
                       {task.status.replace('_', ' ')}
                     </span>
+                  ) : (
+                    <span className="inline-block h-2 w-12 rounded bg-surface-100 dark:bg-surface-800" />
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-right text-surface-500 dark:text-surface-400 whitespace-nowrap hidden lg:table-cell">
-                  {loading ? '—' : task.dueDate || '—'}
+                <td className="hidden whitespace-nowrap px-3 py-2.5 text-right text-surface-500 dark:text-surface-400 lg:table-cell">
+                  {task?.dueDate || '-'}
                 </td>
               </tr>
             ))}

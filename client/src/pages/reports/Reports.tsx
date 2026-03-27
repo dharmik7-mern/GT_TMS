@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AreaChart,
   Area,
@@ -60,6 +61,7 @@ type ReportCardProps = {
   sub: string;
   icon: React.ReactNode;
   accent?: string;
+  onClick?: () => void;
 };
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
@@ -152,8 +154,15 @@ function renderPdfTable(headers: string[], rows: Array<Array<string | number>>) 
   `;
 }
 
-const ReportCard: React.FC<ReportCardProps> = ({ title, value, sub, icon, accent = '#3366ff' }) => (
-  <div className="card p-5">
+const ReportCard: React.FC<ReportCardProps> = ({ title, value, sub, icon, accent = '#3366ff', onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      'card p-5 text-left',
+      onClick && 'cursor-pointer hover:shadow-card-hover transition-all'
+    )}
+  >
     <div className="mb-3 flex items-start justify-between">
       <div
         className="flex h-11 w-11 items-center justify-center rounded-2xl"
@@ -165,10 +174,11 @@ const ReportCard: React.FC<ReportCardProps> = ({ title, value, sub, icon, accent
     <p className="text-2xl font-semibold text-surface-900 dark:text-white">{value}</p>
     <p className="mt-1 text-sm font-medium text-surface-700 dark:text-surface-300">{title}</p>
     <p className="mt-1 text-xs text-surface-400">{sub}</p>
-  </div>
+  </button>
 );
 
 export const ReportsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<PeriodKey>('month');
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
@@ -818,6 +828,7 @@ export const ReportsPage: React.FC = () => {
               sub={`${superAdminData.metrics.newCompanies} created in selected period`}
               icon={<Building2 size={20} />}
               accent="#3366ff"
+              onClick={() => navigate('/companies')}
             />
             <ReportCard
               title="User Footprint"
@@ -825,6 +836,7 @@ export const ReportsPage: React.FC = () => {
               sub="Current users across listed companies"
               icon={<Users size={20} />}
               accent="#7c3aed"
+              onClick={() => navigate('/users')}
             />
             <ReportCard
               title="Avg Users / Company"
@@ -832,6 +844,7 @@ export const ReportsPage: React.FC = () => {
               sub="Average size of each company account"
               icon={<TrendingUp size={20} />}
               accent="#10b981"
+              onClick={() => navigate('/companies')}
             />
             <ReportCard
               title="Tracked Companies"
@@ -839,6 +852,7 @@ export const ReportsPage: React.FC = () => {
               sub="High-activity companies shown below"
               icon={<FolderKanban size={20} />}
               accent="#f59e0b"
+              onClick={() => navigate('/companies')}
             />
           </div>
 
@@ -982,6 +996,7 @@ export const ReportsPage: React.FC = () => {
               sub="Projects active in the selected scope"
               icon={<FolderKanban size={20} />}
               accent="#3366ff"
+              onClick={() => navigate('/projects?status=active')}
             />
             <ReportCard
               title="Average Progress"
@@ -989,6 +1004,7 @@ export const ReportsPage: React.FC = () => {
               sub="Mean completion across visible projects"
               icon={<TrendingUp size={20} />}
               accent="#10b981"
+              onClick={() => navigate('/projects')}
             />
             <ReportCard
               title="Completed Work"
@@ -996,6 +1012,7 @@ export const ReportsPage: React.FC = () => {
               sub="Done project and quick tasks in the selected scope"
               icon={<CheckCircle2 size={20} />}
               accent="#7c3aed"
+              onClick={() => navigate('/my-tasks?filter=done')}
             />
             <ReportCard
               title="Average Rating"
@@ -1003,6 +1020,7 @@ export const ReportsPage: React.FC = () => {
               sub="Reviewer rating across approved task completions"
               icon={<Users size={20} />}
               accent="#f59e0b"
+              onClick={() => navigate('/tasks')}
             />
           </div>
 

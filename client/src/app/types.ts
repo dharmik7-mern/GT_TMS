@@ -172,6 +172,54 @@ export interface QuickTaskImportResult {
   failures: QuickTaskImportFailure[];
 }
 
+export interface ProjectImportRow {
+  rowNumber?: number;
+  projectKey: string;
+  projectName: string;
+  projectDescription?: string;
+  projectStatus?: ProjectStatus;
+  projectDepartment?: string;
+  projectColor?: string;
+  memberEmails?: string;
+  memberNames?: string;
+  reportingPersonEmails?: string;
+  reportingPersonNames?: string;
+  startDate?: string;
+  endDate?: string;
+  budget?: number;
+  budgetCurrency?: string;
+  sdlcPlan?: string;
+  taskTitle?: string;
+  taskDescription?: string;
+  taskStatus?: TaskStatus;
+  taskPriority?: Priority;
+  taskAssigneeEmails?: string;
+  taskAssigneeNames?: string;
+  taskStartDate?: string;
+  taskDurationDays?: number;
+  taskEstimatedHours?: number;
+  taskPhase?: string;
+  taskSubtasks?: string;
+}
+
+export interface ProjectImportFailure {
+  rowNumber: number;
+  projectKey?: string;
+  projectName?: string;
+  taskTitle?: string;
+  message: string;
+  code?: string;
+}
+
+export interface ProjectImportResult {
+  totalRows: number;
+  createdCount: number;
+  createdTaskCount: number;
+  failedCount: number;
+  createdProjects: Project[];
+  failures: ProjectImportFailure[];
+}
+
 export interface Workspace {
   id: string;
   name: string;

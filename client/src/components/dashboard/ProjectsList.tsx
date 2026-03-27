@@ -25,10 +25,11 @@ interface Props {
 }
 
 export const ProjectsList: React.FC<Props> = ({ title = 'Active Projects', projects, loading, onItemClick, cta }) => {
-  const skeletonRows = Array.from({ length: 4 });
+  const rows: Array<ProjectListItem | null> = loading ? Array.from({ length: 4 }, () => null) : projects;
+
   return (
-    <div className="card overflow-hidden h-full border border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900">
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
+    <div className="card h-full overflow-hidden border border-surface-100 bg-white dark:border-surface-800 dark:bg-surface-900">
+      <div className="flex items-center justify-between px-5 pb-3 pt-5">
         <div>
           <h3 className="font-display font-semibold text-surface-900 dark:text-white">{title}</h3>
           <p className="text-xs text-surface-400">Clickable rows</p>
@@ -39,59 +40,63 @@ export const ProjectsList: React.FC<Props> = ({ title = 'Active Projects', proje
           </button>
         )}
       </div>
-      <div className="divide-y divide-surface-50 dark:divide-surface-800 max-h-[300px] overflow-y-auto">
-        {(loading ? skeletonRows : projects).map((project, idx) => (
+      <div className="max-h-[300px] divide-y divide-surface-50 overflow-y-auto dark:divide-surface-800">
+        {rows.map((project, idx) => (
           <motion.div
-            key={loading ? `skeleton-${idx}` : project.id}
+            key={project?.id || `skeleton-${idx}`}
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.05 * idx }}
-            onClick={() => !loading && project.id && onItemClick?.(project.id)}
+            onClick={() => project?.id && onItemClick?.(project.id)}
             className={cn(
               'flex items-center gap-4 px-5 py-3.5',
-              !loading && 'hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors',
-              loading && 'animate-pulse select-none'
+              project ? 'cursor-pointer transition-colors hover:bg-surface-50 dark:hover:bg-surface-800/50' : 'animate-pulse select-none'
             )}
           >
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-              style={{ backgroundColor: loading ? '#e5e7eb' : project.color || '#3366ff' }}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+              style={{ backgroundColor: project?.color || '#e5e7eb' }}
             >
-              {loading ? '' : (project.name || '?')[0]}
+              {project?.name?.[0] || ''}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">
-                {loading ? '···' : project.name}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-surface-800 dark:text-surface-200">
+                {project?.name || '...'}
               </p>
-              <div className="flex items-center gap-2 mt-1">
-                {loading ? (
-                  <div className="h-2 w-24 rounded bg-surface-100 dark:bg-surface-800" />
-                ) : (
+              <div className="mt-1 flex items-center gap-2">
+                {project ? (
                   <>
-                    <ProgressBar value={project.progress ?? 0} size="sm" color={getProgressColor(project.progress ?? 0)} className="w-24" />
+                    <ProgressBar
+                      value={project.progress ?? 0}
+                      size="sm"
+                      color={getProgressColor(project.progress ?? 0)}
+                      className="w-24"
+                    />
                     <span className="text-xs text-surface-400">{project.progress ?? 0}%</span>
                   </>
+                ) : (
+                  <div className="h-2 w-24 rounded bg-surface-100 dark:bg-surface-800" />
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              {loading ? (
-                <div className="h-6 w-16 rounded bg-surface-100 dark:bg-surface-800" />
-              ) : project.members && project.members.length ? (
+            <div className="flex flex-shrink-0 items-center gap-3">
+              {project?.members && project.members.length ? (
                 <AvatarGroup users={project.members} max={3} size="xs" />
               ) : (
                 <div className="flex items-center gap-1 text-[11px] text-surface-400">
                   <Users size={14} />
-                  <span>—</span>
+                  <span>{project ? '-' : ''}</span>
                 </div>
               )}
-              {!loading && (
-                <div className="text-right hidden sm:block">
-                  <p className="text-xs text-surface-500">{project.completedTasksCount ?? 0}/{project.tasksCount ?? 0}</p>
+              {project && (
+                <div className="hidden text-right sm:block">
+                  <p className="text-xs text-surface-500">
+                    {project.completedTasksCount ?? 0}/{project.tasksCount ?? 0}
+                  </p>
                   <p className="text-[11px] text-surface-400">tasks</p>
                 </div>
               )}
-              {!loading && <ArrowRight size={14} className="text-surface-300" />}
+              {project && <ArrowRight size={14} className="text-surface-300" />}
             </div>
           </motion.div>
         ))}
