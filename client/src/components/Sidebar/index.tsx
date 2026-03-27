@@ -287,12 +287,14 @@ export const Sidebar: React.FC = () => {
                     <span className="flex-1">{item.label}</span>
                     {item.label === 'Projects' && (
                       <div className="flex items-center gap-1">
-                        <button
-                          className="flex items-center justify-center w-5 h-5 rounded-md hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors cursor-pointer"
-                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate('/projects?new=true'); }}
-                        >
-                          <Plus size={12} className="text-surface-500" />
-                        </button>
+                        {user?.role !== 'team_member' && (
+                          <button
+                            className="flex items-center justify-center w-5 h-5 rounded-md hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate('/projects?new=true'); }}
+                          >
+                            <Plus size={12} className="text-surface-500" />
+                          </button>
+                        )}
                         <ChevronDown
                           size={12}
                           className={cn('text-surface-400 transition-transform mr-1', projectsExpanded && 'rotate-180')}

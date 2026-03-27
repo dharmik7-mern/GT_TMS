@@ -70,9 +70,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
       </div>
 
       {/* Title */}
-      <h4 className="text-sm font-medium text-surface-800 dark:text-surface-200 leading-snug mb-3 group-hover:text-brand-700 dark:group-hover:text-brand-300 transition-colors">
+      <h4 className="text-sm font-medium text-surface-800 dark:text-surface-200 leading-snug group-hover:text-brand-700 dark:group-hover:text-brand-300 transition-colors">
         {task.title}
       </h4>
+      {task.description && (
+        <p className="mt-1 text-[11px] text-surface-400 line-clamp-2 leading-relaxed">
+          {task.description}
+        </p>
+      )}
+      <div className="mb-3" />
 
       {/* Subtasks progress (GW-style bar) */}
       {((task.subtaskTotal ?? task.subtasks?.length ?? 0) > 0) && (

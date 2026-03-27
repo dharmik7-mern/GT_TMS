@@ -160,6 +160,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [isEditingPriority, setIsEditingPriority] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isEditingAssignee, setIsEditingAssignee] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   if (!task) return null;
 
@@ -182,6 +185,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
       project?.reportingPersonIds?.includes(user.id)
     )
   );
+  const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
 
   const persistTaskUpdate = async (updates: Partial<Task> & { completionRemark?: string }, errorTitle = 'Task update failed') => {
     try {
@@ -257,6 +261,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   };
 
   const handleDelete = () => {
+    if (!['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '')) {
+      emitErrorToast('You do not have permission to delete tasks.', 'Forbidden');
+      return;
+    }
     (async () => {
       try {
         await tasksService.delete(task.id);
@@ -300,6 +308,25 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
     }
   };
 
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    try {
+      setIsUploading(true);
+      const fileArray = Array.from(files);
+      const response = await tasksService.uploadAttachments(task.id, fileArray);
+      updateTask(task.id, response.data.data ?? response.data);
+      await bootstrap();
+      emitSuccessToast('Files uploaded successfully.');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'Failed to upload files';
+      emitErrorToast(message, 'Upload Error');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <Modal open={open} onClose={onClose} size="xl" showClose={false}>
       <div className="flex h-full max-h-[85vh] flex-col lg:flex-row">
@@ -313,7 +340,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 <span className={cn('px-1.5 py-0.5 rounded-md font-medium', statusCfg.bg, statusCfg.text)}>{statusCfg.label}</span>
               </div>
 
-              {editingTitle ? (
+              {editingTitle && canManageTask ? (
                 <form onSubmit={handleSubmit(data => {
                   (async () => {
                     await persistTaskUpdate({ title: data.title }, 'Title update failed');
@@ -328,9 +355,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   />
                 </form>
               ) : (
-                <h2 className="font-display font-semibold text-xl text-surface-900 dark:text-white cursor-pointer hover:text-brand-700 dark:hover:text-brand-300 transition-colors leading-tight" onClick={() => setEditingTitle(true)}>
+                <h2 
+                  className={cn(
+                    "font-display font-semibold text-xl text-surface-900 dark:text-white leading-tight",
+                    canManageTask && "cursor-pointer hover:text-brand-700 dark:hover:text-brand-300 transition-colors group"
+                  )} 
+                  onClick={() => canManageTask && setEditingTitle(true)}
+                >
                   {task.title}
-                  <Edit3 size={14} className="inline ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" />
+                  {canManageTask && <Edit3 size={14} className="inline ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" />}
                 </h2>
               )}
             </div>
@@ -574,9 +607,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="label mb-0">Attachments</label>
-                    <button className="btn-ghost btn-sm text-xs">
-                      <Paperclip size={12} />
-                      Upload
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      className="hidden" 
+                      multiple 
+                      onChange={(e) => handleFileUpload(e.target.files)} 
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()} 
+                      disabled={isUploading}
+                      className="btn-ghost btn-sm text-xs"
+                    >
+                      {isUploading ? <Clock size={12} className="animate-spin" /> : <Paperclip size={12} />}
+                      {isUploading ? 'Uploading...' : 'Upload'}
                     </button>
                   </div>
                   {(task.attachments || []).length > 0 && (
@@ -584,7 +628,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                       {(task.attachments || []).map((att) => (
                         <a key={att.id} href={att.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-2 bg-white dark:bg-surface-800 rounded-xl border border-surface-100 dark:border-surface-700 text-xs hover:border-brand-500 transition-colors">
                           <span className="flex items-center gap-2 min-w-0">
-                            <span className="w-6 h-6 rounded bg-brand-50 dark:bg-brand-900/40 flex items-center justify-center text-brand-600 dark:text-brand-400 flex-shrink-0">F</span>
+                            <span className="w-6 h-6 rounded bg-brand-50 dark:bg-brand-900/40 flex items-center justify-center text-brand-600 dark:text-brand-400 flex-shrink-0 font-medium">{att.name[0].toUpperCase()}</span>
                             <span className="truncate">{att.name}</span>
                           </span>
                           <span className="text-[10px] text-surface-400 flex-shrink-0">View</span>
@@ -592,9 +636,23 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                       ))}
                     </div>
                   )}
-                  <div className="border-2 border-dashed border-surface-200 dark:border-surface-700 rounded-xl p-6 text-center">
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleFileUpload(e.dataTransfer.files);
+                    }}
+                    className={cn(
+                      "border-2 border-dashed border-surface-200 dark:border-surface-700 rounded-xl p-6 text-center cursor-pointer transition-colors hover:border-brand-400 hover:bg-brand-50/10",
+                      isUploading && "opacity-50 pointer-events-none"
+                    )}
+                  >
                     <Paperclip size={20} className="mx-auto text-surface-300 mb-2" />
-                    <p className="text-xs text-surface-400">Drop files here or click to upload</p>
+                    <p className="text-xs text-surface-400">
+                      {isUploading ? 'Uploading files...' : 'Drop files here or click to upload'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -653,7 +711,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="label mb-0">Priority</label>
-              {!isEditingPriority && (
+              {!isEditingPriority && canManageTask && (
                 <button 
                   onClick={() => setIsEditingPriority(true)}
                   className="p-1 rounded-md text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 transition-colors"
@@ -705,10 +763,48 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 </div>
               ))}
               {assignees.length === 0 && <p className="text-xs text-surface-400">Unassigned</p>}
-              <button className="btn-ghost btn-sm text-xs mt-1">
-                <Users size={12} />
-                Assign
-              </button>
+              
+              <div className="relative">
+                {canManageTask && (
+                  <button 
+                    onClick={() => setIsEditingAssignee(!isEditingAssignee)}
+                    className="btn-ghost btn-sm text-xs mt-1"
+                  >
+                    <Users size={12} />
+                    {task.assigneeIds.length > 0 ? 'Change' : 'Assign'}
+                  </button>
+                )}
+
+                {isEditingAssignee && (
+                  <div className="absolute left-0 top-full mt-2 z-30 w-56 p-1 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                    <div className="max-h-48 overflow-y-auto">
+                      {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                        <button
+                          key={u.id}
+                          onClick={async () => {
+                            const current = task.assigneeIds;
+                            const next = current.includes(u.id) 
+                              ? current.filter(id => id !== u.id)
+                              : [...current, u.id];
+                            await persistTaskUpdate({ assigneeIds: next }, 'Assignee update failed');
+                            setIsEditingAssignee(false);
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left",
+                            task.assigneeIds.includes(u.id)
+                              ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
+                              : "text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800"
+                          )}
+                        >
+                          <UserAvatar name={u.name} color={u.color} size="xs" />
+                          <span className="truncate flex-1">{u.name}</span>
+                          {task.assigneeIds.includes(u.id) && <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

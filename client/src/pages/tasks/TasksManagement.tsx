@@ -43,6 +43,7 @@ export const TasksManagement: React.FC = () => {
    const [fullTaskData, setFullTaskData] = useState<any>(null);
    const [fullTaskLoading, setFullTaskLoading] = useState(false);
    const [isAddingTask, setIsAddingTask] = useState(false);
+   const canCreateTask = user?.role !== 'team_member';
    const [filterStatus, setFilterStatus] = useState('all');
    const [currentPage, setCurrentPage] = useState(1);
    const [projectsPage, setProjectsPage] = useState(1);
@@ -221,13 +222,15 @@ export const TasksManagement: React.FC = () => {
       {/* Bordio Style Top Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setIsAddingTask(true)}
-            className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors shadow-sm"
-          >
-            <Plus size={18} />
-            Add new
-          </button>
+          {canCreateTask && (
+            <button 
+              onClick={() => setIsAddingTask(true)}
+              className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors shadow-sm"
+            >
+              <Plus size={18} />
+              Add new
+            </button>
+          )}
           
           <div className="flex items-center bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg p-1 shadow-sm">
             <button 

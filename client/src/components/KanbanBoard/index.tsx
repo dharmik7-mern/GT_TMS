@@ -11,7 +11,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Plus, Trash2, Pencil } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn, generateId } from '../../utils/helpers';
 import { STATUS_CONFIG } from '../../app/constants';
@@ -39,6 +39,7 @@ type BoardCustomization = {
   customColumns: CustomColumn[];
   columnOrder: string[];
   taskStepOverrides: Record<string, string>;
+  collapsedColumns?: string[];
 };
 
 type BoardColumn = {
@@ -169,6 +170,8 @@ interface KanbanColumnProps {
   onAddProcessStep: (columnId: string) => void;
   onRenameStep: (columnId: string) => void;
   onDeleteStep: (columnId: string) => void;
+  isCollapsed: boolean;
+  onToggleCollapse: (columnId: string) => void;
 }
 
 const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -180,6 +183,8 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onAddProcessStep,
   onRenameStep,
   onDeleteStep,
+  isCollapsed,
+  onToggleCollapse,
 }) => {
   const config = isBuiltInColumn(column.id) ? STATUS_CONFIG[column.id] : null;
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id });
@@ -195,52 +200,89 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
       ref={setRefs}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.75 : 1 }}
       className={cn(
-        'flex w-72 min-w-[288px] flex-col rounded-2xl border border-surface-100 dark:border-surface-800',
+        'flex flex-col rounded-2xl border border-surface-100 dark:border-surface-800 transition-all duration-300',
+        isCollapsed ? 'w-12 min-w-[48px]' : 'w-72 min-w-[288px]',
         isOver ? 'bg-surface-100 dark:bg-surface-800' : 'bg-surface-50 dark:bg-surface-950/50'
       )}
     >
-      <div className="flex items-center gap-2 p-3 pb-2">
-        <div className="flex flex-1 items-center gap-2 min-w-0 cursor-grab active:cursor-grabbing" {...attributes} {...listeners}>
-          <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
-          <h3 className="truncate text-sm font-semibold text-surface-700 dark:text-surface-300">{column.title}</h3>
-        </div>
-        <span className={cn('badge text-[11px]', config ? `${config.bg} ${config.text}` : 'bg-surface-100 text-surface-500')}>{tasks.length}</span>
-        <ColumnMenu
-          isBuiltIn={column.isBuiltIn}
-          onAddProcessStep={() => onAddProcessStep(column.id)}
-          onRename={() => onRenameStep(column.id)}
-          onDelete={() => onDeleteStep(column.id)}
-        />
-      </div>
-
-      <div className="flex-1 space-y-2 overflow-y-auto p-2 pt-1 min-h-[120px] max-h-[calc(100vh-260px)]">
-        <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
-            <SortableTask key={task.id} task={task} onOpen={onOpenTask} onDeleteTask={onDeleteTask} />
-          ))}
-        </SortableContext>
-      </div>
-
-      <div className="p-2 pt-1">
-        {column.isBuiltIn ? (
-          <button
-            type="button"
-            onClick={() => onAddTask?.(column.id as TaskStatus)}
-            className={cn(
-              'w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-surface-400',
-              'hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-600 dark:hover:text-surface-300',
-              'border border-dashed border-surface-200 dark:border-surface-700 transition-all duration-200'
-            )}
-          >
-            <Plus size={14} />
-            <span>Add task</span>
-          </button>
-        ) : (
-          <div className="rounded-xl border border-dashed border-surface-200 px-3 py-2 text-xs text-surface-400 dark:border-surface-700">
-            Drag tasks here to use this process step.
+      {isCollapsed ? (
+        <div 
+          onClick={() => onToggleCollapse(column.id)}
+          className="flex-1 flex flex-col items-center py-6 cursor-pointer hover:bg-surface-100 dark:hover:bg-surface-800/50 transition-colors group/collapsed relative"
+        >
+          <div className="h-2.5 w-2.5 rounded-full mb-8 shadow-sm" style={{ backgroundColor: column.color }} />
+          
+          <div className="flex-1 relative w-full flex items-center justify-center">
+            <h3 className="whitespace-nowrap text-[10px] font-black text-surface-400 dark:text-surface-500 uppercase tracking-[0.2em] transform -rotate-90 origin-center">
+              {column.title}
+            </h3>
           </div>
-        )}
-      </div>
+
+          <div className="mt-8 flex flex-col items-center gap-4">
+             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-200 dark:bg-surface-800 text-surface-600 dark:text-surface-400">
+               {tasks.length}
+             </span>
+             <div className="p-1 rounded bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 shadow-sm text-brand-600 opacity-0 group-hover/collapsed:opacity-100 transition-opacity">
+                <ChevronRight size={10} strokeWidth={3} />
+             </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 p-3 pb-2">
+            <div className="flex flex-1 items-center gap-2 min-w-0 cursor-grab active:cursor-grabbing" {...attributes} {...listeners}>
+              <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
+              <h3 className="truncate text-sm font-semibold text-surface-700 dark:text-surface-300">{column.title}</h3>
+            </div>
+            <span className={cn('badge text-[11px]', config ? `${config.bg} ${config.text}` : 'bg-surface-100 text-surface-500')}>{tasks.length}</span>
+            
+            <div className="flex items-center gap-1">
+              <ColumnMenu
+                isBuiltIn={column.isBuiltIn}
+                onAddProcessStep={() => onAddProcessStep(column.id)}
+                onRename={() => onRenameStep(column.id)}
+                onDelete={() => onDeleteStep(column.id)}
+              />
+              <button 
+                onClick={() => onToggleCollapse(column.id)}
+                className="p-1 hover:bg-surface-200 dark:hover:bg-surface-800 rounded transition-colors text-surface-400"
+                title="Collapse Stage"
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-2 overflow-y-auto p-2 pt-1 min-h-[120px] max-h-[calc(100vh-260px)]">
+            <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+              {tasks.map((task) => (
+                <SortableTask key={task.id} task={task} onOpen={onOpenTask} onDeleteTask={onDeleteTask} />
+              ))}
+            </SortableContext>
+          </div>
+
+          <div className="p-2 pt-1">
+          {onAddTask && column.isBuiltIn ? (
+            <button
+              type="button"
+              onClick={() => onAddTask?.(column.id as TaskStatus)}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-surface-400',
+                'hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-600 dark:hover:text-surface-300',
+                'border border-dashed border-surface-200 dark:border-surface-700 transition-all duration-200'
+              )}
+            >
+              <Plus size={14} />
+              <span>Add task</span>
+            </button>
+          ) : !onAddTask && column.isBuiltIn ? null : (
+            <div className="rounded-xl border border-dashed border-surface-200 px-3 py-2 text-xs text-surface-400 dark:border-surface-700">
+              Drag tasks here.
+            </div>
+          )}
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -267,6 +309,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
   const [columnOrder, setColumnOrder] = useState<string[]>(BASE_COLUMNS.map((column) => column.id));
   const [taskStepOverrides, setTaskStepOverrides] = useState<Record<string, string>>({});
+  const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
 
   const tasks = tasksOverride ?? storeTasks;
   const filteredTasks = projectId ? tasks.filter((task) => task.projectId === projectId) : tasks;
@@ -299,6 +342,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
       const parsed = JSON.parse(raw) as Partial<BoardCustomization>;
       const loadedCustomColumns = Array.isArray(parsed.customColumns) ? parsed.customColumns : [];
+      setCollapsedColumns(Array.isArray(parsed.collapsedColumns) ? parsed.collapsedColumns : []);
       const mergedColumns = [
         ...BASE_COLUMNS.map((column) => ({ ...column, isBuiltIn: true })),
         ...loadedCustomColumns.map((column) => ({ ...column, isBuiltIn: false })),
@@ -311,6 +355,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       setCustomColumns([]);
       setColumnOrder(BASE_COLUMNS.map((column) => column.id));
       setTaskStepOverrides({});
+      setCollapsedColumns([]);
     }
   }, [projectId]);
 
@@ -319,9 +364,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       customColumns,
       columnOrder: mergeColumnOrder(allColumns, columnOrder),
       taskStepOverrides,
+      collapsedColumns,
     };
     localStorage.setItem(getStorageKey(projectId), JSON.stringify(payload));
-  }, [allColumns, columnOrder, customColumns, projectId, taskStepOverrides]);
+  }, [allColumns, columnOrder, customColumns, projectId, taskStepOverrides, collapsedColumns]);
+
+  const toggleCollapse = (columnId: string) => {
+    setCollapsedColumns(prev => 
+      prev.includes(columnId) ? prev.filter(c => c !== columnId) : [...prev, columnId]
+    );
+  };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -466,6 +518,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   onAddProcessStep={addProcessStepAfter}
                   onRenameStep={renameProcessStep}
                   onDeleteStep={deleteProcessStep}
+                  isCollapsed={collapsedColumns.includes(column.id)}
+                  onToggleCollapse={toggleCollapse}
                 />
               </motion.div>
             );
