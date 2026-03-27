@@ -126,7 +126,12 @@ export const SettingsPage: React.FC = () => {
   const [performance, setPerformance] = useState<UserPerformance | null>(null);
   const [loadingPerformance, setLoadingPerformance] = useState(false);
   const workspace = workspaces[0];
+  const canManageWorkspaceSettings = ['super_admin', 'admin'].includes(user?.role || '');
   const canManagePasswordPolicy = ['super_admin', 'admin'].includes(user?.role || '');
+  const visibleTabs = useMemo(
+    () => TAB_ITEMS.filter((tab) => tab.value !== 'workspace' || canManageWorkspaceSettings),
+    [canManageWorkspaceSettings]
+  );
 
   const defaultNotifications = useMemo<NotificationSettings>(() => ({
     taskAssigned: user?.preferences?.notifications?.taskAssigned ?? true,
@@ -192,6 +197,12 @@ export const SettingsPage: React.FC = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'workspace' && !canManageWorkspaceSettings) {
+      setActiveTab('profile');
+    }
+  }, [activeTab, canManageWorkspaceSettings]);
 
   const { register: registerProfile, handleSubmit: handleProfile, reset: resetProfile } = useForm<ProfileForm>({
     defaultValues: {
@@ -408,7 +419,7 @@ export const SettingsPage: React.FC = () => {
 
       {message && <div className="mb-4 rounded-xl bg-surface-50 px-4 py-3 text-sm text-surface-600 dark:bg-surface-800/60">{message}</div>}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} items={TAB_ITEMS} variant="underline">
+      <Tabs value={activeTab} onValueChange={setActiveTab} items={visibleTabs} variant="underline">
         <TabsContent value="profile" className="pt-6">
           <form onSubmit={handleProfile(onSaveProfile)}>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -594,6 +605,7 @@ export const SettingsPage: React.FC = () => {
           </form>
         </TabsContent>
 
+        {canManageWorkspaceSettings && (
         <TabsContent value="workspace" className="pt-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="card p-5">
@@ -671,6 +683,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
         </TabsContent>
+        )}
 
         <TabsContent value="security" className="pt-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -707,6 +720,7 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div className="space-y-4">
+              {canManagePasswordPolicy && (
               <div className="card p-5">
                 <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Organization Password Policy</h3>
                 <SettingRow
@@ -738,12 +752,8 @@ export const SettingsPage: React.FC = () => {
                 <p className="mt-3 text-xs text-surface-400">
                   When off, users in this organization still need at least 8 characters, but uppercase, number, and special-character requirements are removed.
                 </p>
-                {!canManagePasswordPolicy && (
-                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                    Only company admins can change this policy.
-                  </p>
-                )}
               </div>
+              )}
 
               <div className="card p-5">
                 <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Two-Factor Authentication</h3>

@@ -48,12 +48,17 @@ const StatCard: React.FC<{
   color: string;
   trend?: number;
   delay?: number;
-}> = ({ icon, label, value, sub, color, trend, delay = 0 }) => (
+  onClick?: () => void;
+}> = ({ icon, label, value, sub, color, trend, delay = 0, onClick }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay }}
-    className="card p-4 sm:p-5"
+    onClick={onClick}
+    className={cn(
+      'card p-4 sm:p-5',
+      onClick && 'cursor-pointer hover:shadow-card-hover transition-all'
+    )}
   >
     <div className="flex items-start justify-between mb-3">
       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}18` }}>
@@ -193,10 +198,10 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={<Building2 size={20} />} label="Total Companies" value={companiesLoading ? '…' : companies.length} sub="active on platform" color="#3366ff" delay={0} />
-          <StatCard icon={<Users size={20} />} label="Total Users" value={companiesLoading ? '…' : companies.reduce((n, c) => n + (c.usersCount ?? 0), 0)} sub="across all companies" color="#10b981" delay={0.05} />
-          <StatCard icon={<Activity size={20} />} label="System Uptime" value="99.9%" sub="all regions healthy" color="#f59e0b" trend={0} delay={0.1} />
-          <StatCard icon={<Zap size={20} />} label="Active Modules" value="12/12" sub="no reported incidents" color="#7c3aed" trend={0} delay={0.15} />
+          <StatCard icon={<Building2 size={20} />} label="Total Companies" value={companiesLoading ? '…' : companies.length} sub="active on platform" color="#3366ff" delay={0} onClick={() => navigate('/companies')} />
+          <StatCard icon={<Users size={20} />} label="Total Users" value={companiesLoading ? '…' : companies.reduce((n, c) => n + (c.usersCount ?? 0), 0)} sub="across all companies" color="#10b981" delay={0.05} onClick={() => navigate('/users')} />
+          <StatCard icon={<Activity size={20} />} label="System Uptime" value="99.9%" sub="all regions healthy" color="#f59e0b" trend={0} delay={0.1} onClick={() => navigate('/logs?type=info')} />
+          <StatCard icon={<Zap size={20} />} label="Active Modules" value="12/12" sub="no reported incidents" color="#7c3aed" trend={0} delay={0.15} onClick={() => navigate('/logs')} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -329,10 +334,10 @@ export const DashboardPage: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={<FolderKanban size={20} />} label="Active Projects" value={activeProjects.length} sub="across workspace" color="#3366ff" trend={12} delay={0} />
-          <StatCard icon={<CheckCircle2 size={20} />} label="Tasks Completed" value={completedThisWeek.length} sub="this week" color="#10b981" trend={8} delay={0.05} />
-          <StatCard icon={<Clock size={20} />} label="My Open Tasks" value={myTasks.length} sub="assigned to me" color="#f59e0b" trend={-3} delay={0.1} />
-          <StatCard icon={<AlertTriangle size={20} />} label="Overdue Tasks" value={overdueTasks.length} sub="need attention" color="#f43f5e" trend={-15} delay={0.15} />
+          <StatCard icon={<FolderKanban size={20} />} label="Active Projects" value={activeProjects.length} sub="across workspace" color="#3366ff" trend={12} delay={0} onClick={() => navigate('/projects?status=active')} />
+          <StatCard icon={<CheckCircle2 size={20} />} label="Tasks Completed" value={completedThisWeek.length} sub="this week" color="#10b981" trend={8} delay={0.05} onClick={() => navigate('/my-tasks?filter=done')} />
+          <StatCard icon={<Clock size={20} />} label="My Open Tasks" value={myTasks.length} sub="assigned to me" color="#f59e0b" trend={-3} delay={0.1} onClick={() => navigate('/my-tasks?filter=in_progress')} />
+          <StatCard icon={<AlertTriangle size={20} />} label="Overdue Tasks" value={overdueTasks.length} sub="need attention" color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate('/my-tasks?filter=overdue')} />
         </div>
       )}
 

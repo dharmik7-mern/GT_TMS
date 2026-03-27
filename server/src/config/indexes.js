@@ -2,7 +2,19 @@ import Company from '../models/Company.js';
 import { getTenantModels } from './tenantDb.js';
 import { logger } from '../utils/logger.js';
 
-const LEGACY_PROJECT_INDEXES = ['id_1', 'workspaceId_1', 'name_1'];
+const LEGACY_PROJECT_INDEXES = ['id_1', 'workspaceId_1', 'name_1', 'workspaceId_1_name_1', 'name_1_workspaceId_1'];
+
+function shouldDropLegacyProjectIndex(index) {
+  if (!index || !index.name || index.name === '_id_') return false;
+  if (LEGACY_PROJECT_INDEXES.includes(index.name)) return true;
+
+  const keys = Object.keys(index.key || {});
+  const includesNameKey = keys.includes('name');
+  if (!includesNameKey) return false;
+
+  // Old deployments may still carry unique project-name indexes.
+  return Boolean(index.unique);
+}
 
 export async function alignProjectIndexes() {
   const companies = await Company.find().select('_id');
@@ -24,17 +36,15 @@ export async function alignProjectIndexes() {
       continue;
     }
 
-    for (const indexName of LEGACY_PROJECT_INDEXES) {
-      const hasIndex = existingIndexes.some((index) => index.name === indexName);
-      if (!hasIndex) continue;
-
+    for (const index of existingIndexes) {
+      if (!shouldDropLegacyProjectIndex(index)) continue;
       try {
-        await Project.collection.dropIndex(indexName);
-        logger.info('project_legacy_index_dropped', { companyId: String(company._id), indexName });
+        await Project.collection.dropIndex(index.name);
+        logger.info('project_legacy_index_dropped', { companyId: String(company._id), indexName: index.name });
       } catch (error) {
         logger.warn('project_legacy_index_drop_failed', {
           companyId: String(company._id),
-          indexName,
+          indexName: index.name,
           message: error?.message,
         });
       }

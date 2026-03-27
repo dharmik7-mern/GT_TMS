@@ -603,6 +603,16 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
     assignedToId: '',
     description: ''
   });
+  const selectedProject = projects.find((project) => project.id === formData.projectId);
+  const assignableUsers = selectedProject
+    ? users.filter((user) => !selectedProject.reportingPersonIds.includes(user.id))
+    : users;
+
+  useEffect(() => {
+    if (!formData.assignedToId) return;
+    if (assignableUsers.some((user) => user.id === formData.assignedToId)) return;
+    setFormData((prev) => ({ ...prev, assignedToId: '' }));
+  }, [assignableUsers, formData.assignedToId]);
 
   const selectedProject = projects.find(p => p.id === formData.projectId);
   const assignableUsers = useMemo(() => {

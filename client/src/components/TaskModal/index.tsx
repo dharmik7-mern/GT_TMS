@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import {
@@ -147,7 +147,7 @@ function buildTaskTimeline(task: Task, comments: Comment[]) {
 }
 
 export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => {
-  const { updateTask, deleteTask, projects, users, bootstrap } = useAppStore();
+  const { tasks, updateTask, deleteTask, projects, users, bootstrap } = useAppStore();
   const { user } = useAuthStore();
   const [editingTitle, setEditingTitle] = useState(false);
   const [newComment, setNewComment] = useState('');
@@ -156,6 +156,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const [completionChecklist, setCompletionChecklist] = useState<ChecklistItem[]>(parseChecklist(task?.completionReview?.completionRemark));
   const [reviewChecklist, setReviewChecklist] = useState<ChecklistItem[]>(parseChecklist(task?.completionReview?.reviewRemark));
   const [rating, setRating] = useState<number>(task?.completionReview?.rating || 0);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [assigneeQuery, setAssigneeQuery] = useState('');
+  const assigneeRef = useRef<HTMLDivElement | null>(null);
   const { register, handleSubmit } = useForm<{ title: string }>();
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState('');
@@ -166,6 +171,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
 
   if (!task) return null;
 
+const currentTask = tasks.find((item) => item.id === task.id) || task;
   const project = projects.find(p => p.id === task.projectId);
   const assignees = users.filter(u => task.assigneeIds.includes(u.id));
   const reporter = users.find(u => u.id === task.reporterId);
@@ -181,16 +187,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const canReview = Boolean(
     user && (
       ['super_admin', 'admin', 'manager', 'team_leader'].includes(user.role) ||
-      task.reporterId === user.id ||
+      currentTask.reporterId === user.id ||
       project?.reportingPersonIds?.includes(user.id)
     )
   );
+  const assignableUsers = useMemo(() => {
+    const projectMemberIds = new Set(project?.members || []);
+    return users.filter((candidate) => projectMemberIds.has(candidate.id));
+  }, [project?.members, users]);
+  const filteredAssignableUsers = useMemo(() => {
+    const query = assigneeQuery.trim().toLowerCase();
+    if (!query) return assignableUsers;
+    return assignableUsers.filter((candidate) =>
+      [candidate.name, candidate.email, candidate.jobTitle, candidate.department]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    );
+  }, [assignableUsers, assigneeQuery]);
   const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
 
   const persistTaskUpdate = async (updates: Partial<Task> & { completionRemark?: string }, errorTitle = 'Task update failed') => {
     try {
-      const response = await tasksService.update(task.id, updates);
-      updateTask(task.id, response.data.data ?? response.data);
+      const response = await tasksService.update(currentTask.id, updates);
+      updateTask(currentTask.id, response.data.data ?? response.data);
       await bootstrap();
     } catch (error: any) {
       const message =
@@ -200,6 +219,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
       emitErrorToast(message, errorTitle);
     }
   };
+
+  useEffect(() => {
+    setComments(currentTask.comments || []);
+    setCompletionChecklist(parseChecklist(currentTask.completionReview?.completionRemark));
+    setReviewChecklist(parseChecklist(currentTask.completionReview?.reviewRemark));
+    setRating(currentTask.completionReview?.rating || 0);
+  }, [currentTask]);
+
+  useEffect(() => {
+    if (!assigneeOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (assigneeRef.current?.contains(event.target as Node)) return;
+      setAssigneeOpen(false);
+      setAssigneeQuery('');
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [assigneeOpen]);
 
   const updateChecklistItem = (
     setter: React.Dispatch<React.SetStateAction<ChecklistItem[]>>,
@@ -229,12 +266,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
 
   const handleReview = async (action: 'approve' | 'changes_requested') => {
     try {
-      const response = await tasksService.review(task.id, {
+      const response = await tasksService.review(currentTask.id, {
         action,
         rating: action === 'approve' ? rating : undefined,
         reviewRemark: reviewRemark.trim() || undefined,
       });
-      updateTask(task.id, response.data.data ?? response.data);
+      updateTask(currentTask.id, response.data.data ?? response.data);
       await bootstrap();
       emitSuccessToast(action === 'approve' ? 'Task approved.' : 'Changes requested.');
     } catch (error: any) {
@@ -252,7 +289,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
       id: generateId(),
       content: newComment,
       authorId: user.id,
-      taskId: task.id,
+      taskId: currentTask.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -267,8 +304,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
     }
     (async () => {
       try {
-        await tasksService.delete(task.id);
-        deleteTask(task.id);
+        await tasksService.delete(currentTask.id);
+        deleteTask(currentTask.id);
         await bootstrap();
         emitSuccessToast('Task deleted successfully.', 'Task Deleted');
         onClose();
@@ -283,6 +320,25 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   };
 
   const handleAddSubtask = async () => {
+<<<<<<< dev-dhiren
+    const title = newSubtaskTitle.trim();
+    if (!title) return;
+    setAddingSubtask(true);
+    try {
+      const response = await tasksService.addSubtask(currentTask.id, { title });
+      updateTask(currentTask.id, response.data.data ?? response.data);
+      await bootstrap();
+      setNewSubtaskTitle('');
+      emitSuccessToast('Subtask added successfully.');
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Subtask could not be added.';
+      emitErrorToast(message, 'Subtask failed');
+    } finally {
+      setAddingSubtask(false);
+=======
     if (!subtaskTitle.trim()) return;
     try {
       const response = await tasksService.addSubtask(task.id, { 
@@ -295,11 +351,41 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
       await bootstrap();
     } catch (err: any) {
       emitErrorToast(err?.response?.data?.message || 'Failed to add subtask', 'Error');
+>>>>>>> main
     }
   };
 
   const handleToggleSubtask = async (subtaskId: string, isCompleted: boolean) => {
     try {
+<<<<<<< dev-dhiren
+      const response = await tasksService.patchSubtask(currentTask.id, subtaskId, { isCompleted: !isCompleted });
+      updateTask(currentTask.id, response.data.data ?? response.data);
+      await bootstrap();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Subtask could not be updated.';
+      emitErrorToast(message, 'Subtask update failed');
+    }
+  };
+
+  const toggleAssignee = async (assigneeId: string) => {
+    const nextAssigneeIds = currentTask.assigneeIds.includes(assigneeId)
+      ? currentTask.assigneeIds.filter((id) => id !== assigneeId)
+      : [...currentTask.assigneeIds, assigneeId];
+
+    try {
+      const response = await tasksService.update(currentTask.id, { assigneeIds: nextAssigneeIds });
+      updateTask(currentTask.id, response.data.data ?? response.data);
+      await bootstrap();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Assignees could not be updated.';
+      emitErrorToast(message, 'Assignee update failed');
+=======
       const response = await tasksService.patchSubtask(task.id, subtaskId, { isCompleted });
       updateTask(task.id, response.data.data ?? response.data);
       await bootstrap();
@@ -324,6 +410,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+>>>>>>> main
     }
   };
 
@@ -348,13 +435,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   })();
                 })}>
                   <input
-                    {...register('title', { value: task.title })}
+                    {...register('title', { value: currentTask.title })}
                     autoFocus
                     className="input text-xl font-display font-semibold mb-0 h-auto py-1"
                     onBlur={() => setEditingTitle(false)}
                   />
                 </form>
               ) : (
+<<<<<<< dev-dhiren
+                <h2 className="font-display font-semibold text-xl text-surface-900 dark:text-white cursor-pointer hover:text-brand-700 dark:hover:text-brand-300 transition-colors leading-tight" onClick={() => setEditingTitle(true)}>
+                  {currentTask.title}
+                  <Edit3 size={14} className="inline ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" />
+=======
                 <h2 
                   className={cn(
                     "font-display font-semibold text-xl text-surface-900 dark:text-white leading-tight",
@@ -364,6 +456,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 >
                   {task.title}
                   {canManageTask && <Edit3 size={14} className="inline ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" />}
+>>>>>>> main
                 </h2>
               )}
             </div>
@@ -399,7 +492,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 <div>
                   <label className="label">Description</label>
                   <textarea
-                    defaultValue={task.description}
+                    defaultValue={currentTask.description}
                     onBlur={e => { void persistTaskUpdate({ description: e.target.value }, 'Description update failed'); }}
                     placeholder="Add a description..."
                     className="input h-auto min-h-[80px] py-2 resize-none"
@@ -407,7 +500,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   />
                 </div>
 
-                {(task.status === 'done' || completionReview?.completedAt) && (
+                {(currentTask.status === 'done' || completionReview?.completedAt) && (
                   <div>
                     <div className="mb-2 flex items-center justify-between">
                       <label className="label mb-0">Completion Remark</label>
@@ -448,7 +541,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   </div>
                 )}
 
-                {(task.status === 'done' || completionReview?.reviewedAt || completionReview?.reviewRemark) && (
+                {(currentTask.status === 'done' || completionReview?.reviewedAt || completionReview?.reviewRemark) && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="label mb-0">Review</label>
@@ -488,7 +581,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                         Add Item
                       </button>
                     </div>
-                    {canReview && task.status === 'done' && (
+                    {canReview && currentTask.status === 'done' && (
                       <div className="mt-3 space-y-3">
                         <div>
                           <label className="label">Rating</label>
@@ -527,6 +620,32 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
+<<<<<<< dev-dhiren
+                    <label className="label mb-0">Subtasks</label>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <input
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleAddSubtask();
+                        }
+                      }}
+                      placeholder="Add a subtask..."
+                      className="input h-9 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { void handleAddSubtask(); }}
+                      disabled={!newSubtaskTitle.trim() || addingSubtask}
+                      className="btn-ghost btn-sm text-xs disabled:opacity-50"
+                    >
+                      <Plus size={12} />
+                      {addingSubtask ? 'Adding...' : 'Add'}
+                    </button>
+=======
                     <div className="flex items-center gap-2">
                       <label className="label mb-0">Subtasks</label>
                       {totalSubtasks > 0 && (
@@ -546,6 +665,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                         Add
                       </button>
                     )}
+>>>>>>> main
                   </div>
 
                   {totalSubtasks > 0 && (
@@ -565,6 +685,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   )}
 
                   <div className="space-y-1.5">
+<<<<<<< dev-dhiren
+                    {(currentTask.subtasks || []).map(sub => (
+                      <div key={sub.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-50 dark:bg-surface-800 border border-surface-100 dark:border-surface-700">
+                        <input
+                          type="checkbox"
+                          checked={sub.isCompleted}
+                          onChange={() => { void handleToggleSubtask(sub.id, sub.isCompleted); }}
+                          className="rounded"
+                        />
+                        <span className={cn('text-sm flex-1', sub.isCompleted && 'line-through text-surface-400')}>{sub.title}</span>
+                      </div>
+                    ))}
+                    {(!currentTask.subtasks || currentTask.subtasks.length === 0) && <p className="text-sm text-surface-400 italic">No subtasks yet</p>}
+=======
                     {isAddingSubtask && (
                       <div className="flex items-center gap-2 p-1.5 rounded-xl border border-brand-500/30 bg-brand-50/10 dark:bg-brand-500/5 mb-3">
                         <input 
@@ -601,6 +735,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                          <p className="text-sm text-surface-400 italic">No subtasks yet. Break it down!</p>
                       </div>
                     )}
+>>>>>>> main
                   </div>
                 </div>
 
@@ -623,9 +758,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                       {isUploading ? 'Uploading...' : 'Upload'}
                     </button>
                   </div>
-                  {(task.attachments || []).length > 0 && (
+                  {(currentTask.attachments || []).length > 0 && (
                     <div className="space-y-2 mb-4">
-                      {(task.attachments || []).map((att) => (
+                      {(currentTask.attachments || []).map((att) => (
                         <a key={att.id} href={att.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-2 bg-white dark:bg-surface-800 rounded-xl border border-surface-100 dark:border-surface-700 text-xs hover:border-brand-500 transition-colors">
                           <span className="flex items-center gap-2 min-w-0">
                             <span className="w-6 h-6 rounded bg-brand-50 dark:bg-brand-900/40 flex items-center justify-center text-brand-600 dark:text-brand-400 flex-shrink-0 font-medium">{att.name[0].toUpperCase()}</span>
@@ -699,7 +834,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           <div>
             <label className="label">Status</label>
             <div className="relative">
-              <select value={task.status} onChange={e => { void persistTaskUpdate({ status: e.target.value as TaskStatus }, 'Status update failed'); }} className="input pr-8 appearance-none">
+              <select value={currentTask.status} onChange={e => { void persistTaskUpdate({ status: e.target.value as TaskStatus }, 'Status update failed'); }} className="input pr-8 appearance-none">
                 {Object.entries(STATUS_CONFIG).map(([key, val]) => (
                   <option key={key} value={key}>{val.label}</option>
                 ))}
@@ -709,6 +844,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           </div>
 
           <div>
+<<<<<<< dev-dhiren
+            <label className="label">Priority</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {(Object.entries(PRIORITY_CONFIG) as [Priority, typeof PRIORITY_CONFIG.low][]).map(([key, cfg]) => (
+                <button key={key} onClick={() => { void persistTaskUpdate({ priority: key }, 'Priority update failed'); }} className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border', currentTask.priority === key ? `${cfg.bg} ${cfg.text} border-current` : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300')}>
+                  <Flag size={10} style={{ color: cfg.color }} />
+                  {cfg.label}
+=======
             <div className="flex items-center justify-between mb-2">
               <label className="label mb-0">Priority</label>
               {!isEditingPriority && canManageTask && (
@@ -717,6 +860,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   className="p-1 rounded-md text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 transition-colors"
                 >
                   <Edit3 size={13} />
+>>>>>>> main
                 </button>
               )}
             </div>
@@ -755,7 +899,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
 
           <div>
             <label className="label">Assignees</label>
-            <div className="space-y-1.5">
+            <div ref={assigneeRef} className="space-y-1.5 relative">
               {assignees.map(u => (
                 <div key={u.id} className="flex items-center gap-2 py-1">
                   <UserAvatar name={u.name} color={u.color} size="xs" />
@@ -763,6 +907,49 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 </div>
               ))}
               {assignees.length === 0 && <p className="text-xs text-surface-400">Unassigned</p>}
+<<<<<<< dev-dhiren
+              <button
+                type="button"
+                onClick={() => setAssigneeOpen((prev) => !prev)}
+                className="btn-ghost btn-sm text-xs mt-1"
+              >
+                <Users size={12} />
+                Assign
+              </button>
+              {assigneeOpen && (
+                <div className="mt-2 rounded-2xl border border-surface-200 bg-white p-3 shadow-lg dark:border-surface-700 dark:bg-surface-900">
+                  <input
+                    value={assigneeQuery}
+                    onChange={(e) => setAssigneeQuery(e.target.value)}
+                    placeholder="Search assignees..."
+                    className="input h-9 text-sm mb-2"
+                  />
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {filteredAssignableUsers.map((candidate) => {
+                      const checked = currentTask.assigneeIds.includes(candidate.id);
+                      return (
+                        <label key={candidate.id} className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => { void toggleAssignee(candidate.id); }}
+                            className="rounded"
+                          />
+                          <UserAvatar name={candidate.name} color={candidate.color} size="xs" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-surface-700 dark:text-surface-200 truncate">{candidate.name}</p>
+                            <p className="text-[10px] text-surface-400 truncate">{candidate.jobTitle || candidate.email}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                    {filteredAssignableUsers.length === 0 && (
+                      <p className="px-2 py-3 text-xs text-surface-400">No team members match this search.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+=======
               
               <div className="relative">
                 {canManageTask && (
@@ -805,6 +992,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   </div>
                 )}
               </div>
+>>>>>>> main
             </div>
           </div>
 
@@ -822,20 +1010,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
             <label className="label">Due Date</label>
             <div className={cn('flex items-center gap-2 text-sm', isOverdue ? 'text-rose-500' : 'text-surface-600 dark:text-surface-400')}>
               <Calendar size={14} />
-              {task.dueDate ? (
-                <span>{formatDate(task.dueDate)}{isOverdue && <AlertTriangle size={12} className="inline ml-1" />}</span>
+              {currentTask.dueDate ? (
+                <span>{formatDate(currentTask.dueDate)}{isOverdue && <AlertTriangle size={12} className="inline ml-1" />}</span>
               ) : (
                 <span className="text-surface-400">No due date</span>
               )}
             </div>
           </div>
 
-          {task.estimatedHours && (
+          {currentTask.estimatedHours && (
             <div>
               <label className="label">Time Estimate</label>
               <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
                 <Clock size={14} />
-                <span>{task.estimatedHours}h estimated</span>
+                <span>{currentTask.estimatedHours}h estimated</span>
               </div>
             </div>
           )}
@@ -843,13 +1031,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           <div>
             <label className="label">Labels</label>
             <div className="flex flex-wrap gap-1.5">
-              {(task.labels || []).map(label => (
+              {(currentTask.labels || []).map(label => (
                 <span key={label} className="badge-gray text-[11px]">
                   <Tag size={9} />
                   {label}
                 </span>
               ))}
-              {(!task.labels || task.labels.length === 0) && <p className="text-xs text-surface-400">No labels</p>}
+              {(!currentTask.labels || currentTask.labels.length === 0) && <p className="text-xs text-surface-400">No labels</p>}
               <button className="badge text-[11px] bg-surface-100 dark:bg-surface-800 text-surface-500 hover:bg-surface-200 transition-colors">
                 <Plus size={9} />
               </button>
@@ -857,8 +1045,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           </div>
 
           <div className="text-[11px] text-surface-400 pt-2 border-t border-surface-100 dark:border-surface-800">
-            <p>Created {formatRelativeTime(task.createdAt)}</p>
-            <p>Updated {formatRelativeTime(task.updatedAt)}</p>
+            <p>Created {formatRelativeTime(currentTask.createdAt)}</p>
+            <p>Updated {formatRelativeTime(currentTask.updatedAt)}</p>
             {completionReview?.completedAt && <p>Completed {formatRelativeTime(completionReview.completedAt)}</p>}
             {completionReview?.reviewedAt && <p>Reviewed {formatRelativeTime(completionReview.reviewedAt)}</p>}
             {completionReview?.rating ? <p>Rating {completionReview.rating}/5</p> : null}

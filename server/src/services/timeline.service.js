@@ -356,6 +356,14 @@ async function ensureTimelineDoc({ ProjectTimeline, projectId, userId }) {
   return timeline;
 }
 
+export async function initializeProjectPlanning({ companyId, workspaceId, project, userId }) {
+  const { Phase, ProjectTimeline } = await getTenantModels(companyId);
+  await Promise.all([
+    ensureTimelineDoc({ ProjectTimeline, projectId: project._id, userId }),
+    bootstrapPhases({ companyId, workspaceId, project, Phase }),
+  ]);
+}
+
 export async function getProjectTimeline({ companyId, workspaceId, projectId, userId }) {
   const { Project, Task, Phase, ProjectTimeline } = await getTenantModels(companyId);
   const project = await Project.findOne({ _id: projectId, tenantId: companyId, workspaceId });

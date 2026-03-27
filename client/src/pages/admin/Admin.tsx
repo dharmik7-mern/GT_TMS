@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, Crown, BarChart3, Plus, Search,
   MoreHorizontal, Check, X, Trash2, Edit3, Globe, Shield,
@@ -108,6 +109,7 @@ function parseUsersCsv(content: string) {
 
 // ─── Workspaces Admin ─────────────────────────────────────────────────────────
 export const AdminWorkspacesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const { workspaces, users } = useAppStore();
   const filtered = workspaces.filter(w => w.name.toLowerCase().includes(search.toLowerCase()));
@@ -135,15 +137,30 @@ export const AdminWorkspacesPage: React.FC = () => {
           { label: 'Active Users', value: users.filter(u => u.isActive).length, color: '#10b981', icon: <Users size={18} /> },
           { label: 'Pro/Enterprise', value: workspaces.filter(w => w.plan !== 'free').length, color: '#7c3aed', icon: <Crown size={18} /> },
           { label: 'MRR', value: '—', color: '#f59e0b', icon: <TrendingUp size={18} /> },
-        ].map((stat, i) => (
-          <motion.div key={stat.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="card p-4">
+        ].map((stat, i) => {
+          const destinations: Record<string, string> = {
+            'Total Workspaces': '/admin/workspaces',
+            'Active Users': '/admin/users',
+            'Pro/Enterprise': '/admin/workspaces',
+            'MRR': '/admin/billing',
+          };
+          return (
+          <motion.button
+            type="button"
+            key={stat.label}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            onClick={() => navigate(destinations[stat.label] || '/admin/workspaces')}
+            className="card p-4 text-left cursor-pointer hover:shadow-card-hover transition-all"
+          >
             <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: `${stat.color}15` }}>
               <div style={{ color: stat.color }}>{stat.icon}</div>
             </div>
             <p className="font-display font-bold text-2xl text-surface-900 dark:text-white">{stat.value}</p>
             <p className="text-xs text-surface-400">{stat.label}</p>
-          </motion.div>
-        ))}
+          </motion.button>
+        )})}
       </div>
 
       {/* Search */}

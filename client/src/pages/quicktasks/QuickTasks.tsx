@@ -184,6 +184,18 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'overdue', label: 'Overdue' },
 ];
 
+const STATUS_CARDS: Array<{
+  value: StatusFilter;
+  label: string;
+  tone: string;
+}> = [
+  { value: 'all', label: 'All Tasks', tone: 'text-surface-900 dark:text-surface-100' },
+  { value: 'todo', label: 'To Do', tone: 'text-amber-600 dark:text-amber-300' },
+  { value: 'in_progress', label: 'In Progress', tone: 'text-blue-600 dark:text-blue-300' },
+  { value: 'done', label: 'Done', tone: 'text-emerald-600 dark:text-emerald-300' },
+  { value: 'overdue', label: 'Overdue', tone: 'text-rose-600 dark:text-rose-300' },
+];
+
 function isOverdue(task: QuickTask) {
   return !!task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
 }
@@ -368,6 +380,46 @@ export const QuickTasksPage: React.FC = () => {
 
       <Tabs value={scope} onValueChange={(v) => setScope(v as ScopeFilter)} items={scopeTabs} variant="pill" className="mb-5">
         <TabsContent value={scope} className="mt-4">
+          <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 xl:grid-cols-5">
+            {STATUS_CARDS.map((card) => {
+              const count =
+                card.value === 'all' ? counts.total :
+                card.value === 'todo' ? counts.todo :
+                card.value === 'in_progress' ? counts.in_progress :
+                card.value === 'done' ? counts.done :
+                counts.overdue;
+
+              const isActive = status === card.value;
+
+              return (
+                <button
+                  key={card.value}
+                  type="button"
+                  onClick={() => setStatus(card.value)}
+                  className={cn(
+                    'card p-4 text-left transition-all border',
+                    isActive
+                      ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
+                      : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+                  )}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wider text-surface-400">{card.label}</p>
+                  <div className="mt-2 flex items-end justify-between gap-3">
+                    <p className={cn('text-3xl font-display font-bold', card.tone)}>{count}</p>
+                    <span
+                      className={cn(
+                        'text-xs font-medium',
+                        isActive ? 'text-brand-600 dark:text-brand-300' : 'text-surface-400'
+                      )}
+                    >
+                      {isActive ? 'Showing' : 'View'}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <div className="relative flex-1 min-w-[220px]">
               <input

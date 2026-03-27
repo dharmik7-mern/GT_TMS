@@ -21,6 +21,8 @@ const teamCreateSchema = z.object({
 
 router.get('/', TeamsController.list);
 router.post('/', validateBody(teamCreateSchema), TeamsController.create);
+router.put('/:id', validateBody(teamCreateSchema.partial()), TeamsController.update);
+router.delete('/:id', TeamsController.remove);
 
 export default router;
 

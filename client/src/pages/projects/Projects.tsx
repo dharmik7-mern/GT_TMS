@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import {
   Plus, Search, LayoutGrid, List, SortAsc,
-  FolderKanban, Calendar, MoreVertical, Trash2, Edit3, Archive, ChevronDown
+  FolderKanban, Calendar, MoreVertical, Trash2, Edit3, Archive, ChevronDown, Upload
 } from 'lucide-react';
 import { cn, formatDate, getProgressColor } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
@@ -15,9 +15,79 @@ import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar, EmptyState, Dropdown } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import type { Project, ProjectStatus, ProjectSdlcPhase } from '../../app/types';
+import type {
+  Priority,
+  Project,
+  ProjectImportResult,
+  ProjectImportRow,
+  ProjectStatus,
+  ProjectSdlcPhase,
+  TaskStatus,
+} from '../../app/types';
 import { projectsService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
+
+const PROJECT_IMPORT_TEMPLATE_HEADERS = [
+  'projectKey',
+  'projectName',
+  'projectDescription',
+  'projectStatus',
+  'projectDepartment',
+  'projectColor',
+  'memberNames',
+  'memberEmails',
+  'reportingPersonNames',
+  'reportingPersonEmails',
+  'startDate',
+  'endDate',
+  'budget',
+  'budgetCurrency',
+  'sdlcPlan',
+  'taskTitle',
+  'taskDescription',
+  'taskStatus',
+  'taskPriority',
+  'taskAssigneeNames',
+  'taskAssigneeEmails',
+  'taskStartDate',
+  'taskDurationDays',
+  'taskEstimatedHours',
+  'taskPhase',
+  'taskSubtasks',
+];
+
+const PROJECT_IMPORT_HEADER_ALIASES: Record<string, string[]> = {
+  projectKey: ['projectkey', 'projectgroup', 'groupkey', 'batchkey'],
+  projectName: ['projectname', 'name', 'projecttitle'],
+  projectDescription: ['projectdescription', 'description', 'projectdetails'],
+  projectStatus: ['projectstatus', 'status'],
+  projectDepartment: ['projectdepartment', 'department'],
+  projectColor: ['projectcolor', 'color'],
+  memberNames: ['membernames', 'members', 'projectmembers', 'assignedmembers'],
+  memberEmails: ['memberemails', 'memberemail', 'projectmemberemails'],
+  reportingPersonNames: ['reportingpersonnames', 'reportingpersons', 'reporters', 'projectreporters'],
+  reportingPersonEmails: ['reportingpersonemails', 'reportingpersonemail', 'reporteremails'],
+  startDate: ['startdate', 'projectstartdate'],
+  endDate: ['enddate', 'duedate', 'projectenddate'],
+  budget: ['budget', 'projectbudget'],
+  budgetCurrency: ['budgetcurrency', 'currency'],
+  sdlcPlan: ['sdlcplan', 'projectplan', 'phasesplan'],
+  taskTitle: ['tasktitle', 'taskname', 'title'],
+  taskDescription: ['taskdescription', 'taskdetails'],
+  taskStatus: ['taskstatus'],
+  taskPriority: ['taskpriority', 'priority'],
+  taskAssigneeNames: ['taskassigneenames', 'assigneenames', 'taskassignees', 'assignees'],
+  taskAssigneeEmails: ['taskassigneeemails', 'assigneeemails', 'taskassigneeemail'],
+  taskStartDate: ['taskstartdate'],
+  taskDurationDays: ['taskdurationdays', 'durationdays'],
+  taskEstimatedHours: ['taskestimatedhours', 'estimatedhours'],
+  taskPhase: ['taskphase', 'phase'],
+  taskSubtasks: ['tasksubtasks', 'subtasks', 'checklist'],
+};
+
+const VALID_PROJECT_IMPORT_STATUSES: ProjectStatus[] = ['active', 'on_hold', 'completed', 'archived'];
+const VALID_PROJECT_IMPORT_TASK_STATUSES: TaskStatus[] = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'];
+const VALID_PROJECT_IMPORT_PRIORITIES: Priority[] = ['low', 'medium', 'high', 'urgent'];
 const STATUS_FILTERS: { value: ProjectStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'active', label: 'Active' },
@@ -53,6 +123,216 @@ const DEFAULT_SDLC_PLAN: ProjectSdlcPhase[] = [
   { name: 'Deployment', durationDays: 2, notes: '' },
   { name: 'Maintenance', durationDays: 3, notes: '' },
 ];
+
+function normalizeHeader(value: string) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function normalizeProjectStatusValue(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return normalized || 'active';
+}
+
+function normalizeTaskStatusValue(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) return 'todo';
+  if (normalized === 'completed') return 'done';
+  return normalized;
+}
+
+function normalizePriorityValue(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return normalized || 'medium';
+}
+
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      values.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values.map((value) => value.replace(/^"|"$/g, '').trim());
+}
+
+function parseProjectsCsv(content: string) {
+  const sanitized = content.replace(/^\uFEFF/, '');
+  const lines = sanitized
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return {
+      rows: [] as ProjectImportRow[],
+      parseErrors: ['The file must contain a header row and at least one project or task row.'],
+    };
+  }
+
+  const headers = parseCsvLine(lines[0]).map((header) => header.trim());
+  const normalizedHeaders = headers.map((header) => normalizeHeader(header));
+  const headerKeyMap = normalizedHeaders.reduce<Record<string, string>>((acc, normalized, index) => {
+    acc[normalized] = headers[index];
+    return acc;
+  }, {});
+
+  const resolveHeader = (canonicalKey: keyof typeof PROJECT_IMPORT_HEADER_ALIASES) => {
+    const aliases = PROJECT_IMPORT_HEADER_ALIASES[canonicalKey];
+    const match = aliases.find((alias) => headerKeyMap[alias]);
+    return match ? headerKeyMap[match] : undefined;
+  };
+
+  const mappedHeaders = {
+    projectKey: resolveHeader('projectKey'),
+    projectName: resolveHeader('projectName'),
+    projectDescription: resolveHeader('projectDescription'),
+    projectStatus: resolveHeader('projectStatus'),
+    projectDepartment: resolveHeader('projectDepartment'),
+    projectColor: resolveHeader('projectColor'),
+    memberNames: resolveHeader('memberNames'),
+    memberEmails: resolveHeader('memberEmails'),
+    reportingPersonNames: resolveHeader('reportingPersonNames'),
+    reportingPersonEmails: resolveHeader('reportingPersonEmails'),
+    startDate: resolveHeader('startDate'),
+    endDate: resolveHeader('endDate'),
+    budget: resolveHeader('budget'),
+    budgetCurrency: resolveHeader('budgetCurrency'),
+    sdlcPlan: resolveHeader('sdlcPlan'),
+    taskTitle: resolveHeader('taskTitle'),
+    taskDescription: resolveHeader('taskDescription'),
+    taskStatus: resolveHeader('taskStatus'),
+    taskPriority: resolveHeader('taskPriority'),
+    taskAssigneeNames: resolveHeader('taskAssigneeNames'),
+    taskAssigneeEmails: resolveHeader('taskAssigneeEmails'),
+    taskStartDate: resolveHeader('taskStartDate'),
+    taskDurationDays: resolveHeader('taskDurationDays'),
+    taskEstimatedHours: resolveHeader('taskEstimatedHours'),
+    taskPhase: resolveHeader('taskPhase'),
+    taskSubtasks: resolveHeader('taskSubtasks'),
+  };
+
+  const missingHeaders = ['projectKey', 'projectName']
+    .filter((header) => !mappedHeaders[header as keyof typeof mappedHeaders]);
+
+  if (missingHeaders.length > 0) {
+    return {
+      rows: [] as ProjectImportRow[],
+      parseErrors: [`Missing required columns: ${missingHeaders.join(', ')}`],
+    };
+  }
+
+  const rows: ProjectImportRow[] = [];
+  const parseErrors: string[] = [];
+
+  for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+    const values = parseCsvLine(lines[lineIndex]);
+    const record = headers.reduce<Record<string, string>>((acc, header, index) => {
+      acc[header] = values[index] ?? '';
+      return acc;
+    }, {});
+
+    const projectKey = mappedHeaders.projectKey ? record[mappedHeaders.projectKey]?.trim() || '' : '';
+    const projectName = mappedHeaders.projectName ? record[mappedHeaders.projectName]?.trim() || '' : '';
+
+    if (!projectKey && !projectName) continue;
+
+    if (!projectKey || !projectName) {
+      parseErrors.push(`Row ${lineIndex + 1}: projectKey and projectName are required.`);
+      continue;
+    }
+
+    const projectStatus = normalizeProjectStatusValue(mappedHeaders.projectStatus ? record[mappedHeaders.projectStatus] : '');
+    const taskStatus = normalizeTaskStatusValue(mappedHeaders.taskStatus ? record[mappedHeaders.taskStatus] : '');
+    const taskPriority = normalizePriorityValue(mappedHeaders.taskPriority ? record[mappedHeaders.taskPriority] : '');
+    const budgetValue = mappedHeaders.budget ? record[mappedHeaders.budget]?.trim() || '' : '';
+    const durationValue = mappedHeaders.taskDurationDays ? record[mappedHeaders.taskDurationDays]?.trim() || '' : '';
+    const estimatedHoursValue = mappedHeaders.taskEstimatedHours ? record[mappedHeaders.taskEstimatedHours]?.trim() || '' : '';
+
+    if (!VALID_PROJECT_IMPORT_STATUSES.includes(projectStatus as ProjectStatus)) {
+      parseErrors.push(`Row ${lineIndex + 1}: projectStatus must be one of ${VALID_PROJECT_IMPORT_STATUSES.join(', ')}.`);
+      continue;
+    }
+
+    if (mappedHeaders.taskStatus && record[mappedHeaders.taskStatus]?.trim() && !VALID_PROJECT_IMPORT_TASK_STATUSES.includes(taskStatus as TaskStatus)) {
+      parseErrors.push(`Row ${lineIndex + 1}: taskStatus must be one of ${VALID_PROJECT_IMPORT_TASK_STATUSES.join(', ')}.`);
+      continue;
+    }
+
+    if (mappedHeaders.taskPriority && record[mappedHeaders.taskPriority]?.trim() && !VALID_PROJECT_IMPORT_PRIORITIES.includes(taskPriority as Priority)) {
+      parseErrors.push(`Row ${lineIndex + 1}: taskPriority must be one of ${VALID_PROJECT_IMPORT_PRIORITIES.join(', ')}.`);
+      continue;
+    }
+
+    if (budgetValue && Number.isNaN(Number(budgetValue))) {
+      parseErrors.push(`Row ${lineIndex + 1}: budget must be a number.`);
+      continue;
+    }
+
+    if (durationValue && Number.isNaN(Number(durationValue))) {
+      parseErrors.push(`Row ${lineIndex + 1}: taskDurationDays must be a number.`);
+      continue;
+    }
+
+    if (estimatedHoursValue && Number.isNaN(Number(estimatedHoursValue))) {
+      parseErrors.push(`Row ${lineIndex + 1}: taskEstimatedHours must be a number.`);
+      continue;
+    }
+
+    rows.push({
+      rowNumber: lineIndex + 1,
+      projectKey,
+      projectName,
+      projectDescription: mappedHeaders.projectDescription ? record[mappedHeaders.projectDescription]?.trim() || '' : '',
+      projectStatus: projectStatus as ProjectStatus,
+      projectDepartment: mappedHeaders.projectDepartment ? record[mappedHeaders.projectDepartment]?.trim() || '' : '',
+      projectColor: mappedHeaders.projectColor ? record[mappedHeaders.projectColor]?.trim() || '' : '',
+      memberNames: mappedHeaders.memberNames ? record[mappedHeaders.memberNames]?.trim() || '' : '',
+      memberEmails: mappedHeaders.memberEmails ? record[mappedHeaders.memberEmails]?.trim() || '' : '',
+      reportingPersonNames: mappedHeaders.reportingPersonNames ? record[mappedHeaders.reportingPersonNames]?.trim() || '' : '',
+      reportingPersonEmails: mappedHeaders.reportingPersonEmails ? record[mappedHeaders.reportingPersonEmails]?.trim() || '' : '',
+      startDate: mappedHeaders.startDate ? record[mappedHeaders.startDate]?.trim() || '' : '',
+      endDate: mappedHeaders.endDate ? record[mappedHeaders.endDate]?.trim() || '' : '',
+      budget: budgetValue ? Number(budgetValue) : undefined,
+      budgetCurrency: mappedHeaders.budgetCurrency ? record[mappedHeaders.budgetCurrency]?.trim() || '' : '',
+      sdlcPlan: mappedHeaders.sdlcPlan ? record[mappedHeaders.sdlcPlan]?.trim() || '' : '',
+      taskTitle: mappedHeaders.taskTitle ? record[mappedHeaders.taskTitle]?.trim() || '' : '',
+      taskDescription: mappedHeaders.taskDescription ? record[mappedHeaders.taskDescription]?.trim() || '' : '',
+      taskStatus: taskStatus as TaskStatus,
+      taskPriority: taskPriority as Priority,
+      taskAssigneeNames: mappedHeaders.taskAssigneeNames ? record[mappedHeaders.taskAssigneeNames]?.trim() || '' : '',
+      taskAssigneeEmails: mappedHeaders.taskAssigneeEmails ? record[mappedHeaders.taskAssigneeEmails]?.trim() || '' : '',
+      taskStartDate: mappedHeaders.taskStartDate ? record[mappedHeaders.taskStartDate]?.trim() || '' : '',
+      taskDurationDays: durationValue ? Number(durationValue) : undefined,
+      taskEstimatedHours: estimatedHoursValue ? Number(estimatedHoursValue) : undefined,
+      taskPhase: mappedHeaders.taskPhase ? record[mappedHeaders.taskPhase]?.trim() || '' : '',
+      taskSubtasks: mappedHeaders.taskSubtasks ? record[mappedHeaders.taskSubtasks]?.trim() || '' : '',
+    });
+  }
+
+  return { rows, parseErrors };
+}
 
 const ProjectCard = React.forwardRef<HTMLDivElement, {
   project: Project;
@@ -203,12 +483,19 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
 
 export const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { projects, users, addProject, deleteProject, bootstrap } = useAppStore();
   const { user } = useAuthStore();
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>(() => {
+    const incoming = searchParams.get('status');
+    return incoming === 'active' || incoming === 'on_hold' || incoming === 'completed' || incoming === 'archived'
+      ? incoming
+      : 'all';
+  });
   const canManageProjects = user?.role !== 'team_member';
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all');
   const [showModal, setShowModal] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [selectedReportingPersons, setSelectedReportingPersons] = useState<string[]>([]);
@@ -216,10 +503,17 @@ export const ProjectsPage: React.FC = () => {
   const [reportingSearch, setReportingSearch] = useState('');
   const [sdlcPlan, setSdlcPlan] = useState<ProjectSdlcPhase[]>(DEFAULT_SDLC_PLAN);
   const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
+  const [importFileName, setImportFileName] = useState('');
+  const [importRows, setImportRows] = useState<ProjectImportRow[]>([]);
+  const [importParseErrors, setImportParseErrors] = useState<string[]>([]);
+  const [importResult, setImportResult] = useState<ProjectImportResult | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importServerError, setImportServerError] = useState('');
   const [view, setView] = useState<'grid' | 'list'>('grid'); // Added view state
   const { register, handleSubmit, reset, formState: { errors }, setValue, watch } = useForm<ProjectFormData>({
     defaultValues: { budgetCurrency: 'INR' }
   });
+  const canImportProjects = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
 
   const todayDate = new Date().toISOString().split('T')[0];
   const budgetCurrency = watch('budgetCurrency');
@@ -240,6 +534,12 @@ export const ProjectsPage: React.FC = () => {
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query));
   });
+  const availableAssignableUsers = filteredAssignableUsers.filter(
+    (candidate) => !selectedReportingPersons.includes(candidate.id)
+  );
+  const availableReportingUsers = filteredReportingUsers.filter(
+    (candidate) => !selectedMembers.includes(candidate.id)
+  );
 
   const totalPlannedDurationDays = sdlcPlan.reduce((sum, phase) => sum + (Number(phase.durationDays) || 0), 0);
 
@@ -258,6 +558,107 @@ export const ProjectsPage: React.FC = () => {
     setReportingSearch('');
     setSdlcPlan(DEFAULT_SDLC_PLAN);
     reset();
+  };
+
+  React.useEffect(() => {
+    const next = statusFilter === 'all' ? null : statusFilter;
+    const current = searchParams.get('status');
+    if ((current || null) === next) return;
+    const updatedParams = new URLSearchParams(searchParams);
+    if (next) updatedParams.set('status', next);
+    else updatedParams.delete('status');
+    setSearchParams(updatedParams, { replace: true });
+  }, [searchParams, setSearchParams, statusFilter]);
+
+  const resetImportState = () => {
+    setImportFileName('');
+    setImportRows([]);
+    setImportParseErrors([]);
+    setImportResult(null);
+    setIsImporting(false);
+    setImportServerError('');
+  };
+
+  const downloadImportTemplate = () => {
+    const sampleRows = [
+      PROJECT_IMPORT_TEMPLATE_HEADERS.join(','),
+      'website-redesign-1,Website Redesign,Company site refresh,active,Design,#3366FF,"Aarav Shah;Maya Roy",,"Priya Singh",,2026-04-01,2026-06-30,250000,INR,"Planning:3;Design:5;Development:12;Testing:4",Homepage Wireframes,Create homepage UI draft,todo,high,Maya Roy,,2026-04-01,3,16,Design,"Create layout;Review copy;Approve visuals"',
+      'website-redesign-1,Website Redesign,Company site refresh,active,Design,#3366FF,,,,,2026-04-01,2026-06-30,250000,INR,"Planning:3;Design:5;Development:12;Testing:4",Landing Page Build,Implement final landing page,in_progress,medium,"Aarav Shah;Dev Team Lead",,2026-04-05,6,32,Development,"Set up sections;Connect forms;QA check"',
+      'mobile-app-rollout,Mobile App Rollout,Launch v2 mobile app,on_hold,Product,#0F766E,,"owner@company.com","Product Head","head@company.com",2026-05-10,2026-08-20,500000,USD,"Planning:4;Development:20;Testing:8",Sprint Planning,Prepare sprint board,todo,medium,,"scrum@company.com",2026-05-10,2,8,Planning,"Backlog review;Capacity plan"',
+    ].join('\n');
+    const blob = new Blob([sampleRows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'project-import-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImportResult(null);
+    setImportServerError('');
+    setImportFileName(file.name);
+
+    const text = await file.text();
+    const parsed = parseProjectsCsv(text);
+    setImportRows(parsed.rows);
+    setImportParseErrors(parsed.parseErrors);
+  };
+
+  const handleBulkImport = async () => {
+    if (!importRows.length) return;
+    setIsImporting(true);
+    setImportResult(null);
+    setImportServerError('');
+    try {
+      const res = await projectsService.importBulk(importRows);
+      const result = (res.data?.data ?? res.data) as ProjectImportResult;
+      setImportResult(result);
+      await bootstrap();
+      emitSuccessToast(
+        `${result.createdCount} project${result.createdCount === 1 ? '' : 's'} and ${result.createdTaskCount} task${result.createdTaskCount === 1 ? '' : 's'} imported successfully.`,
+        'Import Completed'
+      );
+    } catch (error: any) {
+      const details = error?.response?.data?.error?.details;
+      const fieldErrors = details?.fieldErrors
+        ? Object.entries(details.fieldErrors).flatMap(([field, messages]) =>
+            Array.isArray(messages) ? messages.map((message) => `${field}: ${message}`) : []
+          )
+        : [];
+      const formErrors = Array.isArray(details?.formErrors) ? details.formErrors : [];
+      const message =
+        [...fieldErrors, ...formErrors].filter(Boolean).join(' | ') ||
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        'Import failed.';
+      setImportServerError(message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const toggleMemberSelection = (memberId: string, checked: boolean) => {
+    setSelectedMembers((prev) =>
+      checked ? Array.from(new Set([...prev, memberId])) : prev.filter((id) => id !== memberId)
+    );
+    if (checked) {
+      setSelectedReportingPersons((prev) => prev.filter((id) => id !== memberId));
+    }
+  };
+
+  const toggleReportingSelection = (memberId: string, checked: boolean) => {
+    setSelectedReportingPersons((prev) =>
+      checked ? Array.from(new Set([...prev, memberId])) : prev.filter((id) => id !== memberId)
+    );
+    if (checked) {
+      setSelectedMembers((prev) => prev.filter((id) => id !== memberId));
+    }
   };
 
   const onCreateProject = async (data: ProjectFormData) => {
@@ -349,11 +750,20 @@ export const ProjectsPage: React.FC = () => {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {canManageProjects && (
-            <button onClick={() => setShowModal(true)} className="btn-primary btn-sm px-4">
-              <Plus size={14} /> New Project
+          {canImportProjects && (
+            <button
+              onClick={() => {
+                resetImportState();
+                setImportOpen(true);
+              }}
+              className="btn-secondary btn-sm px-4"
+            >
+              <Upload size={14} /> Import
             </button>
           )}
+          <button onClick={() => setShowModal(true)} className="btn-primary btn-sm px-4">
+            <Plus size={14} /> New Project
+          </button>
           <div className="flex items-center bg-surface-100 dark:bg-surface-800 rounded-xl p-1">
             <button
               onClick={() => setView('grid')}
@@ -544,19 +954,13 @@ export const ProjectsPage: React.FC = () => {
               />
             </div>
             <div className="max-h-40 overflow-y-auto border border-surface-100 dark:border-surface-800 rounded-xl p-2 space-y-1">
-              {filteredAssignableUsers.map(u => (
+              {availableAssignableUsers.map(u => (
                 <label key={u.id} className="flex items-center gap-3 p-2 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg cursor-pointer transition-colors">
                   <input
                     type="checkbox"
                     className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
                     checked={selectedMembers.includes(u.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedMembers([...selectedMembers, u.id]);
-                      } else {
-                        setSelectedMembers(selectedMembers.filter(id => id !== u.id));
-                      }
-                    }}
+                    onChange={(e) => toggleMemberSelection(u.id, e.target.checked)}
                   />
                   <UserAvatar name={u.name} color={u.color} size="xs" />
                   <div className="flex-1 min-w-0">
@@ -565,7 +969,7 @@ export const ProjectsPage: React.FC = () => {
                   </div>
                 </label>
               ))}
-              {filteredAssignableUsers.length === 0 && <p className="p-2 text-xs text-surface-400">No employees match this search.</p>}
+              {availableAssignableUsers.length === 0 && <p className="p-2 text-xs text-surface-400">No employees match this search.</p>}
             </div>
           </div>
 
@@ -581,19 +985,13 @@ export const ProjectsPage: React.FC = () => {
               />
             </div>
             <div className="max-h-40 overflow-y-auto border border-surface-100 dark:border-surface-800 rounded-xl p-2 space-y-1">
-              {filteredReportingUsers.map(u => (
+              {availableReportingUsers.map(u => (
                 <label key={`reporting-${u.id}`} className="flex items-center gap-3 p-2 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg cursor-pointer transition-colors">
                   <input
                     type="checkbox"
                     className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
                     checked={selectedReportingPersons.includes(u.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedReportingPersons([...selectedReportingPersons, u.id]);
-                      } else {
-                        setSelectedReportingPersons(selectedReportingPersons.filter(id => id !== u.id));
-                      }
-                    }}
+                    onChange={(e) => toggleReportingSelection(u.id, e.target.checked)}
                   />
                   <UserAvatar name={u.name} color={u.color} size="xs" />
                   <div className="flex-1 min-w-0">
@@ -602,7 +1000,7 @@ export const ProjectsPage: React.FC = () => {
                   </div>
                 </label>
               ))}
-              {filteredReportingUsers.length === 0 && <p className="p-2 text-xs text-surface-400">No reporting persons match this search.</p>}
+              {availableReportingUsers.length === 0 && <p className="p-2 text-xs text-surface-400">No reporting persons match this search.</p>}
             </div>
           </div>
 
@@ -653,6 +1051,150 @@ export const ProjectsPage: React.FC = () => {
             <button type="submit" className="btn-primary btn-md flex-1">Create Project</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={importOpen}
+        onClose={() => {
+          setImportOpen(false);
+          resetImportState();
+        }}
+        title="Import Projects"
+        description="Upload an Excel-friendly CSV file to create projects with tasks, subtasks, assignees, and reporting persons."
+        size="lg"
+      >
+        <div className="p-4 sm:p-6 space-y-5">
+          <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50/70 p-5 dark:border-surface-700 dark:bg-surface-800/40">
+            <p className="text-sm font-semibold text-surface-800 dark:text-surface-100">Step 1: Prepare your file</p>
+            <p className="mt-1 text-xs text-surface-500">
+              Each row belongs to a project using `projectKey`. All rows with the same `projectKey` create one project and attach their tasks into it.
+              Duplicate `projectName` values are allowed. Users can be matched by full name, email, or employee ID. Use `taskSubtasks` like `Draft copy;Review QA;Publish`.
+            </p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={downloadImportTemplate} className="btn-secondary btn-md">
+                Download Template
+              </button>
+              <label className="btn-primary btn-md cursor-pointer">
+                Select CSV File
+                <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { void handleImportFile(e); }} />
+              </label>
+            </div>
+            {importFileName && (
+              <p className="mt-3 text-xs text-surface-400">Selected file: {importFileName}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <div className="card p-4">
+              <p className="text-xs uppercase tracking-wider text-surface-400">Rows Ready</p>
+              <p className="mt-1 text-2xl font-display font-bold text-surface-900 dark:text-surface-100">{importRows.length}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs uppercase tracking-wider text-surface-400">Project Groups</p>
+              <p className="mt-1 text-2xl font-display font-bold text-surface-900 dark:text-surface-100">
+                {new Set(importRows.map((row) => row.projectKey)).size}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs uppercase tracking-wider text-surface-400">Parse Errors</p>
+              <p className="mt-1 text-2xl font-display font-bold text-rose-500">{importParseErrors.length}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs uppercase tracking-wider text-surface-400">Template</p>
+              <p className="mt-1 text-sm font-medium text-surface-700 dark:text-surface-200">Excel-compatible CSV</p>
+            </div>
+          </div>
+
+          {importParseErrors.length > 0 && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/40 dark:bg-rose-950/20">
+              <p className="text-sm font-semibold text-rose-700 mb-2">Fix these rows before import</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                {importParseErrors.map((error, index) => (
+                  <p key={`${error}-${index}`} className="text-xs text-rose-600">{error}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {importServerError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/40 dark:bg-rose-950/20">
+              <p className="text-sm font-semibold text-rose-700 mb-2">Import request failed</p>
+              <p className="text-xs text-rose-600 whitespace-pre-wrap">{importServerError}</p>
+            </div>
+          )}
+
+          {importRows.length > 0 && (
+            <div className="rounded-2xl border border-surface-200 p-4 dark:border-surface-700">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-surface-800 dark:text-surface-100">Preview</p>
+                <p className="text-xs text-surface-400">Showing first {Math.min(importRows.length, 5)} rows</p>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-surface-400">
+                      <th className="pb-2 pr-4 font-semibold">Project Key</th>
+                      <th className="pb-2 pr-4 font-semibold">Project Name</th>
+                      <th className="pb-2 pr-4 font-semibold">Task</th>
+                      <th className="pb-2 pr-4 font-semibold">Assignees</th>
+                      <th className="pb-2 font-semibold">Reporting</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importRows.slice(0, 5).map((row) => (
+                      <tr key={`${row.projectKey}-${row.rowNumber}`} className="border-t border-surface-100 dark:border-surface-800">
+                        <td className="py-2 pr-4 text-surface-600 dark:text-surface-300">{row.projectKey}</td>
+                        <td className="py-2 pr-4 text-surface-800 dark:text-surface-100">{row.projectName}</td>
+                        <td className="py-2 pr-4 text-surface-600 dark:text-surface-300">{row.taskTitle || 'Project only row'}</td>
+                        <td className="py-2 pr-4 text-surface-500">{row.taskAssigneeNames || row.taskAssigneeEmails || row.memberNames || row.memberEmails || '-'}</td>
+                        <td className="py-2 text-surface-500">{row.reportingPersonNames || row.reportingPersonEmails || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {importResult && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <p className="text-sm font-semibold text-emerald-700">Import finished</p>
+              <p className="mt-1 text-xs text-emerald-700">
+                Created {importResult.createdCount} project{importResult.createdCount === 1 ? '' : 's'}, {importResult.createdTaskCount} task{importResult.createdTaskCount === 1 ? '' : 's'}, and recorded {importResult.failedCount} failure{importResult.failedCount === 1 ? '' : 's'}.
+              </p>
+              {importResult.failures.length > 0 && (
+                <div className="mt-3 max-h-40 space-y-1 overflow-y-auto pr-1">
+                  {importResult.failures.slice(0, 12).map((failure, index) => (
+                    <p key={`${failure.rowNumber}-${index}`} className="text-xs text-rose-600">
+                      Row {failure.rowNumber}: {failure.message}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setImportOpen(false);
+                resetImportState();
+              }}
+              className="btn-secondary btn-md flex-1"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!importRows.length || importParseErrors.length > 0 || isImporting}
+              onClick={() => { void handleBulkImport(); }}
+              className="btn-primary btn-md flex-1 disabled:opacity-50"
+            >
+              {isImporting ? 'Importing...' : 'Import Projects'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

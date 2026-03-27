@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Download, Filter, History, Search, Terminal, User, Zap } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { Table } from '../../components/ui';
 import { useAuthStore } from '../../context/authStore';
 import { activityService } from '../../services/api';
@@ -56,6 +57,18 @@ const LOG_TYPE_COLORS: Record<string, string> = {
   info: 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400',
 };
 
+const LOG_SUMMARY_CARDS: Array<{
+  label: string;
+  value: 'all' | 'create' | 'update' | 'delete' | 'info';
+  color: string;
+}> = [
+  { label: 'Visible Logs', value: 'all', color: 'text-surface-700' },
+  { label: 'Created', value: 'create', color: 'text-emerald-600' },
+  { label: 'Updated', value: 'update', color: 'text-brand-600' },
+  { label: 'Deleted', value: 'delete', color: 'text-rose-600' },
+  { label: 'Info', value: 'info', color: 'text-surface-500' },
+];
+
 function normalizeType(type: string) {
   const v = String(type || '').toLowerCase();
   if (v.includes('create')) return 'create';
@@ -88,11 +101,15 @@ function buildCsv(rows: ActivityLogRow[]) {
 }
 
 export const LogsPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
   const [logs, setLogs] = useState<ActivityLogRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState(() => {
+    const incoming = searchParams.get('type');
+    return ['all', 'create', 'update', 'delete', 'info'].includes(incoming || '') ? (incoming || 'all') : 'all';
+  });
   const [moduleFilter, setModuleFilter] = useState('all');
   const [daysFilter, setDaysFilter] = useState<number>(1);
   const [selectedLog, setSelectedLog] = useState<ActivityLogRow | null>(null);
@@ -132,7 +149,7 @@ export const LogsPage: React.FC = () => {
     return [...new Set(logs.map((item) => item.entityType).filter(Boolean))];
   }, [logs]);
 
-  const filteredLogs = useMemo(() => {
+  const queryFilteredLogs = useMemo(() => {
     const query = search.trim().toLowerCase();
     return logs.filter((item) => {
       const matchesQuery = !query || [
@@ -144,21 +161,26 @@ export const LogsPage: React.FC = () => {
         item.user?.role,
       ].some((value) => String(value || '').toLowerCase().includes(query));
 
-      const normalizedType = normalizeType(item.type);
-      const matchesType = typeFilter === 'all' || normalizedType === typeFilter;
       const matchesModule = moduleFilter === 'all' || item.entityType === moduleFilter;
 
-      return matchesQuery && matchesType && matchesModule;
+      return matchesQuery && matchesModule;
     });
-  }, [logs, search, typeFilter, moduleFilter]);
+  }, [logs, search, moduleFilter]);
 
   const summary = useMemo(() => {
-    return filteredLogs.reduce((acc, item) => {
+    return queryFilteredLogs.reduce((acc, item) => {
       acc.total += 1;
       acc[normalizeType(item.type)] += 1;
       return acc;
     }, { total: 0, create: 0, update: 0, delete: 0, info: 0 });
-  }, [filteredLogs]);
+  }, [queryFilteredLogs]);
+
+  const filteredLogs = useMemo(() => {
+    return queryFilteredLogs.filter((item) => {
+      const normalizedType = normalizeType(item.type);
+      return typeFilter === 'all' || normalizedType === typeFilter;
+    });
+  }, [queryFilteredLogs, typeFilter]);
 
   useEffect(() => {
     setSelectedLog((current) => {
@@ -167,6 +189,16 @@ export const LogsPage: React.FC = () => {
       return filteredLogs.find((item) => item.id === current.id) || filteredLogs[0];
     });
   }, [filteredLogs]);
+
+  useEffect(() => {
+    const next = typeFilter === 'all' ? null : typeFilter;
+    const current = searchParams.get('type');
+    if ((current || null) === next) return;
+    const updatedParams = new URLSearchParams(searchParams);
+    if (next) updatedParams.set('type', next);
+    else updatedParams.delete('type');
+    setSearchParams(updatedParams, { replace: true });
+  }, [searchParams, setSearchParams, typeFilter]);
 
   const exportLogs = () => {
     const csv = buildCsv(filteredLogs);
@@ -194,18 +226,36 @@ export const LogsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
-        {[
-          { label: 'Visible Logs', value: summary.total, color: 'text-surface-700' },
-          { label: 'Created', value: summary.create, color: 'text-emerald-600' },
-          { label: 'Updated', value: summary.update, color: 'text-brand-600' },
-          { label: 'Deleted', value: summary.delete, color: 'text-rose-600' },
-          { label: 'Info', value: summary.info, color: 'text-surface-500' },
-        ].map((item) => (
-          <div key={item.label} className="card p-4">
+        {LOG_SUMMARY_CARDS.map((item) => {
+          const count =
+            item.value === 'all' ? summary.total :
+            item.value === 'create' ? summary.create :
+            item.value === 'update' ? summary.update :
+            item.value === 'delete' ? summary.delete :
+            summary.info;
+          const isActive = typeFilter === item.value;
+
+          return (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => setTypeFilter(item.value)}
+            className={cn(
+              'card p-4 text-left transition-all border',
+              isActive
+                ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
+                : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+            )}
+          >
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">{item.label}</p>
-            <p className={cn('mt-2 text-2xl font-semibold', item.color)}>{item.value}</p>
-          </div>
-        ))}
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <p className={cn('text-2xl font-semibold', item.color)}>{count}</p>
+              <span className={cn('text-xs font-medium', isActive ? 'text-brand-600 dark:text-brand-300' : 'text-surface-400')}>
+                {isActive ? 'Showing' : 'View'}
+              </span>
+            </div>
+          </button>
+        )})}
       </div>
 
       <div className="card p-4 sm:p-5">

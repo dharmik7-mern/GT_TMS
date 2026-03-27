@@ -30,8 +30,53 @@ const projectCreateSchema = z.object({
 
 const projectUpdateSchema = projectCreateSchema.partial();
 
+const optionalTrimmedString = (max) =>
+  z.preprocess(
+    (value) => {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      return trimmed === '' ? undefined : trimmed;
+    },
+    z.string().max(max).optional()
+  );
+
+const importSchema = z.object({
+  rows: z.array(
+    z.object({
+      rowNumber: z.number().int().positive().optional(),
+      projectKey: z.string().trim().min(1).max(120),
+      projectName: z.string().trim().min(2).max(200),
+      projectDescription: optionalTrimmedString(4000),
+      projectStatus: z.enum(['active', 'on_hold', 'completed', 'archived']).optional(),
+      projectDepartment: optionalTrimmedString(120),
+      projectColor: optionalTrimmedString(32),
+      memberEmails: optionalTrimmedString(1000),
+      memberNames: optionalTrimmedString(1000),
+      reportingPersonEmails: optionalTrimmedString(1000),
+      reportingPersonNames: optionalTrimmedString(1000),
+      startDate: optionalTrimmedString(50),
+      endDate: optionalTrimmedString(50),
+      budget: z.number().min(0).optional(),
+      budgetCurrency: optionalTrimmedString(8),
+      sdlcPlan: optionalTrimmedString(2000),
+      taskTitle: optionalTrimmedString(300),
+      taskDescription: optionalTrimmedString(10000),
+      taskStatus: z.enum(['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done']).optional(),
+      taskPriority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+      taskAssigneeEmails: optionalTrimmedString(1000),
+      taskAssigneeNames: optionalTrimmedString(1000),
+      taskStartDate: optionalTrimmedString(50),
+      taskDurationDays: z.number().int().min(1).max(3650).optional(),
+      taskEstimatedHours: z.number().min(0).optional(),
+      taskPhase: optionalTrimmedString(120),
+      taskSubtasks: optionalTrimmedString(3000),
+    })
+  ).min(1).max(2000),
+});
+
 router.get('/', ProjectsController.list);
 router.post('/', validateBody(projectCreateSchema), ProjectsController.create);
+router.post('/import', validateBody(importSchema), ProjectsController.importBulk);
 router.get('/:id', ProjectsController.get);
 router.put('/:id', validateBody(projectUpdateSchema), ProjectsController.update);
 router.delete('/:id', ProjectsController.remove);

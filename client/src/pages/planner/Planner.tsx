@@ -94,6 +94,32 @@ const PlannerPage: React.FC = () => {
   return (
     <div className="h-[calc(100vh-60px)] overflow-hidden bg-white dark:bg-surface-950 flex flex-col font-sans -m-6">
       
+      {/* compact header */}
+      <header className="px-6 py-2.5 flex items-center justify-between border-b border-surface-100 dark:border-surface-900 bg-white dark:bg-surface-950 flex-shrink-0">
+        <div className="flex items-center gap-8">
+          <h1 className="text-xl font-semibold text-surface-900 dark:text-white flex-shrink-0">Planner</h1>
+          <div className="w-px h-4 bg-surface-200 dark:bg-surface-800" />
+          <PlannerStats
+            stats={stats}
+            onSelect={(nextFilter) => setFilter(nextFilter)}
+          />
+        </div>
+        
+        <button 
+          onClick={() => setShowPanel(!showPanel)}
+          className={cn(
+            "p-1.5 rounded-md transition-all",
+            showPanel ? "bg-brand-600 text-white shadow-sm shadow-brand-500/20" : "text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-900"
+          )}
+        >
+          <PanelRight size={18} />
+        </button>
+      </header>
+
+      {/* compact control bar */}
+      <div className="px-6 py-3 space-y-3 bg-surface-50/20 dark:bg-surface-900/10 border-b border-surface-100 dark:border-surface-800 flex-shrink-0">
+         <div className="flex items-center justify-between gap-4">
+            <div className="bg-white dark:bg-surface-900 p-0.5 rounded-lg flex items-center gap-0.5 border border-surface-100 dark:border-surface-800">
       {/* 1. Header Row */}
       <div className="px-6 py-4 flex items-center justify-between border-b border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-950 flex-shrink-0 gap-6">
          <div className="flex items-center gap-6">
