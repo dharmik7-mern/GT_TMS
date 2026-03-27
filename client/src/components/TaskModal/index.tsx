@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import {
@@ -13,7 +13,7 @@ import { useAuthStore } from '../../context/authStore';
 import { UserAvatar } from '../UserAvatar';
 import { Modal } from '../Modal';
 import { ReassignRequestModal } from '../ReassignRequestModal';
-import type { Activity, Task, Priority, TaskStatus, Comment } from '../../app/types';
+import type { Activity, Task, Priority, TaskStatus, Comment, User } from '../../app/types';
 import { tasksService, reassignService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 
@@ -88,73 +88,44 @@ function buildTaskTimeline(task: Task, comments: Comment[]) {
 export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => {
   const { tasks, updateTask, deleteTask, projects, users, bootstrap } = useAppStore();
   const { user } = useAuthStore();
-  const activeTask = task ? tasks.find((item) => item.id === task.id) || task : null;
+  
+  const currentTask = useMemo(() => {
+    if (!task) return null;
+    return tasks.find((item) => item.id === task.id) || task;
+  }, [task, tasks]);
+
   const [activeTab, setActiveTab] = useState<'details' | 'activity'>('details');
   const [editingTitle, setEditingTitle] = useState(false);
-  const [comments, setComments] = useState<Comment[]>(activeTask?.comments || []);
+  const [comments, setComments] = useState<Comment[]>(currentTask?.comments || []);
   const [newComment, setNewComment] = useState('');
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [assigneeQuery, setAssigneeQuery] = useState('');
-  const [completionChecklist, setCompletionChecklist] = useState<ChecklistItem[]>(parseChecklist(activeTask?.completionReview?.completionRemark));
-  const [reviewChecklist, setReviewChecklist] = useState<ChecklistItem[]>(parseChecklist(activeTask?.completionReview?.reviewRemark));
-  const [rating, setRating] = useState(activeTask?.completionReview?.rating || 0);
+  const [completionChecklist, setCompletionChecklist] = useState<ChecklistItem[]>(parseChecklist(currentTask?.completionReview?.completionRemark));
+  const [reviewChecklist, setReviewChecklist] = useState<ChecklistItem[]>(parseChecklist(currentTask?.completionReview?.reviewRemark));
+  const [rating, setRating] = useState(currentTask?.completionReview?.rating || 0);
   const [isUploading, setIsUploading] = useState(false);
+  const [isEditingPriority, setIsEditingPriority] = useState(false);
   const [isEditingAssignee, setIsEditingAssignee] = useState(false);
   const [isAddingLabel, setIsAddingLabel] = useState(false);
   const [labelInput, setLabelInput] = useState('');
   const [isReassigning, setIsReassigning] = useState(false);
   const [pendingReassign, setPendingReassign] = useState<any>(null);
+  
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const assigneeRef = React.useRef<HTMLDivElement>(null);
+  const { register, handleSubmit, reset } = useForm<{ title: string }>();
 
   useEffect(() => {
-    if (task?.id) {
+    if (currentTask?.id) {
        (async () => {
          try {
-           const res = await reassignService.getStatus(task.id);
+           const res = await reassignService.getStatus(currentTask.id);
            setPendingReassign(res.data.data);
          } catch { /* noop */ }
        })();
     }
-  }, [task?.id]);
-
-  if (!task) return null;
-
-  const project = projects.find(p => p.id === task.projectId);
-  const assignees = users.filter(u => task.assigneeIds.includes(u.id));
-  const reporter = users.find(u => u.id === task.reporterId);
-  const priority = PRIORITY_CONFIG[task.priority];
-  const statusCfg = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
-  const completionReview = task.completionReview;
-  const activityItems = buildTaskTimeline(task, comments);
-  
-  const totalSubtasks = (task.subtasks || []).length;
-  const completedSubtasks = (task.subtasks || []).filter(s => s.isCompleted).length;
-  const subtaskProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
-  const canReview = Boolean(
-    user && (
-      canManageTask ||
-      currentTask?.reporterId === user.id ||
-      project?.reportingPersonIds?.includes(user.id)
-    )
-  );
-  const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
-  const isReadOnly = !!pendingReassign && !canManageTask;
-  const completionReview = currentTask?.completionReview;
-  const priority = currentTask ? PRIORITY_CONFIG[currentTask.priority] : PRIORITY_CONFIG.medium;
-  const statusCfg = currentTask ? STATUS_CONFIG[currentTask.status] || STATUS_CONFIG.todo : STATUS_CONFIG.todo;
-  const isOverdue = Boolean(currentTask?.dueDate && new Date(currentTask.dueDate) < new Date() && currentTask.status !== 'done');
-  const assignableUsers = useMemo(() => {
-    const memberIds = new Set(project?.members || []);
-    return users.filter((item) => memberIds.has(item.id));
-  }, [project?.members, users]);
-  const filteredAssignableUsers = useMemo(() => {
-    const query = assigneeQuery.trim().toLowerCase();
-    if (!query) return assignableUsers;
-    return assignableUsers.filter((item) => [item.name, item.email, item.jobTitle, item.department].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
-  }, [assignableUsers, assigneeQuery]);
-  const activityItems = currentTask ? buildTaskTimeline(currentTask, comments) : [];
+  }, [currentTask?.id]);
 
   useEffect(() => {
     if (!currentTask) return;
@@ -164,17 +135,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
     setReviewChecklist(parseChecklist(currentTask.completionReview?.reviewRemark));
     setRating(currentTask.completionReview?.rating || 0);
   }, [currentTask, reset]);
-
-  useEffect(() => {
-    if (!assigneeOpen) return;
-    const handleOutside = (event: MouseEvent) => {
-      if (assigneeRef.current?.contains(event.target as Node)) return;
-      setAssigneeOpen(false);
-      setAssigneeQuery('');
-    };
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [assigneeOpen]);
 
   useEffect(() => {
     if (!open) {
@@ -187,7 +147,37 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!assigneeOpen) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (assigneeRef.current?.contains(event.target as Node)) return;
+      setAssigneeOpen(false);
+      setAssigneeQuery('');
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [assigneeOpen]);
+
   if (!currentTask) return null;
+
+  const project = projects.find(p => p.id === currentTask.projectId);
+  const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+  const assignees = users.filter(u => currentTask.assigneeIds.includes(u.id));
+  const reporter = users.find(u => u.id === currentTask.reporterId);
+  const priority = PRIORITY_CONFIG[currentTask.priority] || PRIORITY_CONFIG.medium;
+  const statusCfg = STATUS_CONFIG[currentTask.status] || STATUS_CONFIG.todo;
+  const isOverdue = Boolean(currentTask.dueDate && new Date(currentTask.dueDate) < new Date() && currentTask.status !== 'done');
+  const completionReview = currentTask.completionReview;
+  const activityItems = buildTaskTimeline(currentTask, comments);
+  const isReadOnly = !!(currentTask.isReassignPending || pendingReassign) && !canManageTask;
+
+  const canReview = Boolean(
+    user && (
+      canManageTask ||
+      currentTask.reporterId === user.id ||
+      project?.reportingPersonIds?.includes(user.id)
+    )
+  );
 
   const syncTask = async (request: () => Promise<any>, errorTitle: string, successMessage?: string) => {
     try {
@@ -199,6 +189,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
       const message = error?.response?.data?.error?.message || error?.response?.data?.message || 'Task update failed.';
       emitErrorToast(message, errorTitle);
     }
+  };
+
+  const persistTaskUpdate = async (updates: Partial<Task>, errorTitle = 'Task update failed') => {
+    await syncTask(() => tasksService.update(currentTask.id, updates), errorTitle);
   };
 
   const updateChecklistItem = (
@@ -276,44 +270,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 {canManageTask && <button onClick={() => { void (async () => { try { await tasksService.delete(currentTask.id); deleteTask(currentTask.id); await bootstrap(); emitSuccessToast('Task deleted successfully.', 'Task Deleted'); onClose(); } catch (error: any) { emitErrorToast(error?.response?.data?.message || 'Task could not be deleted.', 'Delete failed'); } })(); }} className="btn-ghost h-8 w-8 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"><Trash2 size={15} /></button>}
                 <button onClick={onClose} className="btn-ghost h-8 w-8"><X size={15} /></button>
               </div>
-
-              {editingTitle && canManageTask ? (
-                <form onSubmit={handleSubmit(data => {
-                  (async () => {
-                    await persistTaskUpdate({ title: data.title }, 'Title update failed');
-                    setEditingTitle(false);
-                  })();
-                })}>
-                  <input
-                    {...register('title', { value: task.title })}
-                    autoFocus
-                    className="input text-xl font-display font-semibold mb-0 h-auto py-1"
-                    onBlur={() => setEditingTitle(false)}
-                  />
-                </form>
-              ) : (
-                <h2 
-                  className={cn(
-                    "font-display font-semibold text-xl text-surface-900 dark:text-white leading-tight",
-                    canManageTask && "cursor-pointer hover:text-brand-700 dark:hover:text-brand-300 transition-colors group"
-                  )} 
-                  onClick={() => canManageTask && setEditingTitle(true)}
-                >
-                  {task.title}
-                  {canManageTask && <Edit3 size={14} className="inline ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" />}
-                </h2>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {canManageTask && (
-                <button onClick={handleDelete} className="btn-ghost w-8 h-8 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30">
-                  <Trash2 size={15} />
-                </button>
-              )}
-              <button onClick={onClose} className="btn-ghost w-8 h-8">
-                <X size={15} />
-              </button>
             </div>
           </div>
 
@@ -502,7 +458,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
             <div className="relative">
               <select
                   disabled={isReadOnly}
-                  value={task.status}
+                  value={currentTask.status}
                   onChange={(e) => persistTaskUpdate({ status: e.target.value as TaskStatus }, 'Status update failed')}
                   className={cn(
                     'bg-white dark:bg-surface-800 border rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 outline-none transition-all w-full flex items-center justify-between',
@@ -544,7 +500,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                     }} 
                     className={cn(
                       'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border', 
-                      task.priority === key 
+                      currentTask.priority === key 
                         ? `${cfg.bg} ${cfg.text} border-current ring-1 ring-current/20` 
                         : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300 bg-white dark:bg-surface-900'
                     )}
@@ -583,17 +539,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                     className="btn-ghost btn-sm text-xs mt-1"
                   >
                     <Users size={12} />
-                    {task.assigneeIds.length > 0 ? 'Change' : 'Assign'}
+                    {currentTask.assigneeIds.length > 0 ? 'Change' : 'Assign'}
                   </button>
                 )}
 
                 {!canManageTask && (
                   <div className="pt-1">
-                    {pendingReassign ? (
+                    {(currentTask.isReassignPending || pendingReassign) ? (
                       <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-3 py-1.5 rounded-lg border border-amber-100 dark:border-amber-900/40 mt-1">
                         <Clock size={12} />
                          <span>
-                           Reassigning to {users.find(u => u.id === task.requestedAssigneeId)?.name || (pendingReassign ? users.find(u => u.id === pendingReassign.requestedAssigneeId)?.name : '...')}
+                           Reassigning to {users.find(u => u.id === currentTask.requestedAssigneeId)?.name || (pendingReassign ? users.find(u => u.id === pendingReassign.requestedAssigneeId)?.name : '...')}
                          </span>
                       </div>
                     ) : (
@@ -615,7 +571,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                         <button
                           key={u.id}
                           onClick={async () => {
-                            const current = task.assigneeIds;
+                            const current = currentTask.assigneeIds;
                             const next = current.includes(u.id) 
                               ? current.filter(id => id !== u.id)
                               : [...current, u.id];
@@ -624,14 +580,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                           }}
                           className={cn(
                             "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left",
-                            task.assigneeIds.includes(u.id)
+                            currentTask.assigneeIds.includes(u.id)
                               ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
                               : "text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800"
                           )}
                         >
                           <UserAvatar name={u.name} color={u.color} size="xs" />
                           <span className="truncate flex-1">{u.name}</span>
-                          {task.assigneeIds.includes(u.id) && <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
+                          {currentTask.assigneeIds.includes(u.id) && <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
                         </button>
                       ))}
                     </div>
@@ -655,20 +611,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
             <label className="label">Due Date</label>
             <div className={cn('flex items-center gap-2 text-sm', isOverdue ? 'text-rose-500' : 'text-surface-600 dark:text-surface-400')}>
               <Calendar size={14} />
-              {task.dueDate ? (
-                <span>{formatDate(task.dueDate)}{isOverdue && <AlertTriangle size={12} className="inline ml-1" />}</span>
+              {currentTask.dueDate ? (
+                <span>{formatDate(currentTask.dueDate)}{isOverdue && <AlertTriangle size={12} className="inline ml-1" />}</span>
               ) : (
                 <span className="text-surface-400">No due date</span>
               )}
             </div>
           </div>
 
-          {task.estimatedHours && (
+          {currentTask.estimatedHours && (
             <div>
               <label className="label">Time Estimate</label>
               <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
                 <Clock size={14} />
-                <span>{task.estimatedHours}h estimated</span>
+                <span>{currentTask.estimatedHours}h estimated</span>
               </div>
             </div>
           )}
@@ -676,14 +632,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           <div>
             <label className="label">Labels</label>
             <div className="flex flex-wrap gap-1.5 items-center">
-              {(task.labels || []).map(label => (
+              {(currentTask.labels || []).map(label => (
                 <span key={label} className="badge-gray text-[11px] group relative">
                   <Tag size={9} />
                   {label}
                   {canManageTask && (
                     <button 
                       onClick={async () => {
-                        const next = (task.labels || []).filter(l => l !== label);
+                        const next = (currentTask.labels || []).filter(l => l !== label);
                         await persistTaskUpdate({ labels: next }, 'Label removal failed');
                       }}
                       className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -693,7 +649,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   )}
                 </span>
               ))}
-              {(!task.labels || task.labels.length === 0) && !isAddingLabel && <p className="text-xs text-surface-400">No labels</p>}
+              {(!currentTask.labels || currentTask.labels.length === 0) && !isAddingLabel && <p className="text-xs text-surface-400">No labels</p>}
               
               {isAddingLabel ? (
                 <div className="relative">
@@ -704,8 +660,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                     onKeyDown={async e => {
                       if (e.key === 'Enter') {
                         const trimmed = labelInput.trim();
-                        if (trimmed && !(task.labels || []).includes(trimmed)) {
-                          const next = [...(task.labels || []), trimmed];
+                        if (trimmed && !(currentTask.labels || []).includes(trimmed)) {
+                          const next = [...(currentTask.labels || []), trimmed];
                           await persistTaskUpdate({ labels: next }, 'Label addition failed');
                         }
                         setIsAddingLabel(false);
@@ -727,13 +683,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                     placeholder="New label..."
                   />
                   <div className="absolute left-0 top-full mt-1 z-40 w-32 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-xl p-1">
-                    {['ASAP', 'Feedback', 'Blocked', 'Follow-up'].filter(l => !(task.labels || []).includes(l)).map(l => (
+                    {['ASAP', 'Feedback', 'Blocked', 'Follow-up'].filter(l => !(currentTask.labels || []).includes(l)).map(l => (
                       <button
                         key={l}
                         type="button"
                         onMouseDown={e => e.preventDefault()} // prevent blur
                         onClick={async () => {
-                          const next = [...(task.labels || []), l];
+                          const next = [...(currentTask.labels || []), l];
                           await persistTaskUpdate({ labels: next }, 'Label addition failed');
                           setIsAddingLabel(false);
                         }}
@@ -749,7 +705,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   <button 
                     type="button"
                     onClick={() => {
-                        console.log('Plus button clicked');
                         setIsAddingLabel(true);
                     }}
                     className="badge text-[11px] bg-surface-100 dark:bg-surface-800 text-surface-500 hover:bg-surface-200 transition-colors flex items-center justify-center p-1 min-w-[20px]"
@@ -762,8 +717,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           </div>
 
           <div className="text-[11px] text-surface-400 pt-2 border-t border-surface-100 dark:border-surface-800">
-            <p>Created {formatRelativeTime(task.createdAt)}</p>
-            <p>Updated {formatRelativeTime(task.updatedAt)}</p>
+            <p>Created {formatRelativeTime(currentTask.createdAt)}</p>
+            <p>Updated {formatRelativeTime(currentTask.updatedAt)}</p>
             {completionReview?.completedAt && <p>Completed {formatRelativeTime(completionReview.completedAt)}</p>}
             {completionReview?.reviewedAt && <p>Reviewed {formatRelativeTime(completionReview.reviewedAt)}</p>}
             {completionReview?.rating ? <p>Rating {completionReview.rating}/5</p> : null}
@@ -773,13 +728,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
       <ReassignRequestModal 
         open={isReassigning}
         onClose={() => setIsReassigning(false)}
-        taskId={task.id}
-        taskTitle={task.title}
+        taskId={currentTask.id}
+        taskTitle={currentTask.title}
         onSubmitted={() => {
-           // Refresh global and local status
            bootstrap();
            (async () => {
-             const res = await reassignService.getStatus(task.id);
+             const res = await reassignService.getStatus(currentTask.id);
              setPendingReassign(res.data.data);
            })();
         }}

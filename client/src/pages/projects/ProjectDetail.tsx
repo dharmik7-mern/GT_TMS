@@ -55,7 +55,7 @@ export const ProjectDetailPage: React.FC = () => {
   const members = users.filter(u => project?.members.includes(u.id));
   const canCreateTask = user?.role !== 'team_member';
   const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
-  const assignableUsers = users.filter((u) => !project?.reportingPersonIds?.includes(u.id));
+  const assignableUsers = members.filter((u) => !project?.reportingPersonIds?.includes(u.id));
   const todayDate = new Date().toISOString().split('T')[0];
 
   const { register, handleSubmit, reset, setValue, watch } = useForm<TaskFormData>({
