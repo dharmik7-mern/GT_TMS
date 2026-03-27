@@ -246,6 +246,40 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
   return project;
 }
 
+export async function syncProjectStats(companyId, workspaceId, projectId) {
+  const { Project, Task } = await getTenantModels(companyId);
+  if (!projectId) return;
+
+  const tasks = await Task.find({ 
+    projectId, 
+    tenantId: companyId, 
+    workspaceId,
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }] 
+  }).select('status').lean();
+
+  const STATUS_WEIGHTS = {
+    backlog: 0,
+    todo: 0,
+    scheduled: 10,
+    in_progress: 50,
+    in_review: 90,
+    blocked: 0,
+    done: 100
+  };
+
+  const total = tasks.length;
+  const completed = tasks.filter((t) => t.status === 'done').length;
+  
+  const totalWeight = tasks.reduce((sum, t) => sum + (STATUS_WEIGHTS[t.status] || 0), 0);
+  const progress = total > 0 ? Math.round(totalWeight / total) : 0;
+
+  await Project.updateOne(
+    { _id: projectId, tenantId: companyId, workspaceId },
+    { $set: { tasksCount: total, completedTasksCount: completed, progress } }
+  );
+}
+
+
 export async function updateProject({ companyId, workspaceId, userId, projectId, updates }) {
   const tenantId = companyId;
   const { Project, ActivityLog } = await getTenantModels(companyId);

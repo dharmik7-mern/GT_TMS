@@ -53,7 +53,7 @@ export const ProjectDetailPage: React.FC = () => {
   const projectTasks = tasks.filter(t => t.projectId === id);
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const members = users.filter(u => project?.members.includes(u.id));
-  const canCreateTask = user?.role !== 'team_member';
+  const canCreateTask = user?.role !== 'team_member' || (project?.reportingPersonIds || []).includes(user?.id);
   const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
   const assignableUsers = members.filter((u) => !project?.reportingPersonIds?.includes(u.id));
   const todayDate = new Date().toISOString().split('T')[0];
@@ -205,6 +205,18 @@ export const ProjectDetailPage: React.FC = () => {
     }
   };
 
+
+
+  const handleMoveTaskRemote = async (taskId: string, status: TaskStatus) => {
+    try {
+      await tasksService.update(taskId, { status });
+      await bootstrap(); 
+    } catch (error: any) {
+      const message = error?.response?.data?.error?.message || error?.response?.data?.message || 'Movement failed';
+      emitErrorToast(message, 'Board sync error');
+    }
+  };
+
   const statusCounts = Object.keys(STATUS_CONFIG).reduce((acc, key) => {
     acc[key as TaskStatus] = projectTasks.filter(t => t.status === key).length;
     return acc;
@@ -314,6 +326,7 @@ export const ProjectDetailPage: React.FC = () => {
             onOpenTask={openTask} 
             onAddTask={canCreateTask ? handleAddTask : undefined} 
             onDeleteTask={canCreateTask ? handleDeleteTask : undefined} 
+            onMoveTaskRemote={handleMoveTaskRemote}
           />
         </TabsContent>
 
