@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { getTenantModels } from '../config/tenantDb.js';
 import { sendTemplatedEmailSafe } from './mail.service.js';
+import { syncProjectStats } from './project.service.js';
 
 function strId(x) {
   return x ? String(x) : '';
@@ -21,7 +22,11 @@ export async function getAccessibleProjectIds({ tenantId, workspaceId, userId, r
 
   for (const p of projects) {
     const pid = p._id;
-    if (strId(p.ownerId) === uid || (p.members || []).some((m) => strId(m) === uid)) {
+    if (
+      strId(p.ownerId) === uid || 
+      (p.members || []).some((m) => strId(m) === uid) ||
+      (p.reportingPersonIds || []).some((m) => strId(m) === uid)
+    ) {
       allowed.push(pid);
       continue;
     }
@@ -333,7 +338,6 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
       : [],
   });
 
-  await Project.updateOne({ _id: task.projectId, tenantId, workspaceId }, { $inc: { tasksCount: 1 } });
 
   await ActivityLog.create({
     tenantId,
@@ -364,9 +368,11 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
       assigneeIds: task.assigneeIds,
       actorId: userId,
       task,
-      projectName: project?.name || 'Untitled Project',
+    projectName: project?.name || 'Untitled Project',
     });
   }
+
+  await syncProjectStats(companyId, workspaceId, task.projectId);
 
   return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
 }
@@ -559,6 +565,8 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
+  await syncProjectStats(companyId, workspaceId, task.projectId);
+
   return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
 }
 
@@ -653,6 +661,8 @@ export async function reviewTaskCompletion({ companyId, workspaceId, userId, rol
     relatedId: task._id,
   });
 
+  await syncProjectStats(companyId, workspaceId, task.projectId);
+
   return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
 }
 
@@ -674,7 +684,6 @@ export async function deleteTask({ companyId, workspaceId, userId, role, taskId 
   const task = await Task.findOneAndDelete({ _id: taskId, tenantId, workspaceId });
   if (!task) return null;
 
-  await Project.updateOne({ _id: task.projectId, tenantId, workspaceId }, { $inc: { tasksCount: -1 } });
 
   await ActivityLog.create({
     tenantId,
@@ -686,6 +695,8 @@ export async function deleteTask({ companyId, workspaceId, userId, role, taskId 
     entityId: task._id,
     metadata: { projectId: task.projectId },
   });
+
+  await syncProjectStats(companyId, workspaceId, task.projectId);
 
   return task;
 }
