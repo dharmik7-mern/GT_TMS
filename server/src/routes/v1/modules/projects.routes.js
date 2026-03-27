@@ -44,7 +44,7 @@ const importSchema = z.object({
   rows: z.array(
     z.object({
       rowNumber: z.number().int().positive().optional(),
-      projectKey: z.string().trim().min(1).max(120),
+      projectKey: optionalTrimmedString(120),
       projectName: z.string().trim().min(2).max(200),
       projectDescription: optionalTrimmedString(4000),
       projectStatus: z.enum(['active', 'on_hold', 'completed', 'archived']).optional(),

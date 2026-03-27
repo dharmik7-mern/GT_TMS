@@ -175,7 +175,7 @@ export interface QuickTaskImportResult {
 
 export interface ProjectImportRow {
   rowNumber?: number;
-  projectKey: string;
+  projectKey?: string;
   projectName: string;
   projectDescription?: string;
   projectStatus?: ProjectStatus;

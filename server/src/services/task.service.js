@@ -59,6 +59,15 @@ function taskModifyRoles(role, task, userId) {
   return false;
 }
 
+function buildDirectTaskAccessFilter(userId) {
+  return {
+    $or: [
+      { assigneeIds: userId },
+      { reporterId: userId },
+    ],
+  };
+}
+
 function canViewQuickTask({ role, userId, task }) {
   const uid = strId(userId);
   const isOwner = (
@@ -264,15 +273,22 @@ export async function listTasks({
 
   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
   if (allowed !== null) {
-    if (allowed.length === 0) {
-      return { items: [], total: 0, page, limit };
-    }
     if (projectId) {
-      const ok = allowed.some((id) => strId(id) === strId(projectId));
-      if (!ok) return { items: [], total: 0, page, limit };
       filter.projectId = projectId;
+      if (!allowed.some((id) => strId(id) === strId(projectId))) {
+        Object.assign(filter, buildDirectTaskAccessFilter(userId));
+      }
     } else {
-      filter.projectId = { $in: allowed };
+      filter.$and = [
+        { $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }] },
+        {
+          $or: [
+            ...(allowed.length ? [{ projectId: { $in: allowed } }] : []),
+            buildDirectTaskAccessFilter(userId),
+          ],
+        },
+      ];
+      delete filter.$or;
     }
   } else if (projectId) {
     filter.projectId = projectId;
@@ -397,7 +413,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
    
    // Use the task's actual workspaceId for project access check
    const ok = await assertProjectAccess({ tenantId, workspaceId: task.workspaceId, userId, role, projectId: task.projectId });
-   if (!ok) return null;
+   if (!ok && !taskModifyRoles(role, task, userId)) return null;
    return (await attachTaskActivity({ companyId, workspaceId: task.workspaceId, tasks: [task] }))[0];
  }
 

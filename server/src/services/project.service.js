@@ -35,6 +35,18 @@ function normalizeUserName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+function buildImportProjectKey(row, index) {
+  const explicitKey = String(row?.projectKey || '').trim();
+  if (explicitKey) return explicitKey;
+
+  const projectName = String(row?.projectName || '').trim();
+  if (projectName) {
+    return `auto-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project'}-${index + 2}`;
+  }
+
+  return `auto-project-${index + 2}`;
+}
+
 async function buildUserDirectory(companyId) {
   const { User } = await getTenantModels(companyId);
   const users = await User.find({ tenantId: companyId }).select('name email employeeId').lean();
@@ -444,9 +456,14 @@ export async function importProjectsBulk({ companyId, workspaceId, userId, actor
   const groups = new Map();
   for (let index = 0; index < normalizedRows.length; index += 1) {
     const row = normalizedRows[index] || {};
-    const projectKey = String(row.projectKey || '').trim();
+    const projectKey = buildImportProjectKey(row, index);
     const items = groups.get(projectKey) || [];
-    items.push({ ...row, rowNumber: Number(row.rowNumber) > 0 ? Number(row.rowNumber) : index + 2 });
+    items.push({
+      ...row,
+      projectKey,
+      projectName: String(row.projectName ?? '').trim(),
+      rowNumber: Number(row.rowNumber) > 0 ? Number(row.rowNumber) : index + 2,
+    });
     groups.set(projectKey, items);
   }
 

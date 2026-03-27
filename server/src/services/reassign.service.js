@@ -92,6 +92,16 @@ export async function handleReassignRequest({ companyId, userId, requestId, appr
         metadata: { oldAssignee: request.currentAssigneeId, newAssignee: request.requestedAssigneeId, requestId }
       });
 
+      await Notification.create({
+        tenantId: companyId,
+        workspaceId: task.workspaceId,
+        userId: request.requestedAssigneeId,
+        type: 'task_assigned',
+        title: 'Task assigned to you',
+        message: `You were assigned "${task.title}" after reassignment approval.`,
+        relatedId: String(task._id)
+      });
+
       // Notify requester
       await Notification.create({
         tenantId: companyId,

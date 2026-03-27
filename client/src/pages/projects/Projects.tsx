@@ -58,7 +58,7 @@ const PROJECT_IMPORT_TEMPLATE_HEADERS = [
 
 const PROJECT_IMPORT_HEADER_ALIASES: Record<string, string[]> = {
   projectKey: ['projectkey', 'projectgroup', 'groupkey', 'batchkey'],
-  projectName: ['projectname', 'name', 'projecttitle'],
+  projectName: ['projectname', 'project', 'projecttitle', 'name'],
   projectDescription: ['projectdescription', 'description', 'projectdetails'],
   projectStatus: ['projectstatus', 'status'],
   projectDepartment: ['projectdepartment', 'department'],
@@ -233,7 +233,7 @@ function parseProjectsCsv(content: string) {
     taskSubtasks: resolveHeader('taskSubtasks'),
   };
 
-  const missingHeaders = ['projectKey', 'projectName']
+  const missingHeaders = ['projectName']
     .filter((header) => !mappedHeaders[header as keyof typeof mappedHeaders]);
 
   if (missingHeaders.length > 0) {
@@ -258,10 +258,12 @@ function parseProjectsCsv(content: string) {
 
     if (!projectKey && !projectName) continue;
 
-    if (!projectKey || !projectName) {
-      parseErrors.push(`Row ${lineIndex + 1}: projectKey and projectName are required.`);
+    if (!projectName) {
+      parseErrors.push(`Row ${lineIndex + 1}: projectName is required.`);
       continue;
     }
+
+    const generatedProjectKey = projectKey || `${projectName}-${lineIndex + 1}`;
 
     const projectStatus = normalizeProjectStatusValue(mappedHeaders.projectStatus ? record[mappedHeaders.projectStatus] : '');
     const taskStatus = normalizeTaskStatusValue(mappedHeaders.taskStatus ? record[mappedHeaders.taskStatus] : '');
@@ -302,7 +304,7 @@ function parseProjectsCsv(content: string) {
 
     rows.push({
       rowNumber: lineIndex + 1,
-      projectKey,
+      projectKey: generatedProjectKey,
       projectName,
       projectDescription: mappedHeaders.projectDescription ? record[mappedHeaders.projectDescription]?.trim() || '' : '',
       projectStatus: projectStatus as ProjectStatus,
@@ -1067,8 +1069,9 @@ export const ProjectsPage: React.FC = () => {
           <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50/70 p-5 dark:border-surface-700 dark:bg-surface-800/40">
             <p className="text-sm font-semibold text-surface-800 dark:text-surface-100">Step 1: Prepare your file</p>
             <p className="mt-1 text-xs text-surface-500">
-              Each row belongs to a project using `projectKey`. All rows with the same `projectKey` create one project and attach their tasks into it.
-              Duplicate `projectName` values are allowed. Users can be matched by full name, email, or employee ID. Use `taskSubtasks` like `Draft copy;Review QA;Publish`.
+              `projectName` is required. `projectKey` is optional and will be auto-generated if it is missing.
+              All rows with the same `projectKey` create one project and attach their tasks into it. Duplicate `projectName` values are allowed.
+              Users can be matched by full name, email, or employee ID. Use `taskSubtasks` like `Draft copy;Review QA;Publish`.
             </p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button type="button" onClick={downloadImportTemplate} className="btn-secondary btn-md">

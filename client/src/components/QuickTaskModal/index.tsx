@@ -130,14 +130,10 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
     if (set.has(assigneeId)) set.delete(assigneeId);
     else set.add(assigneeId);
     setValue('assigneeIds', Array.from(set), { shouldDirty: true });
-    setAssigneeOpen(false);
-    setAssigneeQuery('');
   };
 
   const clearAssignees = () => {
     setValue('assigneeIds', [], { shouldDirty: true });
-    setAssigneeOpen(false);
-    setAssigneeQuery('');
   };
 
   const onSubmit = (data: QuickTaskFormData) => {
@@ -281,7 +277,19 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
           </div>
 
           <div>
-            <label className="label">Assignees</label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="label mb-0">Assignees</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setAssigneeOpen((prev) => !prev);
+                  if (assigneeOpen) setAssigneeQuery('');
+                }}
+                className="text-xs font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              >
+                {assigneeOpen ? 'Hide list' : 'Show list'}
+              </button>
+            </div>
             <div className="rounded-[22px] border border-white/70 bg-white/75 p-3 shadow-sm backdrop-blur dark:border-surface-700/80 dark:bg-surface-900/70">
               {selectedAssignees.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2">
@@ -323,7 +331,21 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
                 <User size={14} className="absolute right-3 top-[22px] -translate-y-1/2 text-surface-400 pointer-events-none" />
 
                 {assigneeOpen && (
-                  <div className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-30 overflow-hidden rounded-2xl border border-surface-200/80 bg-white/98 shadow-card backdrop-blur dark:border-surface-700/80 dark:bg-surface-900/98">
+                  <div className="mt-3 overflow-hidden rounded-2xl border border-surface-200/80 bg-white/98 shadow-card backdrop-blur dark:border-surface-700/80 dark:bg-surface-900/98">
+                    <div className="flex items-center justify-between gap-3 border-b border-surface-100 px-4 py-2 text-xs text-surface-500 dark:border-surface-800 dark:text-surface-400">
+                      <span>{filteredAssignableUsers.length} result{filteredAssignableUsers.length === 1 ? '' : 's'}</span>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setAssigneeOpen(false);
+                          setAssigneeQuery('');
+                        }}
+                        className="font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                      >
+                        Hide
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
@@ -341,7 +363,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
                       </span>
                     </button>
 
-                    <div className="max-h-52 overflow-y-auto border-t border-surface-100 dark:border-surface-800">
+                    <div className="max-h-60 overflow-y-auto border-t border-surface-100 dark:border-surface-800">
                       {filteredAssignableUsers.length === 0 ? (
                         <div className="px-4 py-3 text-sm text-surface-400">No matching people found.</div>
                       ) : (
