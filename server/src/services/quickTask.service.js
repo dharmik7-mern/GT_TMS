@@ -234,7 +234,7 @@ export async function listQuickTasks({ companyId, workspaceId, userId, role }) {
   const filter = { tenantId, workspaceId };
   if (isAdminRole(role)) {
     // admins can see all quick tasks
-  } else if (['manager', 'team_leader'].includes(role)) {
+  } else if (role === 'manager') {
     filter.$or = [
       { isPrivate: false },
       { isPrivate: { $exists: false } },

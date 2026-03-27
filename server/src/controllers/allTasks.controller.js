@@ -30,12 +30,12 @@ export async function getOverview(req, res, next) {
       .sort({ dueDate: 1 })
       .lean();
 
-    const isAdmin = ['super_admin', 'admin'].includes(role);
-    const qtFilter = { ...filter };
-    if (!isAdmin) {
-      const uid = new mongoose.Types.ObjectId(userId);
-      const privacyOr = [
-        { isPrivate: false },
+     const isAdmin = ['super_admin', 'admin'].includes(role);
+     const qtFilter = { ...filter };
+     if (!isAdmin && role === 'manager') {
+       const uid = new mongoose.Types.ObjectId(userId);
+       const privacyOr = [
+         { isPrivate: false },
         { isPrivate: { $exists: false } },
         { assigneeIds: uid },
         { createdBy: uid },
@@ -46,9 +46,15 @@ export async function getOverview(req, res, next) {
         delete qtFilter.$or;
         qtFilter.$and = [{ $or: involvedOr }, { $or: privacyOr }];
       } else {
-        qtFilter.$or = privacyOr;
-      }
-    }
+         qtFilter.$or = privacyOr;
+       }
+     } else if (!isAdmin) {
+       qtFilter.$or = [
+         { assigneeIds: userId },
+         { reporterId: userId },
+         { createdBy: userId },
+       ];
+     }
 
     const quickTasks = await QuickTask.find(qtFilter)
       .populate('assigneeIds', 'name avatar')
@@ -119,12 +125,12 @@ export async function getAllTasks(req, res, next) {
       .sort({ createdAt: -1 })
       .lean();
 
-    const isAdmin = ['super_admin', 'admin'].includes(role);
-    const qtBaseFilter = { ...baseFilter };
-    if (!isAdmin) {
-      const uid = new mongoose.Types.ObjectId(userId);
-      const privacyOr = [
-        { isPrivate: false },
+     const isAdmin = ['super_admin', 'admin'].includes(role);
+     const qtBaseFilter = { ...baseFilter };
+     if (!isAdmin && role === 'manager') {
+       const uid = new mongoose.Types.ObjectId(userId);
+       const privacyOr = [
+         { isPrivate: false },
         { isPrivate: { $exists: false } },
         { assigneeIds: uid },
         { createdBy: uid },
@@ -135,9 +141,15 @@ export async function getAllTasks(req, res, next) {
         delete qtBaseFilter.$or;
         qtBaseFilter.$and = [{ $or: involvedOr }, { $or: privacyOr }];
       } else {
-        qtBaseFilter.$or = privacyOr;
-      }
-    }
+         qtBaseFilter.$or = privacyOr;
+       }
+     } else if (!isAdmin) {
+       qtBaseFilter.$or = [
+         { assigneeIds: userId },
+         { reporterId: userId },
+         { createdBy: userId },
+       ];
+     }
 
     const quickTasks = await QuickTask.find(qtBaseFilter)
       .populate('assigneeIds', 'name avatar')

@@ -493,7 +493,7 @@ export const ProjectsPage: React.FC = () => {
       ? incoming
       : 'all';
   });
-  const canManageProjects = user?.role !== 'team_member';
+  const canCreateProjects = user?.role !== 'team_member';
   const [showModal, setShowModal] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0]);
@@ -761,9 +761,9 @@ export const ProjectsPage: React.FC = () => {
               <Upload size={14} /> Import
             </button>
           )}
-          <button onClick={() => setShowModal(true)} className="btn-primary btn-sm px-4">
+          {canCreateProjects && <button onClick={() => setShowModal(true)} className="btn-primary btn-sm px-4">
             <Plus size={14} /> New Project
-          </button>
+          </button>}
           <div className="flex items-center bg-surface-100 dark:bg-surface-800 rounded-xl p-1">
             <button
               onClick={() => setView('grid')}
@@ -854,7 +854,7 @@ export const ProjectsPage: React.FC = () => {
       )}
 
       {/* Create Project Modal */}
-      <Modal open={showModal} onClose={closeCreateModal} title="New Project" description="Create a new project for your team">
+      <Modal open={canCreateProjects && showModal} onClose={closeCreateModal} title="New Project" description="Create a new project for your team">
         <form onSubmit={handleSubmit(onCreateProject)} className="p-6 space-y-5">
           <div>
             <label className="label">Project name *</label>
@@ -1054,7 +1054,7 @@ export const ProjectsPage: React.FC = () => {
       </Modal>
 
       <Modal
-        open={importOpen}
+        open={canCreateProjects && importOpen}
         onClose={() => {
           setImportOpen(false);
           resetImportState();

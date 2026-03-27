@@ -10,10 +10,14 @@ function isAdminRole(role) {
   return role === 'super_admin' || role === 'admin';
 }
 
+function hasFullProjectAccess(role) {
+  return isAdminRole(role) || role === 'manager';
+}
+
 /** @returns {Promise<mongoose.Types.ObjectId[]|null>} null = all projects allowed */
 export async function getAccessibleProjectIds({ tenantId, workspaceId, userId, role }) {
   const { Project, Team } = await getTenantModels(tenantId);
-  if (isAdminRole(role)) return null;
+  if (hasFullProjectAccess(role)) return null;
 
   const uid = strId(userId);
   const projects = await Project.find({ tenantId, workspaceId }).lean();
