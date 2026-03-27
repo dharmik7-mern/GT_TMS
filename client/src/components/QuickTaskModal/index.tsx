@@ -172,13 +172,19 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
           const res = await quickTasksService.create(payload);
           qtId = res.data?.data?.id;
         }
+        
         if (qtId && files.length) {
-          await quickTasksService.uploadAttachments(qtId, files);
+          try {
+            await quickTasksService.uploadAttachments(qtId, files);
+          } catch (uploadErr) {
+            console.error('Failed to upload attachments for quick task:', uploadErr);
+          }
         }
+        
         await bootstrap();
         onClose();
-      } catch {
-        // Keep modal open on failure.
+      } catch (err) {
+        console.error('Failed to save quick task:', err);
       }
     })();
   };
@@ -384,26 +390,53 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
               <label className="label mb-0">Files</label>
               <span className="text-xs text-surface-400">Optional</span>
             </div>
-            <div className="border-2 border-dashed border-surface-200 dark:border-surface-700 rounded-xl p-5 text-center">
+            
+            {(task?.attachments || []).length > 0 && (
+              <div className="mb-4 space-y-2">
+                {task!.attachments!.map((att) => (
+                  <a key={att.id} href={att.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-2 bg-white dark:bg-surface-800 rounded-xl border border-surface-100 dark:border-surface-700 text-[10px] hover:border-brand-500 transition-colors">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Paperclip size={10} className="text-brand-500 flex-shrink-0" />
+                      <span className="truncate font-medium">{att.name}</span>
+                    </span>
+                    <span className="text-surface-400 flex-shrink-0">View</span>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            <div 
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer.files) {
+                  setFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)]);
+                }
+              }}
+              className="border-2 border-dashed border-surface-200 dark:border-surface-700 rounded-xl p-5 text-center hover:border-brand-400 hover:bg-brand-50/10 transition-colors cursor-pointer relative"
+              onClick={() => document.getElementById('quick-task-file-upload')?.click()}
+            >
               <Paperclip size={18} className="mx-auto text-surface-300 mb-2" />
               <p className="text-xs text-surface-400 mb-3">Drop files here or click to upload</p>
               <input
+                id="quick-task-file-upload"
                 type="file"
                 multiple
-                onChange={(e) => setFiles(e.target.files ? Array.from(e.target.files) : [])}
-                className="block w-full text-sm text-surface-500 file:mr-4 file:py-2 file:px-3 file:rounded-full file:border-0 file:bg-brand-50 file:text-brand-700 dark:file:bg-brand-950/30 dark:file:text-brand-300"
+                onChange={(e) => setFiles(prev => [...prev, ... (e.target.files ? Array.from(e.target.files) : [])])}
+                className="hidden"
               />
               {files.length ? (
-                <div className="mt-3 space-y-1 text-left">
+                <div className="mt-3 space-y-1 text-left" onClick={e => e.stopPropagation()}>
                   {files.map((f, idx) => (
-                    <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-surface-700 dark:text-surface-200 truncate">{f.name}</span>
+                    <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-3 p-1.5 bg-surface-50 dark:bg-surface-800/50 rounded-lg">
+                      <span className="text-[10px] text-surface-700 dark:text-surface-200 truncate font-medium">{f.name}</span>
                       <button
                         type="button"
                         onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
-                        className="btn-ghost btn-sm p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        className="btn-ghost btn-sm p-1 h-6 w-6 text-rose-500 hover:bg-rose-50"
                       >
-                        Remove
+                        <X size={10} />
                       </button>
                     </div>
                   ))}

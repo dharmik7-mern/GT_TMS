@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Filter, List, LayoutGrid, Plus, MoreHorizontal, 
   Calendar, Clock, User, ChevronDown, Check, Mail, AlertCircle,
@@ -43,6 +43,7 @@ export const TasksManagement: React.FC = () => {
    const [fullTaskData, setFullTaskData] = useState<any>(null);
    const [fullTaskLoading, setFullTaskLoading] = useState(false);
    const [isAddingTask, setIsAddingTask] = useState(false);
+   const canCreateTask = user?.role !== 'team_member';
    const [filterStatus, setFilterStatus] = useState('all');
    const [currentPage, setCurrentPage] = useState(1);
    const [projectsPage, setProjectsPage] = useState(1);
@@ -109,7 +110,8 @@ export const TasksManagement: React.FC = () => {
     if (!selectedTask || selectedTask.type !== 'project') return;
     try {
       await api.patch(`/tasks/${selectedTask.id}/subtasks/${subtaskId}`, { isCompleted });
-      fetchFullTask(selectedTask.id);
+      await fetchFullTask(selectedTask.id);
+      fetchTasks();
     } catch (err) {
       console.error('Toggle subtask failed:', err);
     }
@@ -119,7 +121,8 @@ export const TasksManagement: React.FC = () => {
     if (!selectedTask || selectedTask.type !== 'project' || !title.trim()) return;
     try {
       await api.post(`/tasks/${selectedTask.id}/subtasks`, { title });
-      fetchFullTask(selectedTask.id);
+      await fetchFullTask(selectedTask.id);
+      fetchTasks();
     } catch (err) {
       console.error('Add subtask failed:', err);
     }
@@ -219,13 +222,15 @@ export const TasksManagement: React.FC = () => {
       {/* Bordio Style Top Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setIsAddingTask(true)}
-            className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors shadow-sm"
-          >
-            <Plus size={18} />
-            Add new
-          </button>
+          {canCreateTask && (
+            <button 
+              onClick={() => setIsAddingTask(true)}
+              className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors shadow-sm"
+            >
+              <Plus size={18} />
+              Add new
+            </button>
+          )}
           
           <div className="flex items-center bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg p-1 shadow-sm">
             <button 
@@ -608,6 +613,12 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
     if (assignableUsers.some((user) => user.id === formData.assignedToId)) return;
     setFormData((prev) => ({ ...prev, assignedToId: '' }));
   }, [assignableUsers, formData.assignedToId]);
+
+  const selectedProject = projects.find(p => p.id === formData.projectId);
+  const assignableUsers = useMemo(() => {
+    if (!formData.projectId) return users;
+    return users.filter(u => selectedProject?.members.includes(u.id));
+  }, [formData.projectId, users, selectedProject]);
 
    const handleCreate = async () => {
     if (!formData.title.trim()) return;

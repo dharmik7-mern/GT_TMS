@@ -1,18 +1,30 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Search, Calendar, Clock, Flag, Sparkles, CornerDownLeft } from 'lucide-react';
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { Plus, Search, Calendar, Clock, Flag, Sparkles, CornerDownLeft, AlignLeft, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../../utils/helpers';
 import { parseSmartInput, ParsedTask } from '../../../utils/nlp';
 
 interface SmartInputProps {
-  onAdd: (input: string) => void;
+  onAdd: (data: { input: string; description?: string }) => void;
 }
 
-export const SmartInput: React.FC<SmartInputProps> = ({ onAdd }) => {
+export const SmartInput = forwardRef<{ addValue: (val: string) => void }, SmartInputProps>(({ onAdd }, ref) => {
   const [value, setValue] = useState('');
+  const [description, setDescription] = useState('');
+  const [showDescription, setShowDescription] = useState(false);
   const [parsed, setParsed] = useState<ParsedTask | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    addValue: (val: string) => {
+      setValue(prev => {
+        const newValue = prev + (prev.endsWith(' ') || !prev ? '' : ' ') + val + ' ';
+        return newValue;
+      });
+      inputRef.current?.focus();
+    }
+  }));
 
   useEffect(() => {
     if (value.trim()) {
@@ -25,13 +37,19 @@ export const SmartInput: React.FC<SmartInputProps> = ({ onAdd }) => {
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!value.trim()) return;
-    onAdd(value);
+    onAdd({ input: value, description: showDescription ? description : undefined });
     setValue('');
+    setDescription('');
+    setShowDescription(false);
     setParsed(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSubmit();
+    } else if (e.key === 'Enter' && !showDescription) {
+      // Allow enter to submit if no description field is open
       e.preventDefault();
       handleSubmit();
     }
@@ -40,33 +58,68 @@ export const SmartInput: React.FC<SmartInputProps> = ({ onAdd }) => {
   return (
     <div className="relative group flex-1">
       <div className={cn(
-        "flex items-center gap-2.5 px-3 py-1.5 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-lg transition-all",
-        isFocused ? "border-brand-500/50 bg-white" : "hover:border-surface-300 dark:hover:border-surface-700 shadow-none bg-surface-50/50"
+        "flex flex-col gap-0 px-1 py-1 bg-white dark:bg-surface-900 border-2 border-surface-200 dark:border-surface-800 rounded-xl transition-all overflow-hidden",
+        isFocused ? "border-brand-500 bg-white shadow-lg shadow-brand-500/10" : "hover:border-surface-300 dark:hover:border-surface-700 shadow-none bg-surface-50/50"
       )}>
-        <Plus size={14} strokeWidth={3} className={cn("transition-colors", isFocused ? "text-brand-600" : "text-surface-300")} />
-        
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          onKeyDown={handleKeyDown}
-          placeholder="What's next? (e.g. Call team tomorrow 10am)"
-          className="w-full bg-transparent border-none !outline-none focus:!outline-none focus:!ring-0 text-[13px] font-semibold text-surface-900 dark:text-white placeholder-surface-400 dark:placeholder-surface-500 p-0"
-        />
+        <div className="flex items-center gap-3 px-3 py-2">
+          <Plus size={18} strokeWidth={3} className={cn("transition-colors flex-shrink-0", isFocused ? "text-brand-600" : "text-surface-300")} />
+          
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={handleKeyDown}
+            placeholder="What's next? (e.g. Call team tomorrow 10am)"
+            className="flex-1 bg-transparent border-none !outline-none focus:!outline-none focus:!ring-0 text-sm font-semibold text-surface-900 dark:text-white placeholder-surface-400 dark:placeholder-surface-500 p-0"
+          />
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDescription(!showDescription)}
+              className={cn(
+                "p-1.5 rounded-lg transition-all",
+                showDescription ? "bg-brand-50 text-brand-600 dark:bg-brand-950/30" : "text-surface-300 hover:text-surface-500"
+              )}
+              title="Add Description"
+            >
+              <AlignLeft size={16} />
+            </button>
+
+            <AnimatePresence>
+              {isFocused && value.trim() && (
+                <motion.button
+                  type="button"
+                  onClick={handleSubmit}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="bg-brand-600 text-white p-1.5 rounded-lg shadow-md shadow-brand-500/20 hover:bg-brand-700 transition-colors"
+                >
+                  <CornerDownLeft size={14} />
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
 
         <AnimatePresence>
-          {isFocused && value.trim() && (
+          {showDescription && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-surface-400 bg-surface-100 dark:bg-surface-800 px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="px-3 pb-3 pt-1 border-t border-surface-50 dark:border-surface-800"
             >
-              <span>CMD+Enter</span>
-               <CornerDownLeft size={10} />
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add task details..."
+                className="w-full bg-surface-50/50 dark:bg-surface-800/30 border-none rounded-lg p-2 text-xs font-medium text-surface-700 dark:text-surface-300 focus:ring-0 outline-none min-h-[60px] resize-none"
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -119,4 +172,4 @@ export const SmartInput: React.FC<SmartInputProps> = ({ onAdd }) => {
       </AnimatePresence>
     </div>
   );
-};
+});

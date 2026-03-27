@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, Search, Calendar as CalendarIcon, 
-  PanelRight, Rows, LayoutGrid
+  PanelRight, Rows, LayoutGrid, ChevronLeft, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn, formatDate } from '../../utils/helpers';
@@ -16,14 +16,18 @@ import { TaskItem } from './components/TaskItem';
 import { KanbanView } from './components/KanbanView';
 import { CalendarView } from './components/CalendarView';
 import { PlannerStats } from './components/PlannerStats';
+import PlannerInsightsPanel from './components/PlannerInsightsPanel';
 
-export const PlannerPage: React.FC = () => {
+const PlannerPage: React.FC = () => {
   const { personalTasks, addPersonalTask, updatePersonalTask, deletePersonalTask } = useAppStore();
   const [view, setView] = useState<'list' | 'kanban' | 'calendar'>('list');
-  const [filter, setFilter] = useState<'all' | 'today' | 'upcoming' | 'high'>('all');
+  const [filter, setFilter] = useState<'all' | 'today' | 'upcoming' | 'high' | 'medium' | 'low'>('all');
   const [search, setSearch] = useState('');
   const [stats, setStats] = useState<any>(null);
   const [showPanel, setShowPanel] = useState(false);
+  const smartInputRef = useRef<{ addValue: (val: string) => void }>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const tasksPerPage = 10;
 
   useEffect(() => {
     personalTasksService.getStats().then(res => setStats(res.data.data));
@@ -31,7 +35,7 @@ export const PlannerPage: React.FC = () => {
 
   const filteredTasks = useMemo(() => {
     let tasks = [...personalTasks];
-    if (search) tasks = tasks.filter(t => t.title.toLowerCase().includes(search.toLowerCase()));
+    if (search) tasks = tasks.filter(t => t.title.toLowerCase().includes(search.toLowerCase()) || t.labels?.some(l => l.toLowerCase().includes(search.toLowerCase())));
     
     if (filter === 'today') {
       const todayStr = new Date().toISOString().split('T')[0];
@@ -41,16 +45,30 @@ export const PlannerPage: React.FC = () => {
       tasks = tasks.filter(t => t.dueDate && t.dueDate > todayStr);
     } else if (filter === 'high') {
       tasks = tasks.filter(t => t.priority === 'high');
+    } else if (filter === 'medium') {
+      tasks = tasks.filter(t => t.priority === 'medium');
+    } else if (filter === 'low') {
+      tasks = tasks.filter(t => t.priority === 'low');
     }
 
-    return tasks;
+    return tasks.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
   }, [personalTasks, filter, search]);
 
-  const handleAddTask = async (input: string) => {
-     const parsed = parseSmartInput(input);
+  const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
+  const currentTasks = useMemo(() => {
+    return filteredTasks.slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage);
+  }, [filteredTasks, currentPage]);
+
+  const handleAddTask = async (data: { input: string; description?: string }) => {
+     const parsed = parseSmartInput(data.input);
      try {
-       const res = await personalTasksService.create(parsed);
+       const res = await personalTasksService.create({ ...parsed, description: data.description });
        addPersonalTask(res.data.data);
+       setCurrentPage(1);
      } catch (err) { console.error(err); }
   };
 
@@ -74,7 +92,7 @@ export const PlannerPage: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] overflow-hidden bg-white dark:bg-surface-950 flex flex-col font-sans">
+    <div className="h-[calc(100vh-60px)] overflow-hidden bg-white dark:bg-surface-950 flex flex-col font-sans -m-6">
       
       {/* compact header */}
       <header className="px-6 py-2.5 flex items-center justify-between border-b border-surface-100 dark:border-surface-900 bg-white dark:bg-surface-950 flex-shrink-0">
@@ -102,19 +120,22 @@ export const PlannerPage: React.FC = () => {
       <div className="px-6 py-3 space-y-3 bg-surface-50/20 dark:bg-surface-900/10 border-b border-surface-100 dark:border-surface-800 flex-shrink-0">
          <div className="flex items-center justify-between gap-4">
             <div className="bg-white dark:bg-surface-900 p-0.5 rounded-lg flex items-center gap-0.5 border border-surface-100 dark:border-surface-800">
+      {/* 1. Header Row */}
+      <div className="px-6 py-4 flex items-center justify-between border-b border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-950 flex-shrink-0 gap-6">
+         <div className="flex items-center gap-6">
+            <div className="bg-surface-50 dark:bg-surface-900 p-0.5 rounded-lg flex items-center gap-0.5 border border-surface-100 dark:border-surface-800">
               {[
                 { id: 'all', label: 'All' },
                 { id: 'today', label: 'Today' },
                 { id: 'upcoming', label: 'Upcoming' },
-                { id: 'high', label: 'Priority' }
               ].map(f => (
                 <button
                   key={f.id}
-                  onClick={() => setFilter(f.id as any)}
+                  onClick={() => { setFilter(f.id as any); setCurrentPage(1); }}
                   className={cn(
                     "px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all",
                     filter === f.id 
-                      ? "bg-surface-900 text-white dark:bg-surface-800" 
+                      ? "bg-white text-surface-900 dark:bg-surface-800 shadow-sm" 
                       : "text-surface-500 hover:text-surface-800 dark:text-surface-400"
                   )}
                 >
@@ -123,66 +144,132 @@ export const PlannerPage: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex-1 flex items-center gap-3">
-               <div className="flex-1 max-w-xl">
-                 <SmartInput onAdd={handleAddTask} />
-               </div>
-               
-               <div className="relative">
-                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-                 <input 
-                   type="text"
-                   placeholder="Search..."
-                   value={search}
-                   onChange={e => setSearch(e.target.value)}
-                   className="w-40 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-lg py-1.5 pl-8 pr-3 text-[11px] focus:outline-none focus:w-60 transition-all font-semibold"
-                 />
-              </div>
+            <div className="w-px h-4 bg-surface-200 dark:bg-surface-800 mx-1" />
 
-              <div className="flex items-center bg-white dark:bg-surface-900 p-0.5 rounded-lg border border-surface-100 dark:border-surface-800">
-                {[
-                  { id: 'list', icon: Rows },
-                  { id: 'kanban', icon: LayoutGrid },
-                  { id: 'calendar', icon: CalendarIcon }
-                ].map(v => (
-                  <button
-                    key={v.id}
-                    onClick={() => setView(v.id as any)}
-                    className={cn(
-                      "p-1.5 rounded-md transition-all",
-                      view === v.id 
-                        ? "bg-surface-100 dark:bg-surface-800 text-brand-600 shadow-sm" 
-                        : "text-surface-400 hover:text-surface-600"
-                    )}
-                  >
-                    <v.icon size={14} />
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center">
+              <button
+                id="priority-filter-trigger"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const event = new CustomEvent('open-priority-menu', { detail: { x: rect.left, y: rect.bottom + 8 } });
+                  window.dispatchEvent(event);
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2",
+                  ['high', 'medium', 'low'].includes(filter)
+                    ? "bg-white text-brand-600 dark:bg-surface-800 shadow-sm border border-surface-100 dark:border-surface-700"
+                    : "text-surface-500 hover:text-surface-800 dark:text-surface-400"
+                )}
+              >
+                <span>Priority</span>
+                {['high', 'medium', 'low'].includes(filter) && (
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    filter === 'high' ? "bg-rose-500" : filter === 'medium' ? "bg-amber-500" : "bg-surface-400"
+                  )} />
+                )}
+                <ChevronDown size={12} className={cn("transition-transform", ['high', 'medium', 'low'].includes(filter) ? "rotate-180" : "")} />
+              </button>
             </div>
+            <div className="w-px h-4 bg-surface-200 dark:bg-surface-800" />
+            <PlannerStats stats={stats} />
+         </div>
+
+         <div className="flex items-center gap-4">
+            <div className="relative">
+               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+               <input 
+                 type="text"
+                 placeholder="Search tasks..."
+                 value={search}
+                 onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                 className="w-48 bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-lg py-1.5 pl-8 pr-3 text-[11px] focus:outline-none focus:w-64 transition-all font-semibold"
+               />
+            </div>
+
+            <div className="flex items-center bg-surface-50 dark:bg-surface-900 p-0.5 rounded-lg border border-surface-100 dark:border-surface-800">
+              {[
+                { id: 'list', icon: Rows },
+                { id: 'kanban', icon: LayoutGrid },
+                { id: 'calendar', icon: CalendarIcon }
+              ].map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => setView(v.id as any)}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all",
+                    view === v.id 
+                      ? "bg-white dark:bg-surface-800 text-brand-600 shadow-sm" 
+                      : "text-surface-400 hover:text-surface-600"
+                  )}
+                >
+                  <v.icon size={14} />
+                </button>
+              ))}
+            </div>
+
+            <button 
+              onClick={() => setShowPanel(!showPanel)}
+              className={cn(
+                "p-1.5 rounded-md transition-all border border-surface-100 dark:border-surface-800",
+                showPanel ? "bg-brand-600 text-white shadow-sm shadow-brand-500/20" : "text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-900"
+              )}
+            >
+              <PanelRight size={18} />
+            </button>
+         </div>
+      </div>
+
+      {/* 2. Quick Add Area */}
+      <div className="px-6 py-6 bg-surface-50/10 dark:bg-surface-900/5 border-b border-surface-100 dark:border-surface-800">
+         <div className="max-w-4xl">
+           <div className="flex flex-col gap-4">
+              <div className="flex-1">
+                 <h2 className="text-[10px] font-black tracking-widest text-surface-400 uppercase mb-3 px-1">Quick Add Task</h2>
+                 <SmartInput ref={smartInputRef} onAdd={handleAddTask} />
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                 <h3 className="text-[10px] font-bold text-surface-400 uppercase tracking-widest px-1">Common Labels</h3>
+                 <div className="flex flex-wrap gap-2">
+                    {['Urgent', 'Today', 'Work', 'Personal', 'Meeting', 'Call'].map(l => (
+                      <button 
+                        key={l}
+                        onClick={() => {
+                          smartInputRef.current?.addValue('#' + l.toLowerCase());
+                        }}
+                        className="text-[10px] font-black uppercase tracking-tight px-3 py-1 rounded-full bg-white dark:bg-surface-800 border-2 border-surface-100 dark:border-surface-800 text-surface-500 hover:border-brand-500 hover:text-brand-600 transition-all shadow-sm"
+                      >
+                        #{l}
+                      </button>
+                    ))}
+                 </div>
+              </div>
+           </div>
          </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* main task area */}
-        <main className="flex-1 overflow-y-auto px-6 py-4 scrollbar-hide">
-           <div className="bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-lg overflow-hidden flex flex-col h-full max-h-full">
+        <main className="flex-1 flex flex-col overflow-hidden">
+           <div className="bg-white dark:bg-surface-950 flex flex-col h-full overflow-hidden">
              {view === 'list' && (
-               <div className="flex flex-col h-full">
-                  <div className="grid grid-cols-[1fr,150px,180px,80px] px-6 py-2.5 border-b border-surface-100 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-800/20 sticky top-0 z-[1]">
+                <>
+                  <div className="grid grid-cols-[1fr,150px,120px,120px,80px] px-6 py-2.5 border-b border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900 sticky top-0 z-[1]/50">
                     <span className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">TASK</span>
                     <span className="text-[10px] font-bold text-surface-400 uppercase tracking-widest text-center">LABELS</span>
                     <span className="text-[10px] font-bold text-surface-400 uppercase tracking-widest text-center">DUE DATE</span>
+                    <span className="text-[10px] font-bold text-surface-400 uppercase tracking-widest text-center">STATUS</span>
                     <span className="text-[10px] font-bold text-surface-400 uppercase tracking-widest text-right">•••</span>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto divide-y divide-surface-100 dark:divide-surface-800 no-scrollbar">
-                     {filteredTasks.length === 0 ? (
+                  <div className="flex-1 overflow-y-auto scrollbar-hide">
+                     {currentTasks.length === 0 ? (
                         <div className="py-12 text-center text-surface-400 text-xs italic">
                            Nothing here yet.
                         </div>
                      ) : (
-                       filteredTasks.map(task => (
+                        currentTasks.map(task => (
                           <TaskItem 
                             key={task.id} 
                             task={task} 
@@ -194,58 +281,118 @@ export const PlannerPage: React.FC = () => {
                         ))
                      )}
                   </div>
-               </div>
+
+                  {/* Pagination Sticky Bottom */}
+                  {totalPages > 1 && (
+                    <div className="px-6 py-3 border-t border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-950 flex items-center justify-between sticky bottom-0">
+                       <span className="text-[10px] font-black uppercase tracking-widest text-surface-400">
+                         Page {currentPage} of {totalPages}
+                       </span>
+                       <div className="flex items-center gap-3">
+                          <button 
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(p => p - 1)}
+                            className="p-1.5 rounded-lg border border-surface-200 dark:border-surface-800 disabled:opacity-20 hover:bg-surface-50 transition-colors"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+                          <button 
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(p => p + 1)}
+                            className="p-1.5 rounded-lg border border-surface-200 dark:border-surface-800 disabled:opacity-20 hover:bg-surface-50 transition-colors"
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                       </div>
+                    </div>
+                  )}
+                </>
              )}
 
-             {view === 'kanban' && <div className="h-full"><KanbanView tasks={filteredTasks} onMove={async (id, status) => {
+             {view === 'kanban' && <div className="h-full px-6 py-4 overflow-y-auto"><KanbanView tasks={filteredTasks} onMove={async (id, status) => {
                   const res = await personalTasksService.update(id, { status, completedAt: status === 'done' ? new Date().toISOString() : null });
                   updatePersonalTask(id, res.data.data);
                }} /></div>}
 
-             {view === 'calendar' && <div className="flex-1 h-full min-h-0"><CalendarView tasks={filteredTasks} /></div>}
+             {view === 'calendar' && <div className="flex-1 h-full min-h-0 px-6 py-4 overflow-y-auto"><CalendarView tasks={filteredTasks} /></div>}
            </div>
         </main>
 
         {/* insights panel */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {showPanel && (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 280, opacity: 1 }}
+              animate={{ width: 320, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               className="border-l border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-950 overflow-y-auto flex-shrink-0"
             >
-              <div className="p-6 space-y-8">
-                 <div className="space-y-4">
-                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-surface-400">STREAK</h3>
-                    <div className="space-y-3 bg-surface-50 dark:bg-surface-900 p-4 rounded-xl border border-surface-100/50 dark:border-surface-800/50">
-                       <div className="flex justify-between items-center mb-1">
-                          <span className="text-2xl font-semibold text-surface-900 dark:text-white leading-none">{stats?.streak || 0}d</span>
-                          <span className="text-[9px] font-bold uppercase text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">Current</span>
-                       </div>
-                       <div className="h-1.5 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-brand-600 w-[65%]" />
-                       </div>
-                    </div>
-                 </div>
-
-                 <div className="space-y-4">
-                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-surface-400">UPCOMING</h3>
-                    <div className="space-y-3">
-                      {filteredTasks.filter(t => t.dueDate && t.status !== 'done').slice(0, 5).map(t => (
-                        <div key={t.id} className="text-xs group cursor-pointer p-1.5 hover:bg-surface-50 dark:hover:bg-surface-800/50 rounded-lg transition-colors">
-                            <p className="font-semibold text-surface-700 dark:text-surface-300 truncate group-hover:text-brand-600">{t.title}</p>
-                            <p className="text-[10px] text-surface-400 mt-0.5">{formatDate(t.dueDate as string, 'MMM d')}</p>
-                        </div>
-                      ))}
-                    </div>
-                 </div>
-              </div>
+              <PlannerInsightsPanel tasks={personalTasks} onClose={() => setShowPanel(false)} />
             </motion.aside>
           )}
         </AnimatePresence>
       </div>
+      {/* Priority Dropdown implementation */}
+      <PriorityMenu 
+        activeFilter={filter} 
+        onSelect={(p) => { setFilter(p); setCurrentPage(1); }} 
+      />
     </div>
+  );
+};
+
+const PriorityMenu: React.FC<{ activeFilter: string; onSelect: (p: any) => void }> = ({ activeFilter, onSelect }) => {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      setPos(e.detail);
+      setOpen(true);
+    };
+    window.addEventListener('open-priority-menu', handler);
+    return () => window.removeEventListener('open-priority-menu', handler);
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            style={{ left: pos.x, top: pos.y }}
+            className="fixed z-[9999] min-w-[140px] bg-white dark:bg-surface-900 rounded-xl border border-surface-100 dark:border-surface-800 shadow-xl p-1"
+          >
+            {[
+              { id: 'high', label: 'High Priority', color: 'bg-rose-500' },
+              { id: 'medium', label: 'Medium Priority', color: 'bg-amber-500' },
+              { id: 'low', label: 'Low Priority', color: 'bg-surface-400' },
+              { id: 'all', label: 'Clear Filter', color: 'bg-surface-200' },
+            ].map(p => (
+              <button
+                key={p.id}
+                onClick={() => { onSelect(p.id); setOpen(false); }}
+                className={cn(
+                  "w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all",
+                  activeFilter === p.id 
+                    ? "bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400" 
+                    : "text-surface-500 hover:bg-surface-50 dark:hover:bg-surface-800 hover:text-surface-900"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <div className={cn("w-2 h-2 rounded-full", p.color)} />
+                  {p.label}
+                </div>
+                {activeFilter === p.id && <div className="w-1 h-1 rounded-full bg-brand-500" />}
+              </button>
+            ))}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 };
 

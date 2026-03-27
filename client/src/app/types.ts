@@ -344,6 +344,7 @@ export interface PersonalTask {
   dueDate?: string;
   dueTime?: string;
   labels: string[];
+  subtasks?: TaskSubtask[];
   reminder?: {
     enabled: boolean;
     at?: string;

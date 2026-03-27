@@ -29,6 +29,7 @@ export const MyTasksPage: React.FC = () => {
     const incoming = searchParams.get('filter');
     return FILTERS.some((item) => item.value === incoming) ? incoming as typeof FILTERS[0]['value'] : 'all';
   });
+ const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const myTasks = tasks.filter(t => t.assigneeIds.includes(user?.id || ''));
@@ -242,7 +243,7 @@ export const MyTasksPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <TaskCard task={task} onClick={() => setSelectedTask(task)} />
+                    <TaskCard task={task} onClick={() => setSelectedTaskId(task.id)} />
                   </motion.div>
                 );
               })}
@@ -251,7 +252,7 @@ export const MyTasksPage: React.FC = () => {
         </div>
       )}
 
-      <TaskModal task={selectedTask} open={!!selectedTask} onClose={() => setSelectedTask(null)} />
+      <TaskModal task={selectedTask} open={!!selectedTaskId} onClose={() => setSelectedTaskId(null)} />
     </div>
   );
 };

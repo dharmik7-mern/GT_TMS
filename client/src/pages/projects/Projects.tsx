@@ -341,6 +341,8 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
   const navigate = useNavigate();
   const { users } = useAppStore();
   const members = users.filter(u => project.members.includes(u.id));
+  const { user } = useAuthStore();
+  const canManageProjects = user?.role !== 'team_member';
   const badge = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.todo;
 
   return (
@@ -368,37 +370,39 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
           </div>
         </div>
 
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button
-              onClick={e => e.stopPropagation()}
-              className="btn w-7 h-7 rounded-lg opacity group-hover:opacity-100"
-            >
-              <MoreVertical size={14} />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              onClick={e => e.stopPropagation()}
-              className="z-50 min-w-[160px] bg-white dark:bg-surface-900 rounded-xl shadow-modal border border-surface-100 dark:border-surface-800 p-1"
-              sideOffset={4} align="end"
-            >
-              <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
-                <Edit3 size={14} /> Edit
-              </DropdownMenu.Item>
-              <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
-                <Archive size={14} /> Archive
-              </DropdownMenu.Item>
-              <DropdownMenu.Separator className="h-px bg-surface-100 dark:bg-surface-800 my-1" />
-              <DropdownMenu.Item
-                onClick={() => onDelete(project.id)}
-                className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer text-rose-600 outline-none"
+        {canManageProjects && (
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                onClick={e => e.stopPropagation()}
+                className="btn w-7 h-7 rounded-lg opacity group-hover:opacity-100"
               >
-                <Trash2 size={14} /> Delete
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+                <MoreVertical size={14} />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                onClick={e => e.stopPropagation()}
+                className="z-50 min-w-[160px] bg-white dark:bg-surface-900 rounded-xl shadow-modal border border-surface-100 dark:border-surface-800 p-1"
+                sideOffset={4} align="end"
+              >
+                <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
+                  <Edit3 size={14} /> Edit
+                </DropdownMenu.Item>
+                <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
+                  <Archive size={14} /> Archive
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator className="h-px bg-surface-100 dark:bg-surface-800 my-1" />
+                <DropdownMenu.Item
+                  onClick={() => onDelete(project.id)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer text-rose-600 outline-none"
+                >
+                  <Trash2 size={14} /> Delete
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        )}
       </div>
 
       {project.description && (
@@ -434,6 +438,9 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
   const members = users.filter(u => project.members.includes(u.id));
   const badge = PROJECT_STATUS_BADGES[project.status];
 
+  const { user } = useAuthStore();
+  const canManageProjects = user?.role !== 'team_member';
+
   return (
     <motion.div
       layout
@@ -464,10 +471,12 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
           <span className="text-[11px] font-medium text-surface-400 whitespace-nowrap">{formatDate(project.endDate)}</span>
         )}
       </div>
-      <button onClick={e => { e.stopPropagation(); onDelete(project.id); }}
-        className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-rose-500 dark:hover:bg-rose-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-        <Trash2 size={13} />
-      </button>
+      {canManageProjects && (
+        <button onClick={e => { e.stopPropagation(); onDelete(project.id); }}
+          className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-rose-500 dark:hover:bg-rose-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+          <Trash2 size={13} />
+        </button>
+      )}
     </motion.div>
   );
 };
@@ -477,7 +486,6 @@ export const ProjectsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { projects, users, addProject, deleteProject, bootstrap } = useAppStore();
   const { user } = useAuthStore();
-  const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>(() => {
     const incoming = searchParams.get('status');
@@ -485,6 +493,7 @@ export const ProjectsPage: React.FC = () => {
       ? incoming
       : 'all';
   });
+  const canManageProjects = user?.role !== 'team_member';
   const [showModal, setShowModal] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0]);
@@ -500,6 +509,7 @@ export const ProjectsPage: React.FC = () => {
   const [importResult, setImportResult] = useState<ProjectImportResult | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importServerError, setImportServerError] = useState('');
+  const [view, setView] = useState<'grid' | 'list'>('grid'); // Added view state
   const { register, handleSubmit, reset, formState: { errors }, setValue, watch } = useForm<ProjectFormData>({
     defaultValues: { budgetCurrency: 'INR' }
   });
@@ -796,7 +806,7 @@ export const ProjectsPage: React.FC = () => {
                 <div className="h-px flex-1 bg-surface-100 dark:bg-surface-800" />
                 <div className="flex items-center gap-2 px-3 py-1 bg-surface-50 dark:bg-surface-800 rounded-lg group-hover:bg-surface-100 dark:group-hover:bg-surface-700 transition-colors">
                   <span className="text-xs font-bold text-surface-400 uppercase tracking-widest">{dept} ({deptProjects.length})</span>
-                  <ChevronDown size={12} className={cn('text-surface-400 transition-transform', !collapsedDepts[dept] ? 'rotate-180' : 'rotate-270')} />
+                  <ChevronDown size={12} className={cn('text-surface-400 transition-transform', collapsedDepts[dept] ? 'rotate-270' : 'rotate-180')} />
                 </div>
                 <div className="h-px flex-1 bg-surface-100 dark:bg-surface-800" />
               </div>

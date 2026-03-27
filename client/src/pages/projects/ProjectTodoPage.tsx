@@ -126,7 +126,8 @@ export const ProjectTodoPage: React.FC = () => {
   );
 
   const canDelete = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
-  const canEdit = Boolean(user);
+  const canEdit = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+  const canModifySubtasks = Boolean(user);
 
   const loadTasks = useCallback(async () => {
     if (!projectId) return;
@@ -412,10 +413,10 @@ export const ProjectTodoPage: React.FC = () => {
                           checked={s.isCompleted}
                           onChange={() => toggleSubtask(task, s)}
                           className="rounded border-surface-300"
-                          disabled={!canEdit}
+                          disabled={!canModifySubtasks}
                         />
                         <span className={cn(s.isCompleted && 'line-through text-surface-400')}>{s.title}</span>
-                        {canEdit && (
+                        {canModifySubtasks && (
                           <button
                             type="button"
                             className="ml-auto text-xs text-rose-500 hover:underline"
@@ -427,7 +428,7 @@ export const ProjectTodoPage: React.FC = () => {
                       </li>
                     ))}
                   </ul>
-                  {canEdit && (
+                  {canModifySubtasks && (
                     <div className="flex gap-2 mt-3 max-w-xl">
                       <input
                         className="input input-sm flex-1 text-sm"

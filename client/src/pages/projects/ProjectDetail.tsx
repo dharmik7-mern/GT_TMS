@@ -40,7 +40,7 @@ export const ProjectDetailPage: React.FC = () => {
   const { projects, tasks, users, addTask, updateProject, bootstrap } = useAppStore();
   const { user } = useAuthStore();
   const [activeView, setActiveView] = useState('kanban');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [defaultStatus, setDefaultStatus] = useState<TaskStatus>('todo');
@@ -51,7 +51,9 @@ export const ProjectDetailPage: React.FC = () => {
 
   const project = projects.find(p => p.id === id);
   const projectTasks = tasks.filter(t => t.projectId === id);
+  const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const members = users.filter(u => project?.members.includes(u.id));
+  const canCreateTask = user?.role !== 'team_member';
   const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
   const assignableUsers = users.filter((u) => !project?.reportingPersonIds?.includes(u.id));
   const todayDate = new Date().toISOString().split('T')[0];
@@ -87,7 +89,7 @@ export const ProjectDetailPage: React.FC = () => {
   }
 
   const openTask = (task: Task) => {
-    setSelectedTask(task);
+    setSelectedTaskId(task.id);
     setShowTaskModal(true);
   };
 
@@ -307,7 +309,12 @@ export const ProjectDetailPage: React.FC = () => {
       {/* Views */}
       <Tabs value={activeView} onValueChange={setActiveView} items={TAB_ITEMS} variant="underline">
         <TabsContent value="kanban" className="pt-4">
-          <KanbanBoard projectId={project.id} onOpenTask={openTask} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} />
+          <KanbanBoard 
+            projectId={project.id} 
+            onOpenTask={openTask} 
+            onAddTask={canCreateTask ? handleAddTask : undefined} 
+            onDeleteTask={canCreateTask ? handleDeleteTask : undefined} 
+          />
         </TabsContent>
 
         <TabsContent value="list" className="pt-4">
@@ -316,8 +323,8 @@ export const ProjectDetailPage: React.FC = () => {
               <EmptyState
                 icon={<List size={24} />}
                 title="No tasks yet"
-                description="Create your first task to get started"
-                action={<button onClick={() => handleAddTask()} className="btn-primary btn-md"><Plus size={14} /> Add Task</button>}
+                description={canCreateTask ? "Create your first task to get started" : "Tasks will appear here once created by a manager."}
+                action={canCreateTask ? <button onClick={() => handleAddTask()} className="btn-primary btn-md"><Plus size={14} /> Add Task</button> : null}
               />
             ) : (
               projectTasks.map(task => (
@@ -478,7 +485,7 @@ export const ProjectDetailPage: React.FC = () => {
       <TaskModal
         task={selectedTask}
         open={showTaskModal}
-        onClose={() => { setShowTaskModal(false); setSelectedTask(null); }}
+        onClose={() => { setShowTaskModal(false); setSelectedTaskId(null); }}
       />
 
       {/* Add Task Modal */}
