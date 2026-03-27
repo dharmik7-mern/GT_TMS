@@ -260,6 +260,9 @@ export interface Task {
   attachments?: Attachment[];
   completionReview?: CompletionReview;
   activityHistory?: Activity[];
+  isReassignPending?: boolean;
+  requestedAssigneeId?: string;
+  reassignRequestedBy?: string;
   order: number;
   createdAt: string;
   updatedAt: string;

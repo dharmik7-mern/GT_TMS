@@ -77,6 +77,9 @@ const taskSchema = new mongoose.Schema(
       reviewedAt: { type: Date, default: null },
       reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
+    isReassignPending: { type: Boolean, default: false, index: true },
+    requestedAssigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reassignRequestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
@@ -163,6 +166,9 @@ taskSchema.set('toJSON', {
           completionRemark: '',
           reviewRemark: '',
         };
+    ret.isReassignPending = !!ret.isReassignPending;
+    ret.requestedAssigneeId = ret.requestedAssigneeId ? String(ret.requestedAssigneeId) : undefined;
+    ret.reassignRequestedBy = ret.reassignRequestedBy ? String(ret.reassignRequestedBy) : undefined;
     delete ret._id;
     delete ret.__v;
     delete ret.tenantId;

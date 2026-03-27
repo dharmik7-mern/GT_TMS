@@ -70,6 +70,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
       </div>
 
       {/* Title */}
+      {task.isReassignPending && (
+        <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-900/40 mb-2 w-fit">
+          <Clock size={10} />
+          {task.reassignRequestedBy && task.requestedAssigneeId 
+             ? `${users.find(u => u.id === task.reassignRequestedBy)?.name?.split(' ')[0]} requested reassign to ${users.find(u => u.id === task.requestedAssigneeId)?.name?.split(' ')[0]}`
+             : task.requestedAssigneeId
+               ? `Reassigning to ${users.find(u => u.id === task.requestedAssigneeId)?.name || '...'}`
+               : 'Reassign Pending'}
+        </div>
+      )}
       <h4 className="text-sm font-medium text-surface-800 dark:text-surface-200 leading-snug group-hover:text-brand-700 dark:group-hover:text-brand-300 transition-colors">
         {task.title}
       </h4>

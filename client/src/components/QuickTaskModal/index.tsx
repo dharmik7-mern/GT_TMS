@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Calendar, Flag, Search, User, X, Paperclip, Lock } from 'lucide-react';
+import { Calendar, Flag, Search, User, X, Paperclip, Lock, Trash2 } from 'lucide-react';
 import { Modal } from '../Modal';
 import { cn, generateId } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
@@ -215,16 +215,17 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
             </p>
           </div>
           <div className="flex items-center gap-1">
-            {task && (
+            {task && ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '') && (
               <button
+                type="button"
                 onClick={handleDelete}
                 className="btn-ghost w-8 h-8 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                 title="Delete"
               >
-                <X size={14} />
+                <Trash2 size={14} />
               </button>
             )}
-            <button onClick={onClose} className="btn-ghost w-8 h-8" title="Close">
+            <button type="button" onClick={onClose} className="btn-ghost w-8 h-8" title="Close">
               <X size={14} />
             </button>
           </div>

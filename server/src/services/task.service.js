@@ -429,7 +429,16 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
    }
    
    if (!existing) return null;
-  if (!taskModifyRoles(role, existing, userId)) {
+    
+    // Prevent non-managers from editing tasks with pending reassignment
+    if (existing.isReassignPending && !['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
+      const err = new Error('Task is locked (reassignment pending)');
+      err.statusCode = 403;
+      err.code = 'REASSIGN_PENDING_LOCKED';
+      throw err;
+    }
+
+    if (!taskModifyRoles(role, existing, userId)) {
     const err = new Error('Forbidden');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
@@ -689,6 +698,15 @@ export async function addSubtask({ companyId, workspaceId, userId, role, taskId,
       tenantId,
     });
   if (!task) return null;
+  
+  // Reassignment pending lock
+  if (task.isReassignPending && !['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
+    const err = new Error('Subtask update locked (reassignment pending)');
+    err.statusCode = 403;
+    err.code = 'REASSIGN_PENDING_LOCKED';
+    throw err;
+  }
+
   if (!taskModifyRoles(role, task, userId)) {
     const err = new Error('Forbidden');
     err.statusCode = 403;
@@ -710,6 +728,15 @@ export async function updateSubtask({ companyId, workspaceId, userId, role, task
       tenantId,
     });
   if (!task) return null;
+
+  // Reassignment pending lock
+  if (task.isReassignPending && !['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
+    const err = new Error('Subtask update locked (reassignment pending)');
+    err.statusCode = 403;
+    err.code = 'REASSIGN_PENDING_LOCKED';
+    throw err;
+  }
+
   if (!taskModifyRoles(role, task, userId)) {
     const err = new Error('Forbidden');
     err.statusCode = 403;
@@ -734,6 +761,15 @@ export async function removeSubtask({ companyId, workspaceId, userId, role, task
       tenantId,
     });
   if (!task) return null;
+
+  // Reassignment pending lock
+  if (task.isReassignPending && !['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
+    const err = new Error('Subtask removal locked (reassignment pending)');
+    err.statusCode = 403;
+    err.code = 'REASSIGN_PENDING_LOCKED';
+    throw err;
+  }
+
   if (!taskModifyRoles(role, task, userId)) {
     const err = new Error('Forbidden');
     err.statusCode = 403;

@@ -15,6 +15,7 @@ import api from '../../services/api';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar } from '../../components/ui';
 import { TaskCard } from '../../components/TaskCard';
+import { ReassignRequestsPanel } from '../../components/ReassignRequestsPanel';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -473,6 +474,9 @@ export const DashboardPage: React.FC = () => {
 
         {/* Right: My tasks + Activity Feed */}
         <div className="space-y-6">
+          {['admin', 'manager', 'team_leader'].includes(user?.role || '') && (
+            <ReassignRequestsPanel />
+          )}
           {/* Team Tasks Overview */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}

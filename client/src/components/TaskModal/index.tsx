@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import {
   Calendar, Clock, Flag, Tag, Users, Paperclip,
   Plus, Edit3, Trash2,
-  ChevronDown, X, Send, AlertTriangle, ListTodo
+  ChevronDown, X, Send, AlertTriangle, ListTodo, UserPlus
 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, generateId } from '../../utils/helpers';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -12,8 +12,9 @@ import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { UserAvatar } from '../UserAvatar';
 import { Modal } from '../Modal';
+import { ReassignRequestModal } from '../ReassignRequestModal';
 import type { Activity, Task, Priority, TaskStatus, Comment } from '../../app/types';
-import { tasksService } from '../../services/api';
+import { tasksService, reassignService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 
 interface TaskModalProps {
@@ -162,7 +163,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const [isEditingPriority, setIsEditingPriority] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isEditingAssignee, setIsEditingAssignee] = useState(false);
+  const [isAddingLabel, setIsAddingLabel] = useState(false);
+  const [labelInput, setLabelInput] = useState('');
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [pendingReassign, setPendingReassign] = useState<any>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (task?.id) {
+       (async () => {
+         try {
+           const res = await reassignService.getStatus(task.id);
+           setPendingReassign(res.data.data);
+         } catch { /* noop */ }
+       })();
+    }
+  }, [task?.id]);
 
   if (!task) return null;
 
@@ -186,6 +202,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
     )
   );
   const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+  const isReadOnly = !!pendingReassign && !canManageTask;
 
   const persistTaskUpdate = async (updates: Partial<Task> & { completionRemark?: string }, errorTitle = 'Task update failed') => {
     try {
@@ -369,9 +386,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0">
-              <button onClick={handleDelete} className="btn-ghost w-8 h-8 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30">
-                <Trash2 size={15} />
-              </button>
+              {canManageTask && (
+                <button onClick={handleDelete} className="btn-ghost w-8 h-8 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30">
+                  <Trash2 size={15} />
+                </button>
+              )}
               <button onClick={onClose} className="btn-ghost w-8 h-8">
                 <X size={15} />
               </button>
@@ -699,7 +718,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           <div>
             <label className="label">Status</label>
             <div className="relative">
-              <select value={task.status} onChange={e => { void persistTaskUpdate({ status: e.target.value as TaskStatus }, 'Status update failed'); }} className="input pr-8 appearance-none">
+              <select
+                  disabled={isReadOnly}
+                  value={task.status}
+                  onChange={(e) => persistTaskUpdate({ status: e.target.value as TaskStatus }, 'Status update failed')}
+                  className={cn(
+                    'bg-white dark:bg-surface-800 border rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 outline-none transition-all w-full flex items-center justify-between',
+                    statusCfg.bg,
+                    statusCfg.text,
+                    isReadOnly && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
                 {Object.entries(STATUS_CONFIG).map(([key, val]) => (
                   <option key={key} value={key}>{val.label}</option>
                 ))}
@@ -714,6 +743,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
               {!isEditingPriority && canManageTask && (
                 <button 
                   onClick={() => setIsEditingPriority(true)}
+                  disabled={isReadOnly}
                   className="p-1 rounded-md text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 transition-colors"
                 >
                   <Edit3 size={13} />
@@ -773,6 +803,27 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                     <Users size={12} />
                     {task.assigneeIds.length > 0 ? 'Change' : 'Assign'}
                   </button>
+                )}
+
+                {!canManageTask && (
+                  <div className="pt-1">
+                    {pendingReassign ? (
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-3 py-1.5 rounded-lg border border-amber-100 dark:border-amber-900/40 mt-1">
+                        <Clock size={12} />
+                         <span>
+                           Reassigning to {users.find(u => u.id === task.requestedAssigneeId)?.name || (pendingReassign ? users.find(u => u.id === pendingReassign.requestedAssigneeId)?.name : '...')}
+                         </span>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setIsReassigning(true)}
+                        className="btn-ghost btn-sm text-[11px] mt-1 text-brand-600 hover:text-brand-700"
+                      >
+                        <UserPlus size={12} />
+                        Request Reassign
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {isEditingAssignee && (
@@ -842,17 +893,89 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
 
           <div>
             <label className="label">Labels</label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 items-center">
               {(task.labels || []).map(label => (
-                <span key={label} className="badge-gray text-[11px]">
+                <span key={label} className="badge-gray text-[11px] group relative">
                   <Tag size={9} />
                   {label}
+                  {canManageTask && (
+                    <button 
+                      onClick={async () => {
+                        const next = (task.labels || []).filter(l => l !== label);
+                        await persistTaskUpdate({ labels: next }, 'Label removal failed');
+                      }}
+                      className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X size={8} strokeWidth={3} />
+                    </button>
+                  )}
                 </span>
               ))}
-              {(!task.labels || task.labels.length === 0) && <p className="text-xs text-surface-400">No labels</p>}
-              <button className="badge text-[11px] bg-surface-100 dark:bg-surface-800 text-surface-500 hover:bg-surface-200 transition-colors">
-                <Plus size={9} />
-              </button>
+              {(!task.labels || task.labels.length === 0) && !isAddingLabel && <p className="text-xs text-surface-400">No labels</p>}
+              
+              {isAddingLabel ? (
+                <div className="relative">
+                  <input
+                    autoFocus
+                    value={labelInput}
+                    onChange={e => setLabelInput(e.target.value)}
+                    onKeyDown={async e => {
+                      if (e.key === 'Enter') {
+                        const trimmed = labelInput.trim();
+                        if (trimmed && !(task.labels || []).includes(trimmed)) {
+                          const next = [...(task.labels || []), trimmed];
+                          await persistTaskUpdate({ labels: next }, 'Label addition failed');
+                        }
+                        setIsAddingLabel(false);
+                        setLabelInput('');
+                      }
+                      if (e.key === 'Escape') {
+                        setIsAddingLabel(false);
+                        setLabelInput('');
+                      }
+                    }}
+                    onBlur={() => {
+                      // Small delay to allow clicking on predefined labels if I add them later
+                      setTimeout(() => {
+                        setIsAddingLabel(false);
+                        setLabelInput('');
+                      }, 150);
+                    }}
+                    className="input h-6 text-[10px] w-24 py-0 px-2 min-h-0 border-brand-500/50 focus:ring-1 focus:ring-brand-500/30"
+                    placeholder="New label..."
+                  />
+                  <div className="absolute left-0 top-full mt-1 z-40 w-32 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-xl p-1">
+                    {['ASAP', 'Feedback', 'Blocked', 'Follow-up'].filter(l => !(task.labels || []).includes(l)).map(l => (
+                      <button
+                        key={l}
+                        type="button"
+                        onMouseDown={e => e.preventDefault()} // prevent blur
+                        onClick={async () => {
+                          const next = [...(task.labels || []), l];
+                          await persistTaskUpdate({ labels: next }, 'Label addition failed');
+                          setIsAddingLabel(false);
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-[10px] font-bold text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700 rounded-md transition-colors"
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                canManageTask && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                        console.log('Plus button clicked');
+                        setIsAddingLabel(true);
+                    }}
+                    className="badge text-[11px] bg-surface-100 dark:bg-surface-800 text-surface-500 hover:bg-surface-200 transition-colors flex items-center justify-center p-1 min-w-[20px]"
+                  >
+                    <Plus size={10} strokeWidth={3} />
+                  </button>
+                )
+              )}
             </div>
           </div>
 
@@ -865,6 +988,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
           </div>
         </div>
       </div>
+      <ReassignRequestModal 
+        open={isReassigning}
+        onClose={() => setIsReassigning(false)}
+        taskId={task.id}
+        taskTitle={task.title}
+        onSubmitted={() => {
+           // Refresh global and local status
+           bootstrap();
+           (async () => {
+             const res = await reassignService.getStatus(task.id);
+             setPendingReassign(res.data.data);
+           })();
+        }}
+      />
     </Modal>
   );
 };

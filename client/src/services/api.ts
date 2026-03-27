@@ -209,3 +209,11 @@ export const personalTasksService = {
   delete: (id: string) => api.delete(`/personal-tasks/${id}`),
   togglePinned: (id: string) => api.patch(`/personal-tasks/${id}/toggle-pinned`),
 };
+
+export const reassignService = {
+  create: (data: { taskId: string; requestedAssigneeId: string; note?: string }) => api.post('/tasks/reassign-request', data),
+  getAll: () => api.get('/tasks/reassign-requests'),
+  approve: (id: string) => api.put(`/tasks/reassign-request/${id}/approve`),
+  reject: (id: string, note?: string) => api.put(`/tasks/reassign-request/${id}/reject`, { note }),
+  getStatus: (taskId: string) => api.get(`/tasks/reassign-request/status/${taskId}`),
+};

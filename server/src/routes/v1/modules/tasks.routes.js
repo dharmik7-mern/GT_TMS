@@ -8,6 +8,7 @@ import { requireAuth } from '../../../middleware/auth.middleware.js';
 import { validateBody } from '../../../middleware/validate.middleware.js';
 import * as TasksController from '../../../controllers/tasks.controller.js';
 import * as AllTasksController from '../../../controllers/allTasks.controller.js';
+import * as ReassignController from '../../../controllers/reassign.controller.js';
 
 const router = express.Router();
 
@@ -106,6 +107,13 @@ const patchSubtaskSchema = z.object({
 
 router.get('/overview', AllTasksController.getOverview);
 router.get('/all', AllTasksController.getAllTasks);
+
+// Reassign Requests
+router.post('/reassign-request', ReassignController.createRequest);
+router.get('/reassign-requests', ReassignController.getRequests);
+router.put('/reassign-request/:id/approve', ReassignController.approveRequest);
+router.put('/reassign-request/:id/reject', ReassignController.rejectRequest);
+router.get('/reassign-request/status/:taskId', ReassignController.getStatusForTask);
 
 router.get('/', TasksController.list);
  router.get('/detail/:id', TasksController.getDetail);
