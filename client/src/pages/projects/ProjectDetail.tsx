@@ -40,7 +40,7 @@ export const ProjectDetailPage: React.FC = () => {
   const { projects, tasks, users, addTask, updateProject, bootstrap } = useAppStore();
   const { user } = useAuthStore();
   const [activeView, setActiveView] = useState('kanban');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [defaultStatus, setDefaultStatus] = useState<TaskStatus>('todo');
@@ -51,6 +51,7 @@ export const ProjectDetailPage: React.FC = () => {
 
   const project = projects.find(p => p.id === id);
   const projectTasks = tasks.filter(t => t.projectId === id);
+  const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const members = users.filter(u => project?.members.includes(u.id));
   const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
   const todayDate = new Date().toISOString().split('T')[0];
@@ -86,7 +87,7 @@ export const ProjectDetailPage: React.FC = () => {
   }
 
   const openTask = (task: Task) => {
-    setSelectedTask(task);
+    setSelectedTaskId(task.id);
     setShowTaskModal(true);
   };
 
@@ -477,7 +478,7 @@ export const ProjectDetailPage: React.FC = () => {
       <TaskModal
         task={selectedTask}
         open={showTaskModal}
-        onClose={() => { setShowTaskModal(false); setSelectedTask(null); }}
+        onClose={() => { setShowTaskModal(false); setSelectedTaskId(null); }}
       />
 
       {/* Add Task Modal */}
@@ -524,7 +525,7 @@ export const ProjectDetailPage: React.FC = () => {
                 value={watchAssignee} 
                 onChange={(val) => setValue('assigneeId', val)}
                 placeholder="Unassigned"
-                items={users.map(u => ({ 
+                items={members.map(u => ({ 
                   id: u.id, 
                   label: u.name,
                   icon: <UserAvatar name={u.name} color={u.color} size="xs" />

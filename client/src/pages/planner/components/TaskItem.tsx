@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   CheckCircle2, Pin, Trash2, Calendar, 
   Clock, Flag, Tag, PinOff, MoreVertical, 
-  Edit2, Circle, Plus, X, ListTodo, ChevronDown, ChevronUp
+  Edit2, Circle, Plus, X, ListTodo, ChevronDown, ChevronUp, AlignLeft, ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn, formatDate } from '../../../utils/helpers';
@@ -22,6 +22,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleDone, onToggle
   const [showLabelInput, setShowLabelInput] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showDescription, setShowDescription] = useState(false);
+  const [descriptionValue, setDescriptionValue] = useState(task.description || '');
   const [newSubtask, setNewSubtask] = useState('');
   
   const editRef = useRef<HTMLInputElement>(null);
@@ -40,6 +42,12 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleDone, onToggle
        onUpdate({ title: editValue.trim() });
     }
     setIsEditing(false);
+  };
+
+  const handleUpdateDescription = () => {
+    if (descriptionValue !== (task.description || '')) {
+       onUpdate({ description: descriptionValue.trim() });
+    }
   };
 
   const handleAddLabel = (e?: React.FormEvent) => {
@@ -145,23 +153,84 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleDone, onToggle
                         {task.title}
                       </span>
                       {totalSubtasks > 0 && (
-                        <span className="flex-shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-800 text-surface-400 inline-flex items-center gap-1">
-                          <CheckCircle2 size={10} /> {completedSubtasks}/{totalSubtasks}
-                        </span>
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-800 text-surface-400 inline-flex items-center gap-1">
+                            {completedSubtasks}/{totalSubtasks}
+                          </span>
+                          <div className="w-12 h-1 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden hidden sm:block">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(completedSubtasks / totalSubtasks) * 100}%` }}
+                              className="h-full bg-brand-500 rounded-full"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {task.description && !showDescription && (
+                        <AlignLeft size={10} className="text-surface-300 flex-shrink-0" />
                       )}
                     </div>
-                    {totalSubtasks > 0 && (
-                      <button 
-                        onClick={() => setIsExpanded(!isExpanded)}
-                        className="flex items-center gap-1 text-[9px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest hover:text-brand-700 w-fit"
-                      >
-                        {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-                        {isExpanded ? 'Hide Checklist' : 'Show Checklist'}
-                      </button>
+                    {(totalSubtasks > 0 || task.description) && (
+                      <div className="flex items-center gap-3">
+                        {totalSubtasks > 0 && (
+                          <button 
+                            onClick={() => setIsExpanded(!isExpanded)}
+                            className="flex items-center gap-1 text-[9px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest hover:text-brand-700 w-fit"
+                          >
+                            {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                            Checklist
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setShowDescription(!showDescription)}
+                          className={cn(
+                            "flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest transition-colors w-fit",
+                            showDescription ? "text-brand-600 dark:text-brand-400" : "text-surface-400 hover:text-surface-600"
+                          )}
+                        >
+                          {showDescription ? (
+                            <>
+                              <ChevronUp size={10} />
+                              Hide Details
+                            </>
+                          ) : (
+                            <>
+                              <AlignLeft size={10} />
+                              {task.description ? 'Edit Details' : 'Add Details'}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    {task.description && !showDescription && (
+                      <p className="text-[11px] text-surface-400 mt-1 line-clamp-1 italic">
+                        {task.description}
+                      </p>
                     )}
                  </div>
                )}
             </div>
+            
+            {showDescription && (
+              <div className="mt-2 w-full px-1 flex flex-col gap-2">
+                <textarea
+                  value={descriptionValue}
+                  onChange={(e) => setDescriptionValue(e.target.value)}
+                  onBlur={handleUpdateDescription}
+                  placeholder="Add a detailed description..."
+                  className="w-full bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-lg p-2 text-xs text-surface-700 dark:text-surface-300 focus:ring-1 focus:ring-brand-500/20 focus:border-brand-500 outline-none min-h-[80px] resize-none font-medium leading-relaxed"
+                />
+                <div className="flex justify-end">
+                   <button 
+                     onClick={() => setShowDescription(false)}
+                     className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-surface-500 hover:text-surface-900 dark:text-surface-400 dark:hover:text-surface-200 bg-surface-100 dark:bg-surface-800 rounded-lg transition-all"
+                   >
+                     <ArrowLeft size={12} />
+                     Back to list
+                   </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

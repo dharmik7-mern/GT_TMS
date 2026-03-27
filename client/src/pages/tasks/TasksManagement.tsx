@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Filter, List, LayoutGrid, Plus, MoreHorizontal, 
   Calendar, Clock, User, ChevronDown, Check, Mail, AlertCircle,
@@ -109,7 +109,8 @@ export const TasksManagement: React.FC = () => {
     if (!selectedTask || selectedTask.type !== 'project') return;
     try {
       await api.patch(`/tasks/${selectedTask.id}/subtasks/${subtaskId}`, { isCompleted });
-      fetchFullTask(selectedTask.id);
+      await fetchFullTask(selectedTask.id);
+      fetchTasks();
     } catch (err) {
       console.error('Toggle subtask failed:', err);
     }
@@ -119,7 +120,8 @@ export const TasksManagement: React.FC = () => {
     if (!selectedTask || selectedTask.type !== 'project' || !title.trim()) return;
     try {
       await api.post(`/tasks/${selectedTask.id}/subtasks`, { title });
-      fetchFullTask(selectedTask.id);
+      await fetchFullTask(selectedTask.id);
+      fetchTasks();
     } catch (err) {
       console.error('Add subtask failed:', err);
     }
@@ -599,6 +601,12 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
     description: ''
   });
 
+  const selectedProject = projects.find(p => p.id === formData.projectId);
+  const assignableUsers = useMemo(() => {
+    if (!formData.projectId) return users;
+    return users.filter(u => selectedProject?.members.includes(u.id));
+  }, [formData.projectId, users, selectedProject]);
+
    const handleCreate = async () => {
     if (!formData.title.trim()) return;
     try {
@@ -675,7 +683,7 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
                       onChange={e => setFormData({ ...formData, assignedToId: e.target.value })}
                     >
                        <option value="" className="dark:bg-surface-900">Unassigned</option>
-                       {users.map(u => <option key={u.id} value={u.id} className="dark:bg-surface-900">{u.name}</option>)}
+                       {assignableUsers.map(u => <option key={u.id} value={u.id} className="dark:bg-surface-900">{u.name}</option>)}
                     </select>
                  </div>
                 <div className="space-y-2">
