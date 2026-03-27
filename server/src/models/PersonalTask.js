@@ -20,6 +20,13 @@ const personalTaskSchema = new mongoose.Schema(
       at: { type: Date, default: null },
     },
 
+    subtasks: [
+      {
+        title: { type: String, required: true, trim: true, maxlength: 300 },
+        isCompleted: { type: Boolean, default: false },
+        order: { type: Number, default: 0 },
+      }
+    ],
     isPinned: { type: Boolean, default: false, index: true },
     completedAt: { type: Date, default: null },
     order: { type: Number, default: 0 },
@@ -40,6 +47,13 @@ personalTaskSchema.set('toJSON', {
     ret.dueDate = ret.dueDate ? new Date(ret.dueDate).toISOString().split('T')[0] : undefined;
     ret.completedAt = ret.completedAt?.toISOString?.() || ret.completedAt;
     
+    ret.subtasks = Array.isArray(ret.subtasks) ? ret.subtasks.map(s => ({
+       id: String(s._id),
+       title: s.title,
+       isCompleted: Boolean(s.isCompleted),
+       order: s.order || 0
+    })) : [];
+
     delete ret._id;
     delete ret.__v;
     return ret;

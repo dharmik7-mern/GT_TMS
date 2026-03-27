@@ -40,10 +40,10 @@ export const SmartInput: React.FC<SmartInputProps> = ({ onAdd }) => {
   return (
     <div className="relative group flex-1">
       <div className={cn(
-        "flex items-center gap-2.5 px-3 py-1.5 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-lg transition-all",
-        isFocused ? "border-brand-500/50 bg-white" : "hover:border-surface-300 dark:hover:border-surface-700 shadow-none bg-surface-50/50"
+        "flex items-center gap-3 px-4 py-3 bg-white dark:bg-surface-900 border-2 border-surface-200 dark:border-surface-800 rounded-xl transition-all",
+        isFocused ? "border-brand-500 bg-white shadow-lg shadow-brand-500/10" : "hover:border-surface-300 dark:hover:border-surface-700 shadow-none bg-surface-50/50"
       )}>
-        <Plus size={14} strokeWidth={3} className={cn("transition-colors", isFocused ? "text-brand-600" : "text-surface-300")} />
+        <Plus size={18} strokeWidth={3} className={cn("transition-colors", isFocused ? "text-brand-600" : "text-surface-300")} />
         
         <input
           ref={inputRef}
@@ -54,7 +54,7 @@ export const SmartInput: React.FC<SmartInputProps> = ({ onAdd }) => {
           onBlur={() => setIsFocused(false)}
           onKeyDown={handleKeyDown}
           placeholder="What's next? (e.g. Call team tomorrow 10am)"
-          className="w-full bg-transparent border-none !outline-none focus:!outline-none focus:!ring-0 text-[13px] font-semibold text-surface-900 dark:text-white placeholder-surface-400 dark:placeholder-surface-500 p-0"
+          className="w-full bg-transparent border-none !outline-none focus:!outline-none focus:!ring-0 text-sm font-semibold text-surface-900 dark:text-white placeholder-surface-400 dark:placeholder-surface-500 p-0"
         />
 
         <AnimatePresence>

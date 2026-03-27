@@ -31,12 +31,6 @@ export const PlannerStats: React.FC<PlannerStatsProps> = ({ stats }) => {
         <span className="text-xs font-bold text-green-600 dark:text-green-300 px-2 py-0.5 bg-green-50/50 dark:bg-green-900/20 rounded-md border border-green-100/50 dark:border-green-800/50 whitespace-nowrap leading-none">{stats.completedToday}</span>
       </div>
 
-      <div className="w-1.5 h-1.5 rounded-full bg-surface-100 dark:bg-surface-800" />
-
-      <div className="flex items-center gap-2 group cursor-default">
-        <span className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">Streak</span>
-        <span className="text-xs font-bold text-amber-600 dark:text-amber-300 px-2 py-0.5 bg-amber-50/50 dark:bg-amber-900/20 rounded-md border border-amber-100/50 dark:border-amber-800/50 whitespace-nowrap leading-none">{stats.streak}d</span>
-      </div>
     </div>
   );
 };
