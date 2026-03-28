@@ -19,8 +19,8 @@ export async function register(req, res, next) {
 
 export async function login(req, res, next) {
   try {
-    const { email, password } = req.body;
-    const result = await AuthService.login({ email, password });
+    const { email, companyCode, employeeCode, password } = req.body;
+    const result = await AuthService.login({ email, companyCode, employeeCode, password });
     return res.status(200).json({
       success: true,
       data: {

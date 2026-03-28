@@ -9,7 +9,6 @@ import type { Role } from '../app/types';
 
 // Auth pages
 import LoginPage from '../pages/auth/Login';
-import RegisterPage from '../pages/auth/Register';
 import { ForgotPasswordPage, ResetPasswordPage } from '../pages/auth/ForgotPassword';
 
 // App pages
@@ -90,7 +89,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'register',
-        element: <RequireGuest><RegisterPage /></RequireGuest>,
+        element: <Navigate to="/login" replace />,
+      },
+      {
+        path: 'loginWithId',
+        element: <Navigate to="/login" replace />,
       },
       {
         path: 'forgot-password',

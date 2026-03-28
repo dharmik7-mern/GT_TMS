@@ -68,6 +68,12 @@ api.interceptors.response.use(
 
 export default api;
 
+interface LoginPayload {
+  companyCode: string;
+  employeeCode: string;
+  password: string;
+}
+
 // Typed service functions (stubbed — replace with real API calls)
 export const projectsService = {
   getAll: () => api.get('/projects'),
@@ -139,7 +145,7 @@ export const companiesService = {
 };
 
 export const authService = {
-  login: (email: string, password: string) => api.post('/auth/login', { email, password }),
+  login: (payload: LoginPayload) => api.post('/auth/login', payload),
   register: (data: unknown) => api.post('/auth/register', data),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) => api.post('/auth/reset-password', { token, password }),

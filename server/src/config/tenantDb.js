@@ -17,7 +17,7 @@ import { getAdminMessageModel } from '../models/admin/AdminMessage.model.js';
 import { getTaskReassignRequestModel } from '../models/TaskReassignRequest.js';
 
 
-const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'GT_TMS';
+const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'GT_PMS';
 const tenantDbCache = new Map();
 
 function normalizeSegment(value, fallback = 'tenant') {
