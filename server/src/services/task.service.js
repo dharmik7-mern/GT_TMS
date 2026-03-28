@@ -500,16 +500,23 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   const task = await Task.findOneAndUpdate({ _id: taskId, tenantId, workspaceId }, { $set }, { new: true });
   if (!task) return null;
 
-  const activityEntries = [{
-    tenantId,
-    workspaceId,
-    userId,
-    type: 'task_updated',
-    description: `Updated task "${task.title}"`,
-    entityType: 'task',
-    entityId: task._id,
-    metadata: { projectId: task.projectId },
-  }];
+  const changedFields = Object.keys(updates || {});
+  const specializedOnlyFields = new Set(['status', 'assigneeIds']);
+  const hasGenericTaskChanges = changedFields.some((field) => !specializedOnlyFields.has(field));
+  const activityEntries = [];
+
+  if (hasGenericTaskChanges) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'task_updated',
+      description: `Updated task "${task.title}"`,
+      entityType: 'task',
+      entityId: task._id,
+      metadata: { projectId: task.projectId, changedFields },
+    });
+  }
 
   if (previousStatus !== task.status) {
     activityEntries.push({
@@ -538,7 +545,9 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
-  await ActivityLog.insertMany(activityEntries);
+  if (activityEntries.length) {
+    await ActivityLog.insertMany(activityEntries);
+  }
 
   const newlyAssignedIds = afterAssigneeIds.filter((assigneeId) => !beforeAssigneeIds.includes(assigneeId));
   if (newlyAssignedIds.length) {

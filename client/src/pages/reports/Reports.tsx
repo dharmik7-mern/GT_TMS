@@ -367,10 +367,10 @@ export const ReportsPage: React.FC = () => {
       const completedQuickTasks = assignedQuickTasks.filter((task) => task.status === 'done').length;
       const overdueTasks = assignedTasks.filter((task) => {
         const dueDate = parseDate(task.dueDate);
-        return dueDate && dueDate < new Date() && task.status !== 'done';
+        return dueDate && dueDate <= new Date() && task.status !== 'done';
       }).length + assignedQuickTasks.filter((task) => {
         const dueDate = parseDate(task.dueDate);
-        return dueDate && dueDate < new Date() && task.status !== 'done';
+        return dueDate && dueDate <= new Date() && task.status !== 'done';
       }).length;
 
       const approvedRatings = allAssignedWork
@@ -401,10 +401,10 @@ export const ReportsPage: React.FC = () => {
       scopedQuickTasks.filter((task) => task.status === 'done').length;
     const overdueOpenTasks = scopedTasks.filter((task) => {
       const dueDate = parseDate(task.dueDate);
-      return dueDate && dueDate < new Date() && task.status !== 'done';
+      return dueDate && dueDate <= new Date() && task.status !== 'done';
     }).length + scopedQuickTasks.filter((task) => {
       const dueDate = parseDate(task.dueDate);
-      return dueDate && dueDate < new Date() && task.status !== 'done';
+      return dueDate && dueDate <= new Date() && task.status !== 'done';
     }).length;
     const approvedRatings = [...scopedTasks, ...scopedQuickTasks]
       .filter((task) => task.completionReview?.reviewStatus === 'approved' && typeof task.completionReview?.rating === 'number')

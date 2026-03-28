@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Calendar, Flag, Search, User, X, Paperclip, Lock, Trash2 } from 'lucide-react';
 import { Modal } from '../Modal';
-import { cn } from '../../utils/helpers';
+import { cn, getTodayDateKey } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -31,6 +31,7 @@ interface QuickTaskModalProps {
 export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, task }) => {
   const { user } = useAuthStore();
   const { users, bootstrap } = useAppStore();
+  const defaultDueDate = getTodayDateKey();
 
   const [files, setFiles] = useState<File[]>([]);
 
@@ -48,7 +49,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
       priority: task?.priority ?? 'medium',
       status: task?.status ?? 'todo',
       assigneeIds: task?.assigneeIds ?? [],
-      dueDate: task?.dueDate ?? '',
+      dueDate: task?.dueDate ?? defaultDueDate,
       isPrivate: task?.isPrivate ?? false,
     },
   });
@@ -80,10 +81,10 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
       priority: task?.priority ?? 'medium',
       status: task?.status ?? 'todo',
       assigneeIds: task?.assigneeIds ?? [],
-      dueDate: task?.dueDate ?? '',
+      dueDate: task?.dueDate ?? defaultDueDate,
       isPrivate: task?.isPrivate ?? false,
     });
-  }, [task, reset, open]);
+  }, [defaultDueDate, task, reset, open]);
 
   useEffect(() => {
     setAssigneeOpen(false);
@@ -129,11 +130,11 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
     const set = new Set(selectedAssigneeIds);
     if (set.has(assigneeId)) set.delete(assigneeId);
     else set.add(assigneeId);
-    setValue('assigneeIds', Array.from(set), { shouldDirty: true });
+    setValue('assigneeIds', Array.from(set), { shouldDirty: true, shouldValidate: true });
   };
 
   const clearAssignees = () => {
-    setValue('assigneeIds', [], { shouldDirty: true });
+    setValue('assigneeIds', [], { shouldDirty: true, shouldValidate: true });
   };
 
   const onSubmit = (data: QuickTaskFormData) => {
@@ -254,9 +255,18 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
             <div>
               <label className="label">Due date</label>
               <div className="relative">
-                <input type="date" {...register('dueDate')} className="input border-white/70 bg-white/90 pr-10 shadow-sm dark:border-surface-700/80 dark:bg-surface-900/85" min={new Date().toISOString().split('T')[0]} />
+                <input
+                  type="date"
+                  {...register('dueDate', { required: 'Due date is required' })}
+                  className={cn(
+                    'input border-white/70 bg-white/90 pr-10 shadow-sm dark:border-surface-700/80 dark:bg-surface-900/85',
+                    errors.dueDate && 'border-rose-300 focus:ring-rose-200'
+                  )}
+                  min={defaultDueDate}
+                />
                 <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
               </div>
+              {errors.dueDate && <p className="text-xs text-rose-500 mt-1">{errors.dueDate.message}</p>}
             </div>
           </div>
 
@@ -291,6 +301,13 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
               </button>
             </div>
             <div className="rounded-[22px] border border-white/70 bg-white/75 p-3 shadow-sm backdrop-blur dark:border-surface-700/80 dark:bg-surface-900/70">
+              <input
+                type="hidden"
+                {...register('assigneeIds', {
+                  validate: (value) => Array.isArray(value) && value.length > 0 ? true : 'Select at least one assignee',
+                })}
+              />
+
               {selectedAssignees.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {selectedAssignees.map((assignee) => (
@@ -413,6 +430,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
                 </span>
               )}
             </div>
+            {errors.assigneeIds && <p className="text-xs text-rose-500 mt-2">{errors.assigneeIds.message}</p>}
           </div>
 
           {canCurrentUserUsePrivateTask && (

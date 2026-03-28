@@ -55,9 +55,50 @@ const createSchema = z.object({
   assigneeIds: z.array(z.string()).optional().nullable(),
   // Backwards compat: allow single assigneeId, service converts to assigneeIds[]
   assigneeId: z.string().optional().nullable(),
-  dueDate: z.string().optional(),
+  dueDate: z.string().trim().min(1),
   completionRemark: z.string().trim().max(5000).optional(),
   isPrivate: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  const assigneeCount = Array.isArray(data.assigneeIds)
+    ? data.assigneeIds.filter(Boolean).length
+    : data.assigneeId
+      ? 1
+      : 0;
+
+  if (assigneeCount < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['assigneeIds'],
+      message: 'At least one assignee is required',
+    });
+  }
+});
+
+const updateSchema = z.object({
+  title: z.string().trim().min(2).max(300).optional(),
+  description: z.string().trim().max(10000).optional(),
+  status: z.enum(['todo', 'in_progress', 'done']).optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required').optional().nullable(),
+  assigneeId: z.string().optional().nullable(),
+  dueDate: z.string().trim().min(1, 'Due date is required').optional(),
+  completionRemark: z.string().trim().max(5000).optional(),
+  isPrivate: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  const touchedAssignees = data.assigneeIds !== undefined || data.assigneeId !== undefined;
+  const assigneeCount = Array.isArray(data.assigneeIds)
+    ? data.assigneeIds.filter(Boolean).length
+    : data.assigneeId
+      ? 1
+      : 0;
+
+  if (touchedAssignees && assigneeCount < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['assigneeIds'],
+      message: 'At least one assignee is required',
+    });
+  }
 });
 
 const importSchema = z.object({
@@ -92,7 +133,7 @@ const reviewQuickTaskSchema = z.object({
 router.get('/', QuickTasksController.list);
 router.post('/', validateBody(createSchema), QuickTasksController.create);
 router.post('/import', validateBody(importSchema), QuickTasksController.importBulk);
-router.put('/:id', validateBody(createSchema.partial()), QuickTasksController.update);
+router.put('/:id', validateBody(updateSchema), QuickTasksController.update);
 router.delete('/:id', QuickTasksController.remove);
 
 router.post('/:id/comments', validateBody(addCommentSchema), QuickTasksController.addComment);

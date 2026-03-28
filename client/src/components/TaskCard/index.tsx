@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, MessageSquare, Paperclip, Clock } from 'lucide-react';
-import { cn, formatDate } from '../../utils/helpers';
+import { cn, formatDate, isDueDateOverdue } from '../../utils/helpers';
 import { PRIORITY_CONFIG } from '../../app/constants';
 import { UserAvatar, AvatarGroup } from '../UserAvatar';
 import { SubtaskBar } from '../SubtaskBar';
@@ -19,7 +19,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
   const priority = PRIORITY_CONFIG[task.priority];
   const { users } = useAppStore();
   const assignees = users.filter(u => task.assigneeIds.includes(u.id));
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+  const isOverdue = isDueDateOverdue(task.dueDate, task.status);
 
   if (compact) {
     return (

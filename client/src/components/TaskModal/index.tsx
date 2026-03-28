@@ -6,7 +6,7 @@ import {
   Plus, Edit3, Trash2,
   ChevronDown, X, Send, AlertTriangle, ListTodo, UserPlus
 } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime, generateId } from '../../utils/helpers';
+import { cn, formatDate, formatRelativeTime, generateId, isDueDateOverdue } from '../../utils/helpers';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
@@ -166,7 +166,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const reporter = users.find(u => u.id === currentTask.reporterId);
   const priority = PRIORITY_CONFIG[currentTask.priority] || PRIORITY_CONFIG.medium;
   const statusCfg = STATUS_CONFIG[currentTask.status] || STATUS_CONFIG.todo;
-  const isOverdue = Boolean(currentTask.dueDate && new Date(currentTask.dueDate) < new Date() && currentTask.status !== 'done');
+  const isOverdue = isDueDateOverdue(currentTask.dueDate, currentTask.status);
   const completionReview = currentTask.completionReview;
   const activityItems = buildTaskTimeline(currentTask, comments);
   const isReadOnly = !!(currentTask.isReassignPending || pendingReassign) && !canManageTask;

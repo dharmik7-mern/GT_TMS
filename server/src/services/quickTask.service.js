@@ -269,6 +269,27 @@ export async function createQuickTask({ companyId, workspaceId, userId, data, ro
 
   const isPrivate = Boolean(data.isPrivate);
 
+  if (!String(data.title || '').trim()) {
+    const err = new Error('Title is required');
+    err.statusCode = 400;
+    err.code = 'TITLE_REQUIRED';
+    throw err;
+  }
+
+  if (!data.dueDate) {
+    const err = new Error('Due date is required');
+    err.statusCode = 400;
+    err.code = 'DUE_DATE_REQUIRED';
+    throw err;
+  }
+
+  if (!assigneeIds.length) {
+    const err = new Error('At least one assignee is required');
+    err.statusCode = 400;
+    err.code = 'ASSIGNEE_REQUIRED';
+    throw err;
+  }
+
   if (isPrivate) {
     await assertActorCanAssignPrivateQuickTasks({ companyId, userId, role });
   }
@@ -446,6 +467,20 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     ? (updates.completionRemark || '')
     : previousCompletionRemark;
 
+  if (assigneeIdsProvided && !assigneeIds.length) {
+    const err = new Error('At least one assignee is required');
+    err.statusCode = 400;
+    err.code = 'ASSIGNEE_REQUIRED';
+    throw err;
+  }
+
+  if (updates.dueDate !== undefined && !updates.dueDate) {
+    const err = new Error('Due date is required');
+    err.statusCode = 400;
+    err.code = 'DUE_DATE_REQUIRED';
+    throw err;
+  }
+
   const $set = {
     ...updates,
     ...(updates.dueDate !== undefined ? { dueDate: updates.dueDate ? new Date(updates.dueDate) : null } : {}),
@@ -497,16 +532,23 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
   );
   if (!quickTask) return null;
 
-  const activityEntries = [{
-    tenantId,
-    workspaceId,
-    userId,
-    type: 'quick_task_updated',
-    description: `Updated quick task "${quickTask.title}"`,
-    entityType: 'quick_task',
-    entityId: quickTask._id,
-    metadata: { changedFields: Object.keys(updates || {}) },
-  }];
+  const changedFields = Object.keys(updates || {});
+  const specializedOnlyFields = new Set(['status', 'priority', 'dueDate', 'completionRemark', 'assigneeIds', 'assigneeId']);
+  const hasGenericQuickTaskChanges = changedFields.some((field) => !specializedOnlyFields.has(field));
+  const activityEntries = [];
+
+  if (hasGenericQuickTaskChanges) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'quick_task_updated',
+      description: `Updated quick task "${quickTask.title}"`,
+      entityType: 'quick_task',
+      entityId: quickTask._id,
+      metadata: { changedFields },
+    });
+  }
 
   if (previousStatus !== quickTask.status) {
     activityEntries.push({
@@ -576,7 +618,9 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     });
   }
 
-  await ActivityLog.insertMany(activityEntries);
+  if (activityEntries.length) {
+    await ActivityLog.insertMany(activityEntries);
+  }
 
   const newlyAssigned = afterAssignees.filter((assigneeId) => !beforeAssignees.includes(assigneeId));
   if (newlyAssigned.length) {

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Search, Zap, User, Calendar, CheckCircle2, Upload, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn, formatDate } from '../../utils/helpers';
+import { cn, formatDate, isDueDateOverdue } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -197,7 +197,7 @@ const STATUS_CARDS: Array<{
 ];
 
 function isOverdue(task: QuickTask) {
-  return !!task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+  return isDueDateOverdue(task.dueDate, task.status);
 }
 
 export const QuickTasksPage: React.FC = () => {
@@ -222,6 +222,7 @@ export const QuickTasksPage: React.FC = () => {
   const [importServerError, setImportServerError] = useState('');
 
   const canImportQuickTasks = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+  const userMap = useMemo(() => new Map(users.map((item) => [item.id, item])), [users]);
 
   const filtered = useMemo(() => {
     const uid = user?.id ?? '';
@@ -239,10 +240,39 @@ export const QuickTasksPage: React.FC = () => {
       .filter(t => {
         const q = query.trim().toLowerCase();
         if (!q) return true;
-        return (
-          t.title.toLowerCase().includes(q) ||
-          (t.description || '').toLowerCase().includes(q)
-        );
+
+        const reporter = userMap.get(t.reporterId);
+        const assignees = (t.assigneeIds || [])
+          .map((assigneeId) => userMap.get(assigneeId))
+          .filter(Boolean);
+
+        const searchableParts = [
+          t.title,
+          t.description || '',
+          t.status,
+          STATUS_CONFIG[t.status]?.label || '',
+          t.priority,
+          PRIORITY_CONFIG[t.priority]?.label || '',
+          t.dueDate || '',
+          t.dueDate ? formatDate(t.dueDate, 'MMM d, yyyy') : '',
+          t.createdAt || '',
+          t.createdAt ? formatDate(t.createdAt, 'MMM d, yyyy') : '',
+          t.updatedAt || '',
+          t.updatedAt ? formatDate(t.updatedAt, 'MMM d, yyyy') : '',
+          reporter?.name || '',
+          reporter?.email || '',
+          reporter?.employeeId || '',
+          ...assignees.flatMap((assignee) => [
+            assignee?.name || '',
+            assignee?.email || '',
+            assignee?.employeeId || '',
+          ]),
+        ];
+
+        return searchableParts
+          .join(' ')
+          .toLowerCase()
+          .includes(q);
       })
       .sort((a, b) => {
         const aO = isOverdue(a);
@@ -254,7 +284,7 @@ export const QuickTasksPage: React.FC = () => {
         if (!a.dueDate && b.dueDate) return 1;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [quickTasks, scope, status, query, user?.id]);
+  }, [quickTasks, scope, status, query, user?.id, userMap]);
   
   // Reset to first page when filters change
   React.useEffect(() => {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Flag, Trash2, Zap, MessageSquare, Send, Plus, Lock } from 'lucide-react';
-import { cn, formatDate, generateId } from '../../utils/helpers';
+import { cn, formatDate, generateId, isDueDateOverdue } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -209,7 +209,7 @@ export const QuickTaskDetailPage: React.FC = () => {
     task.status === 'todo' ? STATUS_CONFIG.todo :
     task.status === 'in_progress' ? STATUS_CONFIG.in_progress :
     STATUS_CONFIG.done;
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+  const isOverdue = isDueDateOverdue(task.dueDate, task.status);
   const canEdit = Boolean(user);
   const isAssignee = Boolean(user && task.assigneeIds.includes(user.id));
   const isReporter = Boolean(user && task.reporterId === user.id);
