@@ -186,7 +186,7 @@ export const LoginPage: React.FC = () => {
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-surface-500">
+      {/* <p className="mt-6 text-center text-sm text-surface-500">
         {mode === 'email' ? (
           <>
             Prefer employee credentials?{' '}
@@ -210,7 +210,7 @@ export const LoginPage: React.FC = () => {
             </button>
           </>
         )}
-      </p>
+      </p> */}
     </div>
   );
 };
