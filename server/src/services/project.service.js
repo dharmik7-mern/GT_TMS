@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { logger } from '../utils/logger.js';
 import { initializeProjectPlanning } from './timeline.service.js';
 import { createTask } from './task.service.js';
+import { hasWorkspacePermission } from './permission.service.js';
 
 const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-e243b9.log');
 const PROJECT_IMPORT_FALLBACK_COLOR = '#3366FF';
@@ -131,11 +132,10 @@ function parseTaskSubtasks(value) {
 }
 
 function isProjectAdminRole(role) {
-  return ['super_admin', 'admin', 'manager'].includes(role);
+  return ['super_admin', 'admin'].includes(role);
 }
 
-function buildProjectAccessFilter({ role, userId }) {
-  if (isProjectAdminRole(role)) return {};
+function buildOwnedProjectAccessFilter({ userId }) {
   return {
     $or: [
       { ownerId: userId },
@@ -143,6 +143,24 @@ function buildProjectAccessFilter({ role, userId }) {
       { reportingPersonIds: userId },
     ],
   };
+}
+
+async function canSeeOtherProjects({ companyId, workspaceId, role }) {
+  return hasWorkspacePermission({
+    companyId,
+    workspaceId,
+    role,
+    permissionKey: 'seeOtherProjects',
+  });
+}
+
+async function canEditOtherProjects({ companyId, workspaceId, role }) {
+  return hasWorkspacePermission({
+    companyId,
+    workspaceId,
+    role,
+    permissionKey: 'editOtherProjects',
+  });
 }
 
 export async function syncProjectStats(companyId, workspaceId, projectId) {
@@ -178,7 +196,8 @@ export async function syncProjectStats(companyId, workspaceId, projectId) {
 export async function listProjects({ companyId, workspaceId, userId, role, status, department, q, page = 1, limit = 50 }) {
   const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
-  const filter = { tenantId, workspaceId, ...buildProjectAccessFilter({ role, userId }) };
+  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const filter = { tenantId, workspaceId, ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })) };
   if (status) filter.status = status;
   if (department) filter.department = department;
   if (q) filter.$text = { $search: q };
@@ -195,7 +214,13 @@ export async function listProjects({ companyId, workspaceId, userId, role, statu
 export async function getProject({ companyId, workspaceId, projectId, userId, role }) {
   const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
-  const project = await Project.findOne({ _id: projectId, tenantId, workspaceId, ...buildProjectAccessFilter({ role, userId }) });
+  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const project = await Project.findOne({
+    _id: projectId,
+    tenantId,
+    workspaceId,
+    ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })),
+  });
   return project;
 }
 
@@ -313,6 +338,7 @@ export async function createProject({ companyId, workspaceId, userId, role, data
 export async function updateProject({ companyId, workspaceId, userId, role, projectId, updates }) {
   const tenantId = companyId;
   const { Project, ActivityLog } = await getTenantModels(companyId);
+  const hasGlobalEdit = isProjectAdminRole(role) || await canEditOtherProjects({ companyId, workspaceId, role });
   const normalizedUpdates = { ...updates };
 
   if (Array.isArray(updates.members)) {
@@ -345,7 +371,7 @@ export async function updateProject({ companyId, workspaceId, userId, role, proj
   }
 
   const project = await Project.findOneAndUpdate(
-    { _id: projectId, tenantId, workspaceId, ...buildProjectAccessFilter({ role, userId }) },
+    { _id: projectId, tenantId, workspaceId, ...(hasGlobalEdit ? {} : buildOwnedProjectAccessFilter({ userId })) },
     {
       $set: {
         ...normalizedUpdates,
@@ -406,7 +432,13 @@ export async function updateProject({ companyId, workspaceId, userId, role, proj
 export async function deleteProject({ companyId, workspaceId, userId, role, projectId }) {
   const tenantId = companyId;
   const { Project, ActivityLog } = await getTenantModels(companyId);
-  const project = await Project.findOneAndDelete({ _id: projectId, tenantId, workspaceId, ...buildProjectAccessFilter({ role, userId }) });
+  const hasGlobalEdit = isProjectAdminRole(role) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const project = await Project.findOneAndDelete({
+    _id: projectId,
+    tenantId,
+    workspaceId,
+    ...(hasGlobalEdit ? {} : buildOwnedProjectAccessFilter({ userId })),
+  });
   if (!project) return null;
 
   if (project.chatId) {

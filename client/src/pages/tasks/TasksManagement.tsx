@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Filter, List, LayoutGrid, Plus, MoreHorizontal, 
   Calendar, Clock, User, ChevronDown, Check, Mail, AlertCircle,
-  Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon
+  Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon, SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
@@ -31,6 +31,100 @@ interface TaskRow {
   reporterId?: string;
 }
 
+interface SearchableSelectOption {
+  id: string;
+  label: string;
+  meta?: string;
+}
+
+const SearchableSelect: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: SearchableSelectOption[];
+  placeholder: string;
+  searchPlaceholder: string;
+}> = ({ label, value, onChange, options, placeholder, searchPlaceholder }) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!open) setSearch('');
+  }, [open]);
+
+  const selected = options.find((option) => option.id === value);
+  const filteredOptions = options.filter((option) =>
+    `${option.label} ${option.meta || ''}`.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  return (
+    <div ref={rootRef} className="relative">
+      <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-surface-500 ml-1">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={cn(
+          'w-full bg-[#f8f9fc] dark:bg-surface-800 border border-gray-100 dark:border-surface-700 rounded-2xl px-4 py-3 text-[13px] font-semibold flex items-center justify-between gap-3 text-left transition-all',
+          open && 'ring-2 ring-blue-500/15 dark:ring-brand-500/15 border-blue-300 dark:border-brand-500/40'
+        )}
+      >
+        <span className={cn('truncate', !selected && 'text-gray-400 dark:text-surface-500')}>
+          {selected?.label || placeholder}
+        </span>
+        <ChevronDown size={16} className={cn('text-gray-400 dark:text-surface-500 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-2 w-full rounded-2xl border border-gray-200 dark:border-surface-700 bg-white dark:bg-surface-900 p-2 shadow-xl">
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-surface-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full bg-[#f8f9fc] dark:bg-surface-800 border border-gray-100 dark:border-surface-700 rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/15 dark:focus:ring-brand-500/15 text-gray-900 dark:text-surface-100"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-100 dark:border-surface-800 bg-gray-50/60 dark:bg-surface-950/30 p-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-gray-400 dark:text-surface-500">No results found</div>
+            ) : (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    'w-full rounded-xl px-3 py-2.5 text-left transition-colors',
+                    value === option.id
+                      ? 'bg-blue-50 text-blue-700 dark:bg-brand-950/30 dark:text-brand-300'
+                      : 'text-gray-700 dark:text-surface-200 hover:bg-white dark:hover:bg-surface-800'
+                  )}
+                >
+                  <div className="truncate text-sm font-medium">{option.label}</div>
+                  {option.meta ? <div className="truncate text-xs text-gray-400 dark:text-surface-500">{option.meta}</div> : null}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const TasksManagement: React.FC = () => {
   const { user } = useAuthStore();
   const { users, projects } = useAppStore();
@@ -45,6 +139,8 @@ export const TasksManagement: React.FC = () => {
    const [isAddingTask, setIsAddingTask] = useState(false);
    const canCreateTask = user?.role !== 'team_member';
    const [filterStatus, setFilterStatus] = useState('all');
+   const [departmentFilter, setDepartmentFilter] = useState('all');
+   const [personFilter, setPersonFilter] = useState('all');
    const [currentPage, setCurrentPage] = useState(1);
    const [projectsPage, setProjectsPage] = useState(1);
    const [quickPage, setQuickPage] = useState(1);
@@ -64,7 +160,7 @@ export const TasksManagement: React.FC = () => {
       setCurrentPage(1);
       setProjectsPage(1);
       setQuickPage(1);
-    }, [searchTerm, filterStatus]);
+    }, [searchTerm, filterStatus, departmentFilter, personFilter]);
 
    useEffect(() => {
      const handleClickOutside = (e: MouseEvent) => {
@@ -156,6 +252,15 @@ export const TasksManagement: React.FC = () => {
   
   // Kanban columns data
   const kanbanTasks = [...projectTasks, ...quickTasks];
+  const userMap = useMemo(() => new Map(users.map((item) => [item.id, item])), [users]);
+  const departmentOptions = useMemo(
+    () => Array.from(new Set(users.map((item) => item.department?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
+    [users]
+  );
+  const personOptions = useMemo(
+    () => [...users].sort((a, b) => a.name.localeCompare(b.name)),
+    [users]
+  );
 
   useEffect(() => {
     fetchTasks();
@@ -186,6 +291,22 @@ export const TasksManagement: React.FC = () => {
      if (filterStatus !== 'all') {
        filtered = filtered.filter(t => t.status === filterStatus);
      }
+
+     if (departmentFilter !== 'all') {
+       filtered = filtered.filter((task) => {
+         const reporter = task.reporterId ? userMap.get(task.reporterId) : null;
+         const assignees = (task.assigneeIds || []).map((id) => userMap.get(id)).filter(Boolean);
+         const departments = Array.from(new Set([
+           reporter?.department?.trim() || '',
+           ...assignees.map((assignee) => assignee?.department?.trim() || ''),
+         ].filter(Boolean)));
+         return departments.includes(departmentFilter);
+       });
+     }
+
+     if (personFilter !== 'all') {
+       filtered = filtered.filter((task) => task.reporterId === personFilter || (task.assigneeIds || []).includes(personFilter));
+     }
  
      return filtered;
    };
@@ -197,6 +318,7 @@ export const TasksManagement: React.FC = () => {
    };
 
   const allFilteredTasks = [...filteredTasks(projectTasks), ...filteredTasks(quickTasks)];
+  const activeFilterCount = [filterStatus !== 'all', departmentFilter !== 'all', personFilter !== 'all'].filter(Boolean).length;
 
   const StatusIcon = ({ status }: { status: string }) => {
     const s = status.toLowerCase().replace('_', '');
@@ -218,25 +340,25 @@ export const TasksManagement: React.FC = () => {
   };
 
    return (
-    <div className="h-full flex flex-col bg-[#f8f9fc] dark:bg-surface-950 p-6 overflow-hidden">
+    <div className="h-full flex flex-col bg-[#f8f9fc] dark:bg-surface-950 p-3 sm:p-4 lg:p-6 overflow-hidden">
       {/* Bordio Style Top Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+      <div className="mb-4 flex flex-col gap-3 lg:mb-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {canCreateTask && (
             <button 
               onClick={() => setIsAddingTask(true)}
-              className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors shadow-sm"
+              className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-colors shadow-sm w-full sm:w-auto"
             >
               <Plus size={18} />
               Add new
             </button>
           )}
           
-          <div className="flex items-center bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg p-1 shadow-sm">
+          <div className="flex items-center bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg p-1 shadow-sm w-full sm:w-auto overflow-x-auto">
             <button 
               onClick={() => setView('table')}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap",
                 view === 'table' ? "bg-gray-100 dark:bg-surface-800 text-gray-900 dark:text-surface-100 shadow-sm" : "text-gray-500 dark:text-surface-400 hover:text-gray-700 dark:hover:text-surface-200"
               )}
             >
@@ -246,7 +368,7 @@ export const TasksManagement: React.FC = () => {
             <button 
               onClick={() => setView('kanban')}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap",
                 view === 'kanban' ? "bg-gray-100 dark:bg-surface-800 text-gray-900 dark:text-surface-100 shadow-sm" : "text-gray-500 dark:text-surface-400 hover:text-gray-700 dark:hover:text-surface-200"
               )}
             >
@@ -256,13 +378,13 @@ export const TasksManagement: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-           <div className="relative">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+           <div className="relative w-full sm:w-auto">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-surface-500" size={16} />
              <input 
                type="text" 
                placeholder="Search projects, tasks, people..." 
-               className="bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-full pl-9 pr-4 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 transition-all shadow-sm text-gray-900 dark:text-surface-100"
+               className="bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-full pl-9 pr-4 py-2 text-sm w-full sm:w-64 lg:w-72 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 transition-all shadow-sm text-gray-900 dark:text-surface-100"
                value={searchTerm}
                onChange={(e) => setSearchTerm(e.target.value)}
              />
@@ -270,40 +392,131 @@ export const TasksManagement: React.FC = () => {
           
 
           
-           <div className="relative">
+           <div className="relative w-full sm:w-auto">
              <div 
                onClick={() => setOpenDropdown(openDropdown === 'filter' ? null : 'filter')}
-               className="flex items-center gap-2 bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg px-3 py-2 shadow-sm text-xs font-bold text-gray-600 dark:text-surface-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 uppercase tracking-tight transition-all"
+               className="flex items-center justify-center gap-2 bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg px-3 py-2 shadow-sm text-xs font-bold text-gray-600 dark:text-surface-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 uppercase tracking-tight transition-all w-full sm:w-auto"
              >
-               <Filter size={14} />
-               Filter: {filterStatus === 'all' ? 'All' : filterStatus.replace('_', ' ')}
+               <SlidersHorizontal size={14} />
+               Filter
+               {activeFilterCount > 0 && (
+                 <span className="rounded-full bg-[#00a3ff] px-1.5 py-0.5 text-[10px] font-bold text-white">{activeFilterCount}</span>
+               )}
              </div>
              {openDropdown === 'filter' && (
-               <div className="absolute top-full mt-2 right-0 bg-white dark:bg-surface-900 border border-gray-100 dark:border-surface-800 rounded-xl shadow-xl p-2 z-50 min-w-[140px] animate-in fade-in zoom-in-95 duration-100">
-                  {['all', 'todo', 'in_progress', 'done', 'blocked'].map(f => (
-                    <div 
-                      key={f} 
-                      onClick={() => { setFilterStatus(f); setOpenDropdown(null); }} 
-                      className="px-3 py-2 text-[11px] font-bold text-gray-600 dark:text-surface-400 hover:bg-gray-50 dark:hover:bg-surface-800 rounded-lg cursor-pointer capitalize transition-colors"
-                    >
-                      {f.replace('_', ' ')}
+               <div className="absolute top-full mt-2 left-0 sm:left-auto sm:right-0 bg-white dark:bg-surface-900 border border-gray-100 dark:border-surface-800 rounded-[1.25rem] shadow-xl p-4 z-50 w-full sm:w-[340px] max-w-[calc(100vw-1.5rem)] animate-in fade-in zoom-in-95 duration-100">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-gray-800 dark:text-surface-200">Task Filters</p>
+                      <p className="text-xs text-gray-400 dark:text-surface-500">Use the same filtering flow as quick tasks.</p>
                     </div>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setOpenDropdown(null)}
+                      className="text-gray-400 dark:text-surface-500 hover:text-gray-600 dark:hover:text-surface-300"
+                    >
+                      <XIcon size={16} />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <SearchableSelect
+                      label="Person"
+                      value={personFilter}
+                      onChange={setPersonFilter}
+                      placeholder="All people"
+                      searchPlaceholder="Search people..."
+                      options={[
+                        { id: 'all', label: 'All people' },
+                        ...personOptions.map((person) => ({
+                          id: person.id,
+                          label: person.name,
+                          meta: [person.employeeId, person.department].filter(Boolean).join(' • '),
+                        })),
+                      ]}
+                    />
+                    <SearchableSelect
+                      label="Department"
+                      value={departmentFilter}
+                      onChange={setDepartmentFilter}
+                      placeholder="All departments"
+                      searchPlaceholder="Search departments..."
+                      options={[
+                        { id: 'all', label: 'All departments' },
+                        ...departmentOptions.map((department) => ({ id: department, label: department })),
+                      ]}
+                    />
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-surface-500 ml-1">Status</label>
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {['all', 'todo', 'in_progress', 'done', 'blocked'].map(f => (
+                          <button 
+                            key={f}
+                            type="button"
+                            onClick={() => setFilterStatus(f)}
+                            className={cn(
+                              'rounded-xl border px-3 py-2 text-[11px] font-bold capitalize transition-all',
+                              filterStatus === f
+                                ? 'border-[#00a3ff] bg-blue-50 text-[#0082cc] dark:border-brand-500 dark:bg-brand-950/30 dark:text-brand-300'
+                                : 'border-gray-100 bg-[#f8f9fc] text-gray-600 hover:bg-gray-50 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-300 dark:hover:bg-surface-700'
+                            )}
+                          >
+                            {f.replace('_', ' ')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+
+
+
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterStatus('all');
+                        setDepartmentFilter('all');
+                        setPersonFilter('all');
+                      }}
+                      className="w-full rounded-2xl bg-[#f1f4fb] dark:bg-surface-800 px-4 py-3 text-sm font-bold text-[#2c4e87] dark:text-surface-200 hover:bg-[#e7edf8] dark:hover:bg-surface-700 transition-colors"
+                    >
+                      Reset Filters
+                    </button>
+                  </div>
                </div>
              )}
            </div>
 
-           <div className="flex -space-x-2">
-             {users.slice(0, 5).map((u, i) => (
-               <UserAvatar key={u.id} name={u.name} size="xs" color={u.color} className="border-2 border-white dark:border-surface-950" />
-             ))}
-             {users.length > 5 && (
-               <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-surface-800 border-2 border-white dark:border-surface-950 flex items-center justify-center text-[10px] font-bold text-gray-500">
-                 +{users.length - 5}
-               </div>
-             )}
+           <div className="flex items-center justify-end overflow-visible pl-2 sm:pl-0">
+             <div className="flex -space-x-1.5 sm:-space-x-2">
+               {users.slice(0, 5).map((u) => (
+                 <UserAvatar key={u.id} name={u.name} size="xs" color={u.color} className="border-2 border-white dark:border-surface-950 ring-1 ring-[#f8f9fc] dark:ring-surface-950" />
+               ))}
+               {users.length > 5 && (
+                 <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-surface-800 border-2 border-white dark:border-surface-950 ring-1 ring-[#f8f9fc] dark:ring-surface-950 flex items-center justify-center text-[10px] font-bold text-gray-500 dark:text-surface-300">
+                   +{users.length - 5}
+                 </div>
+               )}
+             </div>
            </div>
         </div>
+      </div>
+
+      <div className="mb-4 mt-2 flex flex-wrap items-center gap-2">
+        {filterStatus !== 'all' && (
+          <span className="rounded-full bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-surface-300 capitalize">
+            Status: {filterStatus.replace('_', ' ')}
+          </span>
+        )}
+        {departmentFilter !== 'all' && (
+          <span className="rounded-full bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-surface-300">
+            Department: {departmentFilter}
+          </span>
+        )}
+        {personFilter !== 'all' && (
+          <span className="rounded-full bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-surface-300">
+            Person: {userMap.get(personFilter)?.name || 'Selected'}
+          </span>
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden relative">

@@ -76,6 +76,33 @@ export interface UserPerformance {
   recentEvaluations: PerformanceEvaluation[];
 }
 
+export interface TaskCreationRequest {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  priority: Priority;
+  status: TaskStatus;
+  assigneeIds: string[];
+  requestedBy: string;
+  requestedToIds: string[];
+  startDate?: string;
+  dueDate?: string;
+  durationDays: number;
+  phaseId?: string;
+  estimatedHours?: number;
+  order: number;
+  labels?: string[];
+  subtasks?: TaskSubtask[];
+  requestStatus: 'pending' | 'approved' | 'rejected';
+  reviewNote?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  createdTaskId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface User {
   id: string;
   employeeId?: string;

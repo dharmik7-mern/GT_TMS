@@ -101,6 +101,23 @@ export async function update(req, res, next) {
   }
 }
 
+export async function setPassword(req, res, next) {
+  try {
+    const { companyId, role, sub: userId } = req.auth;
+    const ok = await UserService.setUserPassword({
+      companyId,
+      actorRole: role,
+      actorUserId: userId,
+      targetUserId: req.params.id,
+      newPassword: req.body.newPassword,
+    });
+    if (!ok) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    return res.status(200).json({ success: true, data: { ok: true } });
+  } catch (e) {
+    return next(e);
+  }
+}
+
 export async function remove(req, res, next) {
   try {
     const { companyId, role, sub: userId } = req.auth;

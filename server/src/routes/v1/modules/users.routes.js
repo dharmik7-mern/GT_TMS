@@ -92,6 +92,15 @@ router.put(
   ),
   UsersController.update
 );
+router.put(
+  '/:id/password',
+  validateBody(
+    z.object({
+      newPassword: z.string().min(8).max(200),
+    })
+  ),
+  UsersController.setPassword
+);
 router.delete('/:id', UsersController.remove);
 router.get('/', UsersController.list);
 router.get('/:id/performance', UsersController.performance);

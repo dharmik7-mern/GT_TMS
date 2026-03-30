@@ -16,7 +16,7 @@ import { TaskCard } from '../../components/TaskCard';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar, EmptyState, Tabs, TabsContent, Dropdown } from '../../components/ui';
 import { Modal } from '../../components/Modal';
-import type { Task, TaskStatus, Priority, TimelinePhase } from '../../app/types';
+import type { Task, TaskStatus, Priority, TimelinePhase, TaskCreationRequest } from '../../app/types';
 import { projectsService, tasksService, timelineService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 import { ProjectTimelineModule } from '../../components/ProjectTimelineModule';
@@ -37,7 +37,7 @@ interface TaskFormData {
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { projects, tasks, users, addTask, updateProject, bootstrap } = useAppStore();
+  const { projects, tasks, users, workspaces, addTask, updateProject, bootstrap } = useAppStore();
   const { user } = useAuthStore();
   const [activeView, setActiveView] = useState('kanban');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -48,12 +48,22 @@ export const ProjectDetailPage: React.FC = () => {
   const [timelinePhases, setTimelinePhases] = useState<TimelinePhase[]>([]);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [isCreatingPhase, setIsCreatingPhase] = useState(false);
+  const [taskRequests, setTaskRequests] = useState<TaskCreationRequest[]>([]);
+  const [loadingTaskRequests, setLoadingTaskRequests] = useState(false);
 
   const project = projects.find(p => p.id === id);
+  const workspacePermissions = workspaces[0]?.settings?.permissions || {};
+  const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
   const projectTasks = tasks.filter(t => t.projectId === id);
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const members = users.filter(u => project?.members.includes(u.id));
   const canCreateTask = user?.role !== 'team_member' || (project?.reportingPersonIds || []).includes(user?.id);
+  const canEditProject = user?.role !== 'team_member' || canEditOtherProjects;
+  const canRequestTask = Boolean(user?.id && project?.members.includes(user.id) && !canCreateTask);
+  const canReviewTaskRequests = Boolean(
+    user?.id &&
+    ((project?.reportingPersonIds || []).includes(user.id) || ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || ''))
+  );
   const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
   const assignableUsers = members.filter((u) => !project?.reportingPersonIds?.includes(u.id));
   const todayDate = new Date().toISOString().split('T')[0];
@@ -75,6 +85,25 @@ export const ProjectDetailPage: React.FC = () => {
         setTimelinePhases([]);
       }
     })();
+  }, [project?.id]);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoadingTaskRequests(true);
+        const response = await tasksService.getRequests(project.id);
+        if (!cancelled) setTaskRequests(response.data?.data ?? response.data ?? []);
+      } catch {
+        if (!cancelled) setTaskRequests([]);
+      } finally {
+        if (!cancelled) setLoadingTaskRequests(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [project?.id]);
 
   if (!project) {
@@ -160,7 +189,7 @@ export const ProjectDetailPage: React.FC = () => {
     try {
       const startDate = data.startDate || project.startDate || todayDate;
       const durationDays = Math.max(1, Number(data.durationDays) || 1);
-      const response = await tasksService.create({
+      const payload = {
         title: data.title,
         description: data.description || undefined,
         priority: data.priority,
@@ -173,21 +202,54 @@ export const ProjectDetailPage: React.FC = () => {
         phaseId: data.phaseId || undefined,
         estimatedHours: data.estimatedHours || undefined,
         order: projectTasks.filter((task) => task.status === defaultStatus).length,
-      });
+      };
 
-      const createdTask = response.data.data ?? response.data;
-      addTask(createdTask);
-      updateProject(project.id, { tasksCount: project.tasksCount + 1 });
-      await bootstrap();
+      if (canCreateTask) {
+        const response = await tasksService.create(payload);
+        const createdTask = response.data.data ?? response.data;
+        addTask(createdTask);
+        updateProject(project.id, { tasksCount: project.tasksCount + 1 });
+        await bootstrap();
+        emitSuccessToast('Task created successfully.', 'Task Added');
+      } else {
+        const response = await tasksService.createRequest(payload);
+        const createdRequest = response.data.data ?? response.data;
+        setTaskRequests((prev) => [createdRequest, ...prev]);
+        emitSuccessToast('Task request sent to the reporting person.', 'Request Sent');
+      }
+
       setShowAddTask(false);
       reset();
-      emitSuccessToast('Task created successfully.', 'Task Added');
     } catch (error: any) {
       const message =
         error?.response?.data?.error?.message ||
         error?.response?.data?.message ||
         'Task could not be created.';
-      emitErrorToast(message, 'Task creation failed');
+      emitErrorToast(message, canCreateTask ? 'Task creation failed' : 'Task request failed');
+    }
+  };
+
+  const handleReviewTaskRequest = async (requestId: string, action: 'approve' | 'reject') => {
+    try {
+      const reviewNote = action === 'reject' ? window.prompt('Add rejection note (optional):') || '' : '';
+      const response = await tasksService.reviewRequest(requestId, { action, reviewNote });
+      const result = response.data?.data ?? response.data;
+      if (result?.request) {
+        setTaskRequests((prev) => prev.map((request) => (
+          request.id === requestId ? result.request : request
+        )));
+      }
+      await bootstrap();
+      emitSuccessToast(
+        action === 'approve' ? 'Task request approved and created.' : 'Task request rejected.',
+        action === 'approve' ? 'Request Approved' : 'Request Rejected'
+      );
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Request review failed.';
+      emitErrorToast(message, 'Task Request');
     }
   };
 
@@ -260,10 +322,10 @@ export const ProjectDetailPage: React.FC = () => {
             ) : (
               <h1
                 className="font-display font-bold text-2xl text-surface-900 dark:text-white cursor-pointer hover:text-brand-700 dark:hover:text-brand-300 transition-colors flex items-center gap-2 group"
-                onClick={() => setEditingName(true)}
+                onClick={() => canEditProject && setEditingName(true)}
               >
                 {project.name}
-                <Edit3 size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" />
+                {canEditProject ? <Edit3 size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" /> : null}
               </h1>
             )}
             <p className="text-sm text-surface-400 mt-0.5">{project.description}</p>
@@ -324,7 +386,7 @@ export const ProjectDetailPage: React.FC = () => {
           <KanbanBoard 
             projectId={project.id} 
             onOpenTask={openTask} 
-            onAddTask={canCreateTask ? handleAddTask : undefined} 
+            onAddTask={canCreateTask || canRequestTask ? handleAddTask : undefined} 
             onDeleteTask={canCreateTask ? handleDeleteTask : undefined} 
             onMoveTaskRemote={handleMoveTaskRemote}
           />
@@ -336,8 +398,8 @@ export const ProjectDetailPage: React.FC = () => {
               <EmptyState
                 icon={<List size={24} />}
                 title="No tasks yet"
-                description={canCreateTask ? "Create your first task to get started" : "Tasks will appear here once created by a manager."}
-                action={canCreateTask ? <button onClick={() => handleAddTask()} className="btn-primary btn-md"><Plus size={14} /> Add Task</button> : null}
+                description={canCreateTask ? "Create your first task to get started" : canRequestTask ? "Request a task from the reporting person for this project." : "Tasks will appear here once created by a manager."}
+                action={canCreateTask || canRequestTask ? <button onClick={() => handleAddTask()} className="btn-primary btn-md"><Plus size={14} /> {canCreateTask ? 'Add Task' : 'Request Task'}</button> : null}
               />
             ) : (
               projectTasks.map(task => (
@@ -355,6 +417,64 @@ export const ProjectDetailPage: React.FC = () => {
 
         <TabsContent value="overview" className="pt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="card p-5 md:col-span-2">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-display font-semibold text-surface-900 dark:text-white">Task Requests</h3>
+                  <p className="text-xs text-surface-400">
+                    {canReviewTaskRequests ? 'Review requested tasks before they are created.' : 'Track task requests raised for this project.'}
+                  </p>
+                </div>
+                {loadingTaskRequests ? <span className="text-xs text-surface-400">Loading...</span> : null}
+              </div>
+              <div className="space-y-3">
+                {taskRequests.length === 0 ? (
+                  <p className="text-sm text-surface-400">No task requests found for this project.</p>
+                ) : (
+                  taskRequests.slice(0, 8).map((request) => {
+                    const requester = users.find((member) => member.id === request.requestedBy);
+                    const assignees = users.filter((member) => request.assigneeIds.includes(member.id));
+                    return (
+                      <div key={request.id} className="rounded-2xl border border-surface-100 dark:border-surface-800 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">{request.title}</p>
+                            <p className="mt-1 text-xs text-surface-400">
+                              Requested by {requester?.name || 'Unknown user'} on {formatDate(request.createdAt)}
+                            </p>
+                            {request.description ? (
+                              <p className="mt-2 text-sm text-surface-600 dark:text-surface-300">{request.description}</p>
+                            ) : null}
+                            <p className="mt-2 text-xs text-surface-500">
+                              Assignees: {assignees.length ? assignees.map((member) => member.name).join(', ') : 'Not assigned yet'}
+                            </p>
+                            {request.reviewNote ? <p className="mt-2 text-xs text-surface-500">Note: {request.reviewNote}</p> : null}
+                          </div>
+                          <span className={cn(
+                            'badge text-[10px]',
+                            request.requestStatus === 'approved' && 'badge-green',
+                            request.requestStatus === 'rejected' && 'badge-rose',
+                            request.requestStatus === 'pending' && 'badge-amber'
+                          )}>
+                            {request.requestStatus}
+                          </span>
+                        </div>
+                        {canReviewTaskRequests && request.requestStatus === 'pending' ? (
+                          <div className="mt-3 flex gap-2">
+                            <button onClick={() => { void handleReviewTaskRequest(request.id, 'approve'); }} className="btn-primary btn-sm">
+                              Approve
+                            </button>
+                            <button onClick={() => { void handleReviewTaskRequest(request.id, 'reject'); }} className="btn-secondary btn-sm">
+                              Reject
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
             <div className="card p-5">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Task Distribution</h3>
               <div className="space-y-3">
@@ -502,7 +622,7 @@ export const ProjectDetailPage: React.FC = () => {
       />
 
       {/* Add Task Modal */}
-      <Modal open={showAddTask} onClose={() => setShowAddTask(false)} title="New Task">
+      <Modal open={showAddTask} onClose={() => setShowAddTask(false)} title={canCreateTask ? 'New Task' : 'Request Task'}>
         <form onSubmit={handleSubmit(onCreateTask)} className="p-6 space-y-4">
           <div>
             <label className="label">Title *</label>
@@ -589,7 +709,7 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setShowAddTask(false)} className="btn-secondary btn-md flex-1">Cancel</button>
-            <button type="submit" className="btn-primary btn-md flex-1">Create Task</button>
+            <button type="submit" className="btn-primary btn-md flex-1">{canCreateTask ? 'Create Task' : 'Send Request'}</button>
           </div>
         </form>
       </Modal>

@@ -89,6 +89,11 @@ export const tasksService = {
   getAll: (projectId?: string) => api.get('/tasks', { params: { projectId } }),
   getById: (id: string) => api.get(`/tasks/${id}`),
   create: (data: unknown) => api.post('/tasks', data),
+  getRequests: (projectId: string, requestStatus?: 'pending' | 'approved' | 'rejected') =>
+    api.get('/tasks/requests', { params: { projectId, requestStatus } }),
+  createRequest: (data: unknown) => api.post('/tasks/requests', data),
+  reviewRequest: (id: string, body: { action: 'approve' | 'reject'; reviewNote?: string }) =>
+    api.post(`/tasks/requests/${id}/review`, body),
   update: (id: string, data: unknown) => api.put(`/tasks/${id}`, data),
   delete: (id: string) => api.delete(`/tasks/${id}`),
   move: (id: string, status: string) => api.patch(`/tasks/${id}/status`, { status }),
@@ -112,6 +117,7 @@ export const usersService = {
   create: (data: unknown) => api.post('/users', data),
   importBulk: (rows: unknown[]) => api.post('/users/import', { rows }),
   update: (id: string, data: unknown) => api.put(`/users/${id}`, data),
+  setPassword: (id: string, data: { newPassword: string }) => api.put(`/users/${id}/password`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
   me: () => api.get('/users/me'),
   myPerformance: () => api.get('/users/me/performance'),

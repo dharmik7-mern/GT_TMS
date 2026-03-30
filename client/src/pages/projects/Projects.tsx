@@ -339,12 +339,15 @@ function parseProjectsCsv(content: string) {
 const ProjectCard = React.forwardRef<HTMLDivElement, {
   project: Project;
   onDelete: (id: string) => void;
-}>(({ project, onDelete }, ref) => {
+  onEdit: (project: Project) => void;
+}>(({ project, onDelete, onEdit }, ref) => {
   const navigate = useNavigate();
-  const { users } = useAppStore();
+  const { users, workspaces } = useAppStore();
   const members = users.filter(u => project.members.includes(u.id));
   const { user } = useAuthStore();
-  const canManageProjects = user?.role !== 'team_member';
+  const workspacePermissions = workspaces[0]?.settings?.permissions || {};
+  const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
+  const canManageProjects = user?.role !== 'team_member' || canEditOtherProjects;
   const badge = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.todo;
 
   return (
@@ -388,7 +391,10 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
                 className="z-50 min-w-[160px] bg-white dark:bg-surface-900 rounded-xl shadow-modal border border-surface-100 dark:border-surface-800 p-1"
                 sideOffset={4} align="end"
               >
-                <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
+                <DropdownMenu.Item
+                  onClick={() => onEdit(project)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none"
+                >
                   <Edit3 size={14} /> Edit
                 </DropdownMenu.Item>
                 <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
@@ -434,14 +440,16 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
   );
 });
 
-const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }> = ({ project, onDelete }) => {
+const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; onEdit: (project: Project) => void }> = ({ project, onDelete, onEdit }) => {
   const navigate = useNavigate();
-  const { users } = useAppStore();
+  const { users, workspaces } = useAppStore();
   const members = users.filter(u => project.members.includes(u.id));
   const badge = PROJECT_STATUS_BADGES[project.status];
 
   const { user } = useAuthStore();
-  const canManageProjects = user?.role !== 'team_member';
+  const workspacePermissions = workspaces[0]?.settings?.permissions || {};
+  const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
+  const canManageProjects = user?.role !== 'team_member' || canEditOtherProjects;
 
   return (
     <motion.div
@@ -474,10 +482,18 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
         )}
       </div>
       {canManageProjects && (
-        <button onClick={e => { e.stopPropagation(); onDelete(project.id); }}
-          className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-rose-500 dark:hover:bg-rose-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-          <Trash2 size={13} />
-        </button>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+          <button
+            onClick={e => { e.stopPropagation(); onEdit(project); }}
+            className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-brand-600 flex items-center justify-center"
+          >
+            <Edit3 size={13} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(project.id); }}
+            className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-rose-500 dark:hover:bg-rose-950/30 flex items-center justify-center transition-all">
+            <Trash2 size={13} />
+          </button>
+        </div>
       )}
     </motion.div>
   );
@@ -486,7 +502,7 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
 export const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { projects, users, addProject, deleteProject, bootstrap } = useAppStore();
+  const { projects, users, addProject, updateProject, deleteProject, bootstrap } = useAppStore();
   const { user } = useAuthStore();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>(() => {
@@ -497,6 +513,7 @@ export const ProjectsPage: React.FC = () => {
   });
   const canCreateProjects = user?.role !== 'team_member';
   const [showModal, setShowModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
@@ -553,6 +570,7 @@ export const ProjectsPage: React.FC = () => {
 
   const closeCreateModal = () => {
     setShowModal(false);
+    setEditingProject(null);
     setSelectedColor(PROJECT_COLORS[0]);
     setSelectedMembers([]);
     setSelectedReportingPersons([]);
@@ -560,6 +578,38 @@ export const ProjectsPage: React.FC = () => {
     setReportingSearch('');
     setSdlcPlan(DEFAULT_SDLC_PLAN);
     reset();
+  };
+
+  const openCreateModal = () => {
+    closeCreateModal();
+    reset({
+      name: '',
+      description: '',
+      department: 'General',
+      startDate: todayDate,
+      endDate: '',
+      budget: undefined,
+      budgetCurrency: 'INR',
+    });
+    setShowModal(true);
+  };
+
+  const openEditModal = (project: Project) => {
+    setEditingProject(project);
+    setShowModal(true);
+    setValue('name', project.name);
+    setValue('description', project.description || '');
+    setValue('department', project.department || 'General');
+    setValue('startDate', project.startDate || '');
+    setValue('endDate', project.endDate || '');
+    setValue('budget', project.budget);
+    setValue('budgetCurrency', project.budgetCurrency || 'INR');
+    setSelectedColor(project.color);
+    setSelectedMembers(project.members || []);
+    setSelectedReportingPersons(project.reportingPersonIds || []);
+    setMemberSearch('');
+    setReportingSearch('');
+    setSdlcPlan(project.sdlcPlan?.length ? project.sdlcPlan : DEFAULT_SDLC_PLAN);
   };
 
   React.useEffect(() => {
@@ -663,14 +713,14 @@ export const ProjectsPage: React.FC = () => {
     }
   };
 
-  const onCreateProject = async (data: ProjectFormData) => {
+  const onSaveProject = async (data: ProjectFormData) => {
     try {
       const fallbackMembers = user?.id ? [user.id] : [];
       const payload = {
         name: data.name,
         description: data.description,
         color: selectedColor,
-        status: 'active' as const,
+        status: editingProject?.status || 'active' as const,
         department: data.department || 'General',
         members: selectedMembers.length > 0 ? selectedMembers : fallbackMembers,
         reportingPersonIds: selectedReportingPersons,
@@ -681,26 +731,27 @@ export const ProjectsPage: React.FC = () => {
         sdlcPlan: sdlcPlan.filter((phase) => phase.name.trim()),
       };
 
-      const res = await projectsService.create(payload);
-      const created = res.data.data ?? res.data;
-
-      addProject(created);
-      setShowModal(false);
-      setSelectedColor(PROJECT_COLORS[0]);
-      setSelectedMembers([]);
-      setSelectedReportingPersons([]);
-      setMemberSearch('');
-      setReportingSearch('');
-      setSdlcPlan(DEFAULT_SDLC_PLAN);
-      reset();
-      emitSuccessToast('Project created successfully.');
-      navigate(`/projects/${created.id}`);
+      if (editingProject) {
+        const res = await projectsService.update(editingProject.id, payload);
+        const updated = res.data.data ?? res.data;
+        updateProject(editingProject.id, updated);
+        closeCreateModal();
+        await bootstrap();
+        emitSuccessToast('Project updated successfully.', 'Project Updated');
+      } else {
+        const res = await projectsService.create(payload);
+        const created = res.data.data ?? res.data;
+        addProject(created);
+        closeCreateModal();
+        emitSuccessToast('Project created successfully.');
+        navigate(`/projects/${created.id}`);
+      }
     } catch (error: any) {
       const message =
         error?.response?.data?.error?.message ||
         error?.response?.data?.message ||
         'Project could not be saved to the database.';
-      emitErrorToast(message, 'Project creation failed');
+      emitErrorToast(message, editingProject ? 'Project update failed' : 'Project creation failed');
     }
   };
 
@@ -763,7 +814,7 @@ export const ProjectsPage: React.FC = () => {
               <Upload size={14} /> Import
             </button>
           )}
-          {canCreateProjects && <button onClick={() => setShowModal(true)} className="btn-primary btn-sm px-4">
+          {canCreateProjects && <button onClick={openCreateModal} className="btn-primary btn-sm px-4">
             <Plus size={14} /> New Project
           </button>}
           <div className="flex items-center bg-surface-100 dark:bg-surface-800 rounded-xl p-1">
@@ -825,7 +876,7 @@ export const ProjectsPage: React.FC = () => {
                       <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         <AnimatePresence mode="popLayout">
                           {deptProjects.map(project => (
-                            <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} />
+                            <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} onEdit={openEditModal} />
                           ))}
                         </AnimatePresence>
                       </motion.div>
@@ -842,7 +893,7 @@ export const ProjectsPage: React.FC = () => {
                         </div>
                         <AnimatePresence mode="popLayout">
                           {deptProjects.map(project => (
-                            <ProjectRow key={project.id} project={project} onDelete={handleDeleteProject} />
+                            <ProjectRow key={project.id} project={project} onDelete={handleDeleteProject} onEdit={openEditModal} />
                           ))}
                         </AnimatePresence>
                       </div>
@@ -856,8 +907,13 @@ export const ProjectsPage: React.FC = () => {
       )}
 
       {/* Create Project Modal */}
-      <Modal open={canCreateProjects && showModal} onClose={closeCreateModal} title="New Project" description="Create a new project for your team">
-        <form onSubmit={handleSubmit(onCreateProject)} className="p-6 space-y-5">
+      <Modal
+        open={canCreateProjects && showModal}
+        onClose={closeCreateModal}
+        title={editingProject ? 'Edit Project' : 'New Project'}
+        description={editingProject ? 'Update the selected project for your team.' : 'Create a new project for your team'}
+      >
+        <form onSubmit={handleSubmit(onSaveProject)} className="p-6 space-y-5">
           <div>
             <label className="label">Project name *</label>
             <input {...register('name', { required: 'Name is required' })} placeholder="e.g. Website Redesign" className={cn('input', errors.name && 'border-rose-400')} />
@@ -900,7 +956,7 @@ export const ProjectsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Start date</label>
-              <input {...register('startDate')} type="date" className="input" defaultValue={todayDate} />
+              <input {...register('startDate')} type="date" className="input" />
             </div>
             <div>
               <label className="label">Due date</label>
@@ -1050,7 +1106,7 @@ export const ProjectsPage: React.FC = () => {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={closeCreateModal} className="btn-secondary btn-md flex-1">Cancel</button>
-            <button type="submit" className="btn-primary btn-md flex-1">Create Project</button>
+            <button type="submit" className="btn-primary btn-md flex-1">{editingProject ? 'Save Changes' : 'Create Project'}</button>
           </div>
         </form>
       </Modal>
