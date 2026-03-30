@@ -236,7 +236,7 @@ export const Sidebar: React.FC = () => {
       </AnimatePresence>
 
       {/* Search */}
-      {!isCollapsed && (
+      {/* {!isCollapsed && (
         <div className="px-3 py-2.5">
           <button
             onClick={() => { }}
@@ -244,10 +244,9 @@ export const Sidebar: React.FC = () => {
           >
             <Search size={14} />
             <span>Search...</span>
-            {/* <kbd className="ml-auto text-[10px] px-1.5 py-0.5 bg-surface-200 dark:bg-surface-700 rounded font-mono text-surface-500">⌘K</kbd> */}
           </button>
         </div>
-      )}
+      )} */}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-hide">

@@ -447,6 +447,33 @@ export async function updateUser({ companyId, workspaceId, actorRole, userId, ta
   return user;
 }
 
+export async function setUserPassword({ companyId, actorRole, actorUserId, targetUserId, newPassword }) {
+  const tenantId = companyId;
+  const { User } = await getTenantModels(companyId);
+  if (!['super_admin', 'admin'].includes(actorRole)) {
+    const err = new Error('Only company admins can update user passwords');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  const user = await User.findOne({ _id: targetUserId, tenantId }).select('+passwordHash');
+  if (!user) return null;
+
+  if (String(actorUserId) === String(targetUserId)) {
+    const err = new Error('Use the personal password change flow for your own account');
+    err.statusCode = 400;
+    err.code = 'SELF_PASSWORD_RESET_BLOCKED';
+    throw err;
+  }
+
+  await assertPasswordAllowed(newPassword, { companyId: tenantId });
+  user.passwordHash = await hashPassword(newPassword);
+  await user.save();
+
+  return true;
+}
+
 export async function deleteUser({ companyId, actorRole, userId, targetUserId }) {
   const tenantId = companyId;
   const { User, Membership } = await getTenantModels(companyId);

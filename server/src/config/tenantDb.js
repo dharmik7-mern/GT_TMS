@@ -15,6 +15,7 @@ import { getProjectTimelineModel } from '../models/ProjectTimeline.js';
 import { getAdminConversationModel } from '../models/admin/AdminConversation.model.js';
 import { getAdminMessageModel } from '../models/admin/AdminMessage.model.js';
 import { getTaskReassignRequestModel } from '../models/TaskReassignRequest.js';
+import { getTaskCreationRequestModel } from '../models/TaskCreationRequest.js';
 
 
 const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'GT_PMS';
@@ -100,6 +101,7 @@ export async function getTenantModels(companyId = null) {
     AdminConversation: getAdminConversationModel(conn),
     AdminMessage: getAdminMessageModel(conn),
     TaskReassignRequest: getTaskReassignRequestModel(conn),
+    TaskCreationRequest: getTaskCreationRequestModel(conn),
   };
 }
 

@@ -86,7 +86,7 @@ export const LoginPage: React.FC = () => {
               : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'
           )}
         >
-          Employee Login
+          Employee Code Login
         </button>
       </div>
 
@@ -195,7 +195,7 @@ export const LoginPage: React.FC = () => {
               onClick={() => setMode('employee')}
               className="text-brand-600 dark:text-brand-400 font-medium hover:text-brand-700 transition-colors"
             >
-              Use company code login
+              Use employee code login
             </button>
           </>
         ) : (
