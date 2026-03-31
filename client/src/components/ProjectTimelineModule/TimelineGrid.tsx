@@ -12,6 +12,7 @@ interface TimelineGridProps {
   dayWidth: number;
   extraRightPadding?: number;
   onTaskCommit: (taskId: string, nextStartDate: string, nextEndDate: string) => void;
+  users: any[];
 }
 
 export const TimelineGrid: React.FC<TimelineGridProps> = ({
@@ -22,6 +23,7 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
   dayWidth,
   extraRightPadding = 80,
   onTaskCommit,
+  users,
 }) => {
   const gridWidth = timeline.projectWindow.totalDays * dayWidth;
   const width = gridWidth + extraRightPadding;
@@ -75,12 +77,13 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
         </div>
 
         <div
-          className="absolute top-0 z-10 h-full border-l-2 border-rose-500/80"
+          className="absolute top-0 z-30 h-full border-l-2 border-rose-500/50 pointer-events-none"
           style={{ left: Math.max(0, timeline.projectWindow.todayOffset) * dayWidth }}
         >
-          <span className="absolute -top-6 -left-3 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+          <div className="sticky top-10 -left-3 z-30 flex items-center gap-1.5 whitespace-nowrap bg-rose-500 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-white rounded-full">
+            <div className="w-1 h-1 rounded-full bg-white animate-ping" />
             Today
-          </span>
+          </div>
         </div>
 
         <svg className="pointer-events-none absolute inset-0 z-[12] overflow-visible" width={width} height={totalHeight}>
@@ -166,7 +169,9 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
                 rowTop={row.top}
                 rowHeight={row.height}
                 hasConflict={conflictIds.has(row.task.id)}
+                isReadOnly={timeline.status === 'Approved'}
                 onCommit={onTaskCommit}
+                users={users}
               />
             ) : null}
           </div>

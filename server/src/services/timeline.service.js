@@ -185,16 +185,14 @@ function computeTimelineView({ project, timelineDoc, phases, tasks }) {
   }));
 
   const ungrouped = tasksWithOffsets.filter((task) => !task.phaseId || !phaseMap.has(task.phaseId));
-  if (ungrouped.length) {
-    groupedPhases.push({
-      id: 'ungrouped',
-      projectId: strId(project?._id || project?.id),
-      name: 'Ungrouped',
-      order: Number.MAX_SAFE_INTEGER,
-      color: '#64748b',
-      tasks: ungrouped,
-    });
-  }
+  groupedPhases.push({
+    id: 'ungrouped',
+    projectId: strId(project?._id || project?.id),
+    name: 'Unassigned Tasks',
+    order: Number.MAX_SAFE_INTEGER,
+    color: '#64748b',
+    tasks: ungrouped,
+  });
 
   const taskMap = new Map(tasksWithOffsets.map((task) => [task.id, task]));
   const orderedIds = validateDependencyDag(tasksWithOffsets);

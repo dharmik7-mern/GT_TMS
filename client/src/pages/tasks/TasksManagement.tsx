@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
+import { STATUS_CONFIG } from '../../app/constants';
 import { addDaysToDateKey, cn, formatDate } from '../../utils/helpers';
 import { UserAvatar } from '../../components/UserAvatar';
 import { KanbanBoard } from '../../components/KanbanBoard';
@@ -17,10 +18,11 @@ interface TaskRow {
   _id?: string;
   title: string;
   assignedTo: string;
+  assigneeAvatar?: string;
   assigneeIds?: string[];
   projectId: string | null;
   projectName: string;
-  type: 'project' | 'quick';
+  type: 'project' | 'quick' | 'personal';
   status: string;
   priority: string;
   dueDate: string | null;
@@ -37,6 +39,7 @@ export const TasksManagement: React.FC = () => {
   const [view, setView] = useState<'table' | 'kanban'>('table');
   const [projectTasks, setProjectTasks] = useState<TaskRow[]>([]);
   const [quickTasks, setQuickTasks] = useState<TaskRow[]>([]);
+  const [personalTasks, setPersonalTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
    const [searchTerm, setSearchTerm] = useState('');
    const [selectedTask, setSelectedTask] = useState<TaskRow | null>(null);
@@ -48,8 +51,9 @@ export const TasksManagement: React.FC = () => {
    const [currentPage, setCurrentPage] = useState(1);
    const [projectsPage, setProjectsPage] = useState(1);
    const [quickPage, setQuickPage] = useState(1);
+   const [personalPage, setPersonalPage] = useState(1);
    const [tasksPerPage] = useState(10);
-   const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick']);
+   const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick', 'personal']);
    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
  
    useEffect(() => {
@@ -64,6 +68,7 @@ export const TasksManagement: React.FC = () => {
       setCurrentPage(1);
       setProjectsPage(1);
       setQuickPage(1);
+      setPersonalPage(1);
     }, [searchTerm, filterStatus]);
 
    useEffect(() => {
@@ -96,9 +101,15 @@ export const TasksManagement: React.FC = () => {
   const handleUpdateTaskField = async (field: string, value: any) => {
     if (!selectedTask) return;
     try {
-      const endpoint = selectedTask.type === 'project' ? `/tasks/${selectedTask.id}` : `/quick-tasks/${selectedTask.id}`;
+      const endpoint = selectedTask.type === 'project' ? `/tasks/${selectedTask.id}` : 
+                      selectedTask.type === 'quick' ? `/quick-tasks/${selectedTask.id}` : 
+                      `/personal-tasks/${selectedTask.id}`;
       // Use put for full update or patch if API supports it
-      await api.put(endpoint, { [field]: value });
+      if (selectedTask.type === 'personal') {
+        await api.put(endpoint, { [field]: value });
+      } else {
+        await api.put(endpoint, { [field]: value });
+      }
       fetchFullTask(selectedTask.id);
       fetchTasks(); // Refresh list
     } catch (err) {
@@ -117,10 +128,10 @@ export const TasksManagement: React.FC = () => {
     }
   };
 
-  const handleAddSubtask = async (title: string) => {
+  const handleAddSubtask = async (title: string, assigneeId?: string | null) => {
     if (!selectedTask || selectedTask.type !== 'project' || !title.trim()) return;
     try {
-      await api.post(`/tasks/${selectedTask.id}/subtasks`, { title });
+      await api.post(`/tasks/${selectedTask.id}/subtasks`, { title, assigneeId: assigneeId || undefined });
       await fetchFullTask(selectedTask.id);
       fetchTasks();
     } catch (err) {
@@ -128,15 +139,30 @@ export const TasksManagement: React.FC = () => {
     }
   };
 
-   const handlePostComment = async (content: string) => {
-    if (!selectedTask || !content.trim()) return;
-    const taskId = selectedTask.id;
+  const handleAssignSubtask = async (subtaskId: string, assigneeId: string | null) => {
+    if (!selectedTask || selectedTask.type !== 'project') return;
     try {
-      // Use the resolved type from fullData if available, fallback to selectedTask
-      const taskType = fullTaskData?.type || selectedTask.type;
-      const url = taskType === 'project' ? `/tasks/${taskId}/comments` : `/quick-tasks/${taskId}/comments`;
-      
-      try {
+      await api.patch(`/tasks/${selectedTask.id}/subtasks/${subtaskId}`, { assigneeId });
+      await fetchFullTask(selectedTask.id);
+      fetchTasks();
+    } catch (err) {
+      console.error('Assign subtask failed:', err);
+    }
+  };
+
+   const handlePostComment = async (content: string) => {
+     if (!selectedTask || !content.trim()) return;
+     const taskId = selectedTask.id;
+     try {
+       // Use the resolved type from fullData if available, fallback to selectedTask
+       const taskType = fullTaskData?.type || selectedTask.type;
+       if (taskType === 'personal') {
+         console.warn("Personal tasks do not support comments.");
+         return;
+       }
+       const url = taskType === 'project' ? `/tasks/${taskId}/comments` : `/quick-tasks/${taskId}/comments`;
+       
+       try {
         await api.post(url, { content });
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -155,7 +181,7 @@ export const TasksManagement: React.FC = () => {
   };
   
   // Kanban columns data
-  const kanbanTasks = [...projectTasks, ...quickTasks];
+  const kanbanTasks = [...projectTasks, ...quickTasks, ...personalTasks];
 
   useEffect(() => {
     fetchTasks();
@@ -168,6 +194,7 @@ export const TasksManagement: React.FC = () => {
       if (res.data?.success) {
         setProjectTasks(res.data.data.projectTasks || []);
         setQuickTasks(res.data.data.quickTasks || []);
+        setPersonalTasks(res.data.data.personalTasks || []);
       }
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
@@ -196,7 +223,7 @@ export const TasksManagement: React.FC = () => {
      );
    };
 
-  const allFilteredTasks = [...filteredTasks(projectTasks), ...filteredTasks(quickTasks)];
+  const allFilteredTasks = [...filteredTasks(projectTasks), ...filteredTasks(quickTasks), ...filteredTasks(personalTasks)];
 
   const StatusIcon = ({ status }: { status: string }) => {
     const s = status.toLowerCase().replace('_', '');
@@ -396,7 +423,7 @@ export const TasksManagement: React.FC = () => {
                      <div className="flex items-center gap-2">
                        <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('projects') && "-rotate-90")} />
                        <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Projects</span>
-                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.projectName !== '-').length}</span>
+                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.type === 'project').length}</span>
                      </div>
                    </div>
 
@@ -404,17 +431,17 @@ export const TasksManagement: React.FC = () => {
                      <div className="overflow-auto border-gray-100 dark:border-surface-800 border-t">
                         <table className="w-full text-xs text-left border-collapse">
                           <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                             {allFilteredTasks.filter(t => t.projectName !== '-').length === 0 ? (
+                             {allFilteredTasks.filter(t => t.type === 'project').length === 0 ? (
                                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No project tasks found.</td></tr>
                              ) : (
                                (() => {
                                  const groups: Record<string, TaskRow[]> = {};
-                                 allFilteredTasks.filter(t => t.projectName !== '-').forEach(t => {
+                                 allFilteredTasks.filter(t => t.type === 'project').forEach(t => {
                                    if (!groups[t.projectName]) groups[t.projectName] = [];
                                    groups[t.projectName].push(t);
                                  });
                                  
-                                 const pTasks = allFilteredTasks.filter(t => t.projectName !== '-');
+                                 const pTasks = allFilteredTasks.filter(t => t.type === 'project');
                                  const paginatedPTasks = pTasks.slice((projectsPage - 1) * tasksPerPage, projectsPage * tasksPerPage);
                                  
                                  // Re-group paginated tasks
@@ -485,7 +512,7 @@ export const TasksManagement: React.FC = () => {
                      <div className="flex items-center gap-2">
                        <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('quick') && "-rotate-90")} />
                        <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Quick Tasks</span>
-                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.projectName === '-').length}</span>
+                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.type === 'quick').length}</span>
                      </div>
                    </div>
 
@@ -493,11 +520,11 @@ export const TasksManagement: React.FC = () => {
                      <div className="overflow-auto border-gray-100 dark:border-surface-800 border-t">
                         <table className="w-full text-xs text-left border-collapse">
                           <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                             {allFilteredTasks.filter(t => t.projectName === '-').length === 0 ? (
+                             {allFilteredTasks.filter(t => t.type === 'quick').length === 0 ? (
                                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No quick tasks found.</td></tr>
                              ) : (
                                (() => {
-                                 const qTasks = allFilteredTasks.filter(t => t.projectName === '-');
+                                 const qTasks = allFilteredTasks.filter(t => t.type === 'quick');
                                  const paginatedQTasks = qTasks.slice((quickPage - 1) * tasksPerPage, quickPage * tasksPerPage);
                                  return (
                                    <>
@@ -540,6 +567,71 @@ export const TasksManagement: React.FC = () => {
                      </div>
                    )}
                  </div>
+
+                {/* 4. Personal Tasks Section */}
+                <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
+                  <div 
+                    onClick={() => toggleSection('personal')}
+                    className="px-5 py-3 border-b border-gray-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-950/20 sticky top-0 z-10 backdrop-blur-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('personal') && "-rotate-90")} />
+                      <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Personal Tasks</span>
+                      <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{filteredTasks(personalTasks).length}</span>
+                    </div>
+                  </div>
+ 
+                  {activeSections.includes('personal') && (
+                    <div className="overflow-auto border-gray-100 dark:border-surface-800 border-t">
+                       <table className="w-full text-xs text-left border-collapse">
+                         <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
+                            {filteredTasks(personalTasks).length === 0 ? (
+                              <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No personal tasks found.</td></tr>
+                            ) : (
+                              (() => {
+                                const pTasks = filteredTasks(personalTasks);
+                                const paginatedPTasks = pTasks.slice((personalPage - 1) * tasksPerPage, personalPage * tasksPerPage);
+                                return (
+                                  <>
+                                    {paginatedPTasks.map((task, idx) => (
+                                      <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
+                                    ))}
+                                    {pTasks.length > tasksPerPage && (
+                                      <tr>
+                                         <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
+                                            <div className="flex items-center justify-between">
+                                               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                                                 Showing {Math.min(pTasks.length, (personalPage - 1) * tasksPerPage + 1)}-{Math.min(pTasks.length, personalPage * tasksPerPage)} of {pTasks.length}
+                                               </span>
+                                               <div className="flex items-center gap-2">
+                                                 {Array.from({ length: Math.ceil(pTasks.length / tasksPerPage) }, (_, i) => i + 1).map(page => (
+                                                   <button
+                                                     key={page}
+                                                     onClick={() => setPersonalPage(page)}
+                                                     className={cn(
+                                                       "w-8 h-8 rounded-lg text-xs font-bold transition-all",
+                                                       personalPage === page 
+                                                         ? "bg-[#00a3ff] text-white shadow-lg shadow-blue-500/20" 
+                                                         : "bg-white dark:bg-surface-900 text-gray-500 dark:text-surface-400 hover:bg-gray-100 dark:hover:bg-surface-800 border border-gray-100 dark:border-surface-800"
+                                                     )}
+                                                   >
+                                                     {page}
+                                                   </button>
+                                                 ))}
+                                               </div>
+                                            </div>
+                                         </td>
+                                      </tr>
+                                    )}
+                                  </>
+                                );
+                              })()
+                            )}
+                         </tbody>
+                       </table>
+                    </div>
+                  )}
+                </div>
                </div>
             </motion.div>
           ) : (
@@ -582,6 +674,7 @@ export const TasksManagement: React.FC = () => {
             onAddSubtask={handleAddSubtask}
             onUpdateField={handleUpdateTaskField}
             onPostComment={handlePostComment}
+            onAssignSubtask={handleAssignSubtask}
           />
         )}
       </AnimatePresence>
@@ -769,13 +862,15 @@ const TaskDetailOverlay: React.FC<{
   loading: boolean;
   onClose: () => void; 
   onToggleSubtask: (id: string, completed: boolean) => void;
-  onAddSubtask: (title: string) => void;
+  onAddSubtask: (title: string, assigneeId?: string | null) => void;
+  onAssignSubtask: (id: string, assigneeId: string | null) => void;
   onUpdateField: (field: string, value: any) => void;
   onPostComment: (content: string) => void;
-}> = ({ task, fullData, loading, onClose, onToggleSubtask, onAddSubtask, onUpdateField, onPostComment }) => {
+}> = ({ task, fullData, loading, onClose, onToggleSubtask, onAddSubtask, onAssignSubtask, onUpdateField, onPostComment }) => {
   const { users, projects } = useAppStore();
   const { user } = useAuthStore();
    const [newSubtask, setNewSubtask] = useState('');
+   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState('');
    const [commentText, setCommentText] = useState('');
    const [showTagMenu, setShowTagMenu] = useState(false);
    const [showRepeatMenu, setShowRepeatMenu] = useState(false);
@@ -841,19 +936,19 @@ const TaskDetailOverlay: React.FC<{
                    </div>
                   
                    <div className="flex items-center gap-6">
-                     <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Type</span>
-                     <select 
-                       className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-2 py-1 rounded transition-colors"
-                       value={data.priority}
-                       onChange={(e) => onUpdateField('priority', e.target.value)}
-                     >
-                        <option value="low" className="dark:bg-surface-900">Low</option>
-                        <option value="normal" className="dark:bg-surface-900">Normal</option>
-                        <option value="medium" className="dark:bg-surface-900">Medium</option>
-                        <option value="high" className="dark:bg-surface-900">High</option>
-                        <option value="urgent" className="dark:bg-surface-900">Urgent</option>
-                     </select>
-                   </div>
+                      <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Type</span>
+                      <select 
+                        className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-2 py-1 rounded transition-colors"
+                        value={data.priority}
+                        onChange={(e) => onUpdateField('priority', e.target.value)}
+                      >
+                         <option value="low" className="dark:bg-surface-900">Low</option>
+                         <option value="normal" className="dark:bg-surface-900">Normal</option>
+                         <option value="medium" className="dark:bg-surface-900">Medium</option>
+                         <option value="high" className="dark:bg-surface-900">High</option>
+                         {data.type !== 'personal' && <option value="urgent" className="dark:bg-surface-900">Urgent</option>}
+                      </select>
+                    </div>
 
                    <div className="flex items-center gap-6">
                      <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Due date</span>
@@ -866,27 +961,31 @@ const TaskDetailOverlay: React.FC<{
                      />
                    </div>
 
-                   <div className="flex items-center gap-6">
-                      <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Responsible</span>
-                      <select 
-                       className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-2 py-1 rounded appearance-none transition-colors"
-                       value={(responsible as any).id || ''}
-                       onChange={(e) => onUpdateField('assigneeIds', [e.target.value])}
-                     >
-                        <option value="" className="dark:bg-surface-900">Unassigned</option>
-                        {users.map(u => (
-                          <option key={u.id} value={u.id} className="dark:bg-surface-900">{u.name}</option>
-                        ))}
-                     </select>
-                   </div>
+                   {data.type !== 'personal' && (
+                     <>
+                       <div className="flex items-center gap-6">
+                          <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Responsible</span>
+                          <select 
+                           className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-2 py-1 rounded appearance-none transition-colors"
+                           value={(responsible as any).id || ''}
+                           onChange={(e) => onUpdateField('assigneeIds', [e.target.value])}
+                         >
+                            <option value="" className="dark:bg-surface-900">Unassigned</option>
+                            {users.map(u => (
+                              <option key={u.id} value={u.id} className="dark:bg-surface-900">{u.name}</option>
+                            ))}
+                         </select>
+                       </div>
 
-                   <div className="flex items-center gap-6">
-                      <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Reporter</span>
-                      <div className="flex items-center gap-2 text-[13px] font-bold text-gray-800 dark:text-surface-200">
-                        <UserAvatar name={reporter.name} size="xs" color={(reporter as any).color} />
-                        {reporter.name}
-                     </div>
-                   </div>
+                       <div className="flex items-center gap-6">
+                          <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Reporter</span>
+                          <div className="flex items-center gap-2 text-[13px] font-bold text-gray-800 dark:text-surface-200">
+                            <UserAvatar name={reporter.name} size="xs" color={(reporter as any).color} />
+                            {reporter.name}
+                         </div>
+                       </div>
+                     </>
+                   )}
                 </div>
 
                 <div className="flex items-center gap-10 pt-4 px-1">
@@ -945,21 +1044,46 @@ const TaskDetailOverlay: React.FC<{
                      <ChevronDown size={14} className="text-gray-300 dark:text-surface-700" />
                    </div>
                     <div className="space-y-3 pl-2">
-                       {data.subtasks?.map((st: any) => (
-                         <div key={st.id} className="flex items-center gap-3 group">
-                           <input 
-                             type="checkbox" 
-                             checked={st.isCompleted} 
-                             onChange={(e) => onToggleSubtask(st.id, e.target.checked)}
-                             className="rounded border-gray-300 dark:border-surface-700 dark:bg-surface-800 w-4 h-4 text-blue-500 focus:ring-blue-500/20 transition-colors" 
-                           />
-                           <span className={cn("text-sm transition-colors", st.isCompleted ? "text-gray-400 dark:text-surface-600 line-through" : "text-gray-700 dark:text-surface-200")}>
-                             {st.title}
-                           </span>
-                         </div>
-                       ))}
-                    <div className="pt-2 flex items-center gap-2">
-                      <div className="flex-1 relative">
+                       {data.subtasks?.map((st: any) => {
+                         const assignee = users.find(u => u.id === st.assigneeId) || st.assignee;
+                         return (
+                           <div key={st.id} className="flex items-center gap-3 group">
+                             <input 
+                               type="checkbox" 
+                               checked={st.isCompleted} 
+                               onChange={(e) => onToggleSubtask(st.id, e.target.checked)}
+                               className="rounded border-gray-300 dark:border-surface-700 dark:bg-surface-800 w-4 h-4 text-blue-500 focus:ring-blue-500/20 transition-colors" 
+                             />
+                             <div className="flex-1 flex items-center justify-between gap-3">
+                               <span className={cn("text-sm transition-colors", st.isCompleted ? "text-gray-400 dark:text-surface-600 line-through" : "text-gray-700 dark:text-surface-200")}>
+                                 {st.title}
+                               </span>
+                               <div className="flex items-center gap-2">
+                                 {assignee ? (
+                                   <>
+                                     <UserAvatar name={assignee.name} avatar={assignee.avatar} color={assignee.color} size="xs" />
+                                     <span className="text-[12px] text-gray-500 dark:text-surface-400">{assignee.name}</span>
+                                   </>
+                                 ) : (
+                                   <span className="text-[12px] text-gray-300 italic">Unassigned</span>
+                                 )}
+                                 <select
+                                   className="text-[11px] bg-white dark:bg-surface-800 border border-gray-200 dark:border-surface-700 rounded-lg px-2 py-1 focus:outline-none"
+                                   value={st.assigneeId || ''}
+                                   onChange={(e) => onAssignSubtask(st.id, e.target.value || null)}
+                                 >
+                                   <option value="">Unassigned</option>
+                                   {users.map(u => (
+                                     <option key={u.id} value={u.id}>{u.name}</option>
+                                   ))}
+                                 </select>
+                               </div>
+                             </div>
+                           </div>
+                         );
+                       })}
+                    <div className="pt-2 flex items-center gap-2 flex-wrap">
+                      <div className="flex-1 min-w-[200px] relative">
                         <Plus size={14} className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-300" />
                          <input 
                            type="text" 
@@ -968,13 +1092,36 @@ const TaskDetailOverlay: React.FC<{
                            value={newSubtask}
                            onChange={(e) => setNewSubtask(e.target.value)}
                            onKeyDown={(e) => {
-                             if (e.key === 'Enter' && newSubtask.trim()) {
-                               onAddSubtask(newSubtask);
+                           if (e.key === 'Enter' && newSubtask.trim()) {
+                               onAddSubtask(newSubtask, newSubtaskAssignee || null);
                                setNewSubtask('');
+                               setNewSubtaskAssignee('');
                              }
                            }}
                          />
                       </div>
+                      <select
+                        className="text-[12px] bg-white dark:bg-surface-800 border border-gray-200 dark:border-surface-700 rounded-lg px-3 py-2 focus:outline-none"
+                        value={newSubtaskAssignee}
+                        onChange={(e) => setNewSubtaskAssignee(e.target.value)}
+                      >
+                        <option value="">Assign to…</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => {
+                          if (newSubtask.trim()) {
+                            onAddSubtask(newSubtask, newSubtaskAssignee || null);
+                            setNewSubtask('');
+                            setNewSubtaskAssignee('');
+                          }
+                        }}
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold px-3 py-2 rounded-lg transition-colors"
+                      >
+                        Add
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1011,89 +1158,91 @@ const TaskDetailOverlay: React.FC<{
           </div>
 
           {/* Activity / Chat Sidebar */}
-          <div className="w-[340px] border-l border-gray-100 bg-[#fbfcff] flex flex-col">
-             <div className="p-8 border-b border-gray-100 bg-white">
-                <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
-                        <AlertCircle size={16} />
-                      </div>
-                      <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
-                        Activity
-                      </span>
-                   </div>
-                   <div className="flex -space-x-2">
-                     <UserAvatar name="M" size="xs" className="border-2 border-white" />
-                     <UserAvatar name="S" size="xs" className="border-2 border-white" />
-                   </div>
-                </div>
-             </div>
-             <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-gray-50/20">
-                 <div className="text-center py-2 relative">
-                    <span className="bg-white border border-gray-100 text-[#999] text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest relative z-10 shadow-sm">Activity & Chat</span>
-                    <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-gray-100/50 -z-10" />
-                 </div>
-                 
-                 {data.comments?.map((c: any) => {
-                   const author = users.find(u => u.id === c.authorId);
-                   const isMe = c.authorId === user?.id;
-                   return (
-                     <div key={c.id || c._id} className={cn("flex items-start gap-3", isMe ? "flex-row-reverse" : "")}>
-                        <UserAvatar name={author?.name || 'U'} size="xs" color={author?.color} />
-                        <div className={cn(
-                          "max-w-[80%] rounded-2xl p-3 shadow-sm text-[12px]",
-                          isMe ? "bg-blue-500 text-white rounded-tr-none" : "bg-white border border-gray-100 text-gray-800 rounded-tl-none"
-                        )}>
-                           <div className="flex items-center justify-between gap-4 mb-1">
-                              <span className={cn("font-bold text-[10px]", isMe ? "text-blue-100" : "text-gray-400")}>{author?.name}</span>
-                              <span className={cn("text-[9px]", isMe ? "text-blue-200" : "text-gray-300")}>{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                           </div>
-                           <p className="whitespace-pre-wrap leading-relaxed">{c.content}</p>
+          {data.type !== 'personal' && (
+            <div className="w-[340px] border-l border-gray-100 bg-[#fbfcff] flex flex-col">
+               <div className="p-8 border-b border-gray-100 bg-white">
+                  <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
+                          <AlertCircle size={16} />
                         </div>
+                        <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
+                          Activity
+                        </span>
                      </div>
-                   );
-                 })}
-                 
-                 {!data.comments?.length && (
-                    <div className="text-center text-gray-300 text-[11px] font-medium py-10 italic">No messages yet. Start the conversation!</div>
-                 )}
-              </div>
+                     <div className="flex -space-x-2">
+                       <UserAvatar name="M" size="xs" className="border-2 border-white" />
+                       <UserAvatar name="S" size="xs" className="border-2 border-white" />
+                     </div>
+                  </div>
+               </div>
+               <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-gray-50/20">
+                   <div className="text-center py-2 relative">
+                      <span className="bg-white border border-gray-100 text-[#999] text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest relative z-10 shadow-sm">Activity & Chat</span>
+                      <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-gray-100/50 -z-10" />
+                   </div>
+                   
+                   {data.comments?.map((c: any) => {
+                     const author = users.find(u => u.id === c.authorId);
+                     const isMe = c.authorId === user?.id;
+                     return (
+                       <div key={c.id || c._id} className={cn("flex items-start gap-3", isMe ? "flex-row-reverse" : "")}>
+                          <UserAvatar name={author?.name || 'U'} size="xs" color={author?.color} />
+                          <div className={cn(
+                            "max-w-[80%] rounded-2xl p-3 shadow-sm text-[12px]",
+                            isMe ? "bg-blue-500 text-white rounded-tr-none" : "bg-white border border-gray-100 text-gray-800 rounded-tl-none"
+                          )}>
+                             <div className="flex items-center justify-between gap-4 mb-1">
+                                <span className={cn("font-bold text-[10px]", isMe ? "text-blue-100" : "text-gray-400")}>{author?.name}</span>
+                                <span className={cn("text-[9px]", isMe ? "text-blue-200" : "text-gray-300")}>{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                             </div>
+                             <p className="whitespace-pre-wrap leading-relaxed">{c.content}</p>
+                          </div>
+                       </div>
+                     );
+                   })}
+                   
+                   {!data.comments?.length && (
+                      <div className="text-center text-gray-300 text-[11px] font-medium py-10 italic">No messages yet. Start the conversation!</div>
+                   )}
+                </div>
 
-             <div className="p-6 bg-white dark:bg-surface-900 border-t border-gray-100 dark:border-surface-800 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
-                <div className="relative group">
-                  <textarea 
-                    placeholder="Type a message..."
-                    className="w-full bg-gray-50 dark:bg-surface-950/40 border border-gray-200 dark:border-surface-800 rounded-2xl px-5 py-4 text-sm dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 focus:bg-white dark:focus:bg-surface-950/60 resize-none transition-all pr-20"
-                    rows={2}
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => {
-                       if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
+               <div className="p-6 bg-white dark:bg-surface-900 border-t border-gray-100 dark:border-surface-800 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+                  <div className="relative group">
+                    <textarea 
+                      placeholder="Type a message..."
+                      className="w-full bg-gray-50 dark:bg-surface-950/40 border border-gray-200 dark:border-surface-800 rounded-2xl px-5 py-4 text-sm dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 focus:bg-white dark:focus:bg-surface-950/60 resize-none transition-all pr-20"
+                      rows={2}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                         if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (commentText.trim()) {
+                               onPostComment(commentText);
+                               setCommentText('');
+                            }
+                         }
+                      }}
+                    />
+                    <div className="absolute right-4 bottom-4 flex items-center gap-3 text-gray-400">
+                      <button className="hover:text-blue-500 transition-colors"><Paperclip size={18} /></button>
+                      <button 
+                        onClick={() => {
                           if (commentText.trim()) {
                              onPostComment(commentText);
                              setCommentText('');
                           }
-                       }
-                    }}
-                  />
-                  <div className="absolute right-4 bottom-4 flex items-center gap-3 text-gray-400">
-                    <button className="hover:text-blue-500 transition-colors"><Paperclip size={18} /></button>
-                    <button 
-                      onClick={() => {
-                        if (commentText.trim()) {
-                           onPostComment(commentText);
-                           setCommentText('');
-                        }
-                      }}
-                      className="hover:text-blue-500 transition-colors"
-                    >
-                      <MessageSquare size={18} />
-                    </button>
+                        }}
+                        className="hover:text-blue-500 transition-colors"
+                      >
+                        <MessageSquare size={18} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-             </div>
-          </div>
+               </div>
+            </div>
+          )}
         </div>
       </motion.div>
     </motion.div>
@@ -1136,8 +1285,8 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
        </td>
       <td className="px-3 py-3">
         <div className="flex items-center gap-2.5 whitespace-nowrap">
-          <div className={cn("w-1.5 h-1.5 rounded-full", task.status === 'done' ? 'bg-emerald-500' : 'bg-blue-500')} />
-          <span className="text-gray-600 font-bold text-[11px] uppercase tracking-tight">{task.status.replace('_', ' ')}</span>
+          <div className={cn("w-1.5 h-1.5 rounded-full", task.status === 'done' ? 'bg-emerald-500' : 'bg-blue-500')} style={{ backgroundColor: STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.color }} />
+          <span className="text-gray-600 font-bold text-[11px] uppercase tracking-tight">{STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.label || task.status.replace('_', ' ')}</span>
         </div>
       </td>
       <td className="px-3 py-3">
@@ -1165,7 +1314,7 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
        </td>
        <td className="px-3 py-3 whitespace-nowrap">
          <div className="flex items-center gap-2">
-           <UserAvatar name={task.assignedTo || 'U'} size="xs" />
+           <UserAvatar name={task.assignedTo || 'U'} avatar={task.assigneeAvatar} size="xs" />
            <span className="text-gray-700 dark:text-surface-300 font-bold text-[11px]">{task.assignedTo || 'Unassigned'}</span>
          </div>
        </td>

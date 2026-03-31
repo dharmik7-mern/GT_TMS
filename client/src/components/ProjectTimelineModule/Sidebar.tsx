@@ -1,6 +1,7 @@
 import React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import type { User } from '../../app/types';
+import { cn } from '../../utils/helpers';
 import type { TimelineRow } from './utils';
 
 interface SidebarProps {
@@ -33,7 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className={`relative overflow-hidden border-r border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-950 ${containerClassName || 'h-[72vh]'}`}>
-      <div className="sticky top-0 z-20 flex h-14 items-center border-b border-surface-200 px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-500 dark:border-surface-800">
+      <div className="sticky top-0 z-20 flex h-16 items-center border-b border-surface-200 px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-500 dark:border-surface-800">
         Timeline Outline
       </div>
       <div className="relative overflow-hidden" style={{ height: contentHeight }}>
@@ -48,53 +49,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {row.kind === 'phase' ? (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 text-left"
+                className="group flex w-full items-center gap-3 text-left"
                 onClick={() => onTogglePhase(row.phase.id)}
               >
-                {collapsedPhaseIds.has(row.phase.id) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.phase.color || '#64748b' }} />
-                <span>{row.phase.name}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-surface-400 dark:bg-surface-950">
+                <div className="flex h-5 w-5 items-center justify-center rounded-md bg-surface-100 dark:bg-surface-800 text-surface-500 transition-colors group-hover:bg-brand-50 group-hover:text-brand-600">
+                  {collapsedPhaseIds.has(row.phase.id) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                </div>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: row.phase.color || '#64748b' }} />
+                <span className="flex-1 truncate font-bold text-surface-700 dark:text-surface-300">{row.phase.name}</span>
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-[9px] font-bold text-surface-400 border border-surface-100 dark:bg-surface-900 dark:border-surface-800">
                   {row.phase.tasks.length}
                 </span>
               </button>
             ) : (
-              <div className="flex w-full items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-surface-900 dark:text-surface-100">
+              <div className="flex w-full items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-bold text-surface-800 dark:text-surface-200">
                     {row.task.title}
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-surface-400">
-                    <span className="capitalize">{row.task.type}</span>
-                    <span>{row.task.startDate}</span>
-                    <span>to</span>
-                    <span>{row.task.endDate}</span>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-surface-400">
+                    <span className="bg-rose-50/50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 px-1 rounded-sm uppercase tracking-wider text-[8px] font-bold border border-rose-100/50 dark:border-rose-800/30">
+                      Created: {new Date(row.task.createdAt || Date.now()).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                    </span>
+                    <span className="bg-surface-50 dark:bg-surface-900 px-1 rounded uppercase tracking-wider text-[8px] border border-surface-100/50 dark:border-surface-800/50">{row.task.type}</span>
+                    <div className="flex items-center gap-1.5 opacity-80 text-[10px] font-bold text-surface-500">
+                      <Calendar size={12} className="text-surface-400" />
+                      <span>{row.task.startDate}</span>
+                      <span className="opacity-40 select-none">→</span>
+                      <span>{row.task.endDate}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {row.task.assigneeIds.slice(0, 2).map((assigneeId) => {
+                <div className="flex -space-x-1.5 flex-shrink-0">
+                  {row.task.assigneeIds.map((assigneeId) => {
                     const user = userMap.get(assigneeId);
                     return (
-                      <span
+                      <div
                         key={assigneeId}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                        className="h-6 w-6 rounded-full border-2 border-white dark:border-surface-950 flex items-center justify-center bg-surface-200 text-[9px] font-bold text-white ring-1 ring-black/5"
                         style={{ backgroundColor: user?.color || '#64748b' }}
                         title={user?.name || assigneeId}
                       >
                         {(user?.name || 'U').slice(0, 1).toUpperCase()}
-                      </span>
+                      </div>
                     );
                   })}
                   <button
                     type="button"
                     onClick={() => onSelectDependencyFrom(row.task.id)}
-                    className={`rounded-lg px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    className={cn(
+                      "ml-3 h-6 w-6 flex items-center justify-center rounded-lg transition-all",
                       selectedDependencyFrom === row.task.id
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-surface-100 text-surface-500 dark:bg-surface-900 dark:text-surface-400'
-                    }`}
+                        ? "bg-brand-600 text-white rotate-45"
+                        : "bg-surface-100 text-surface-400 hover:bg-brand-50 hover:text-brand-600 dark:bg-surface-900"
+                    )}
+                    title="Link dependency"
                   >
-                    Link
+                    <Plus size={14} className={selectedDependencyFrom === row.task.id ? "-rotate-45" : ""} />
                   </button>
                 </div>
               </div>

@@ -22,6 +22,7 @@ import {
   Target,
   Unlock,
 } from 'lucide-react';
+import { cn } from '../../utils/helpers';
 import { projectsService, tasksService, timelineService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 import { useAppStore } from '../../context/appStore';
@@ -103,7 +104,7 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
   const activeTimeline = draftTimeline || timeline;
   const deferredTimeline = useDeferredValue(activeTimeline);
   const canManageLockedTimeline = user?.role === 'admin' || user?.role === 'super_admin';
-  const isReadOnly = activeTimeline?.status === 'Approved' && !canManageLockedTimeline;
+  const isReadOnly = activeTimeline?.status === 'Approved';
   const zoom = activeTimeline?.settings.zoom || 'week';
   const baseDayWidth = getDayWidth(zoom);
   const dayWidth = isFullscreen ? Math.max(baseDayWidth + 14, Math.round(baseDayWidth * 2.1)) : baseDayWidth;
@@ -389,20 +390,30 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
     }
   }, [exportTimelineDiagram, exportTimelineExcel]);
 
-  const handleTaskCommit = useCallback((taskId: string, nextStartDate: string, nextEndDate: string) => {
+  const handleTaskCommit = useCallback(async (taskId: string, nextStartDate: string, nextEndDate: string) => {
     if (isReadOnly) return;
-    applyDraftMutation((current) => ({
-      ...current,
-      phases: current.phases.map((phase) => ({
-        ...phase,
-        tasks: phase.tasks.map((task) => (
-          task.id === taskId
-            ? { ...task, startDate: nextStartDate, endDate: nextEndDate }
-            : task
-        )),
-      })),
-    }));
-  }, [applyDraftMutation, isReadOnly]);
+
+    // Persist immediately to the backend
+    try {
+      const task = (activeTimeline?.tasks || []).find((t) => t.id === taskId);
+      if (!task) return;
+
+      await timelineService.patchTask(taskId, {
+        projectId,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
+        phaseId: task.phaseId || null,
+        dependencies: task.dependencies,
+        type: task.type,
+      });
+
+      // Refresh to sync everything (like critical path or resource conflicts)
+      await fetchTimeline();
+      emitSuccessToast('Task schedule updated', 'Timeline');
+    } catch (error: any) {
+      emitErrorToast(error?.response?.data?.message || 'Failed to sync task change', 'Timeline');
+    }
+  }, [activeTimeline?.tasks, fetchTimeline, isReadOnly, projectId]);
 
   const handleSelectDependency = useCallback((taskId: string) => {
     if (!activeTimeline || isReadOnly) return;
@@ -568,31 +579,47 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
     openCreateTaskModal();
   };
 
-  const handleSave = useCallback(async () => {
-    if (!timeline || !draftTimeline || isReadOnly) return;
 
-    try {
-      setIsSaving(true);
-      await persistDraftChanges(draftTimeline, timeline);
-      await fetchTimeline();
-      emitSuccessToast('Timeline saved', 'Timeline');
-    } catch (error: any) {
-      emitErrorToast(error?.response?.data?.message || 'Failed to save timeline', 'Timeline');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [draftTimeline, fetchTimeline, isReadOnly, persistDraftChanges, timeline]);
+
+  const [isLocking, setIsLocking] = useState(false);
 
   const handleLockToggle = async () => {
     if (!activeTimeline || !canManageLockedTimeline) return;
 
     try {
-      if (activeTimeline.status === 'Approved') await timelineService.unlock(projectId);
-      else await timelineService.lock(projectId);
+      setIsLocking(true);
+      const isCurrentlyApproved = activeTimeline.status === 'Approved';
+      if (isCurrentlyApproved) {
+        await timelineService.unlock(projectId);
+      } else {
+        await timelineService.lock(projectId);
+      }
+      
+      // Refresh timeline state and UI
       await fetchTimeline();
-      emitSuccessToast(activeTimeline.status === 'Approved' ? 'Timeline unlocked' : 'Timeline locked', 'Timeline');
+      emitSuccessToast(
+        isCurrentlyApproved ? 'Timeline unlocked - edit mode enabled' : 'Timeline approved and locked', 
+        'Timeline'
+      );
     } catch (error: any) {
-      emitErrorToast(error?.response?.data?.message || 'Failed to change lock state', 'Timeline');
+      console.error('Lock toggle failed:', error);
+      emitErrorToast(
+        error?.response?.data?.message || 'Failed up update timeline lock status',
+        'Timeline'
+      );
+    } finally {
+      setIsLocking(false);
+    }
+  };
+
+  const handleProjectDateChange = async (field: 'startDate' | 'endDate', value: string) => {
+    if (isReadOnly) return;
+    try {
+      await projectsService.update(projectId, { [field]: value });
+      await fetchTimeline();
+      emitSuccessToast(`Project ${field === 'startDate' ? 'start' : 'due'} date updated`, 'Timeline');
+    } catch (error: any) {
+      emitErrorToast(error?.response?.data?.message || 'Failed to update project date', 'Timeline');
     }
   };
 
@@ -661,26 +688,54 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
               <ImageIcon size={14} className="mr-1 inline-block" />
               Diagram
             </button>
-            <button type="button" disabled={!canManageLockedTimeline} onClick={handleLockToggle} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-surface-900 dark:text-surface-300">
-              {activeTimeline.status === 'Approved' ? <Unlock size={14} className="mr-1 inline-block" /> : <Lock size={14} className="mr-1 inline-block" />}
-              {activeTimeline.status === 'Approved' ? 'Unlock' : 'Lock'}
+            <button 
+              type="button" 
+              disabled={!canManageLockedTimeline || isLocking} 
+              onClick={handleLockToggle} 
+              className={cn(
+                "rounded-xl px-3 py-2 text-xs font-semibold transition-all disabled:opacity-50",
+                activeTimeline.status === 'Approved' 
+                  ? "bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300"
+                  : "bg-surface-100 text-surface-600 hover:bg-surface-200 dark:bg-surface-900 dark:text-surface-300"
+              )}
+            >
+              {isLocking ? (
+                <div className="flex items-center gap-1.5 animation-pulse">
+                   <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                   <span>Syncing...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  {activeTimeline.status === 'Approved' ? <Unlock size={14} /> : <Lock size={14} />}
+                  <span>{activeTimeline.status === 'Approved' ? 'Unlock Draft' : 'Approve & Lock'}</span>
+                </div>
+              )}
             </button>
-            <button type="button" disabled={!draftTimeline} onClick={() => setDraftTimeline(null)} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-surface-900 dark:text-surface-300">
-              <RefreshCcw size={14} className="mr-1 inline-block" />
-              Reset
-            </button>
-            <button type="button" onClick={handleSave} disabled={!draftTimeline || isSaving || isReadOnly} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-              <Save size={14} className="mr-1 inline-block" />
-              {isSaving ? 'Saving...' : 'Save'}
-            </button>
+
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-surface-100 px-3 py-1 text-xs font-medium text-surface-500 dark:bg-surface-900 dark:text-surface-300">
-            <Calendar size={12} className="mr-1 inline-block" />
-            {activeTimeline.projectWindow.startDate} to {activeTimeline.projectWindow.endDate}
-          </span>
+          <div className="flex items-center gap-1.5 rounded-full bg-surface-100 px-3 py-1 text-[11px] font-bold text-surface-600 dark:bg-surface-900 dark:text-surface-300 border border-surface-200/50 dark:border-surface-800/50 shadow-sm">
+            <Calendar size={13} className="text-brand-500" />
+            <input
+              type="date"
+              value={project?.startDate || activeTimeline.projectWindow.startDate}
+              onChange={(e) => handleProjectDateChange('startDate', e.target.value)}
+              disabled={isReadOnly}
+              className="bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              title="Project Start Date"
+            />
+            <span className="opacity-30">to</span>
+            <input
+              type="date"
+              value={project?.endDate || activeTimeline.projectWindow.endDate}
+              onChange={(e) => handleProjectDateChange('endDate', e.target.value)}
+              disabled={isReadOnly}
+              className="bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              title="Project End Date"
+            />
+          </div>
           <span className="rounded-full bg-surface-100 px-3 py-1 text-xs font-medium text-surface-500 dark:bg-surface-900 dark:text-surface-300">
             <Target size={12} className="mr-1 inline-block" />
             {activeTimeline.summary.criticalTasks} critical tasks
@@ -694,18 +749,16 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
               Locked for editing. Only admins can change this approved timeline.
             </span>
           ) : null}
-          {draftTimeline ? (
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
-              <Sparkles size={12} className="mr-1 inline-block" />
-              What-if simulation active
-            </span>
-          ) : null}
-          {selectedDependencyFrom ? (
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">
-              <GitBranchPlus size={12} className="mr-1 inline-block" />
-              Select the task that should start after {selectedDependencyFrom}
-            </span>
-          ) : null}
+
+          {selectedDependencyFrom ? (() => {
+            const selectedTask = activeTimeline?.tasks.find((t) => t.id === selectedDependencyFrom);
+            return (
+              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">
+                <GitBranchPlus size={12} className="mr-1 inline-block" />
+                Select the task that should start after <span className="font-bold underline decoration-brand-400/40 underline-offset-2">{selectedTask?.title || selectedDependencyFrom}</span>
+              </span>
+            );
+          })() : null}
         </div>
       </div>
 
@@ -745,6 +798,7 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
               dayWidth={dayWidth}
               extraRightPadding={fullscreen ? 180 : 80}
               onTaskCommit={handleTaskCommit}
+              users={users}
             />
           </div>
         </div>

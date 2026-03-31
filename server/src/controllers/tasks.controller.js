@@ -1,7 +1,8 @@
- import * as TaskService from '../services/task.service.js';
- import mongoose from 'mongoose';
- import { getTaskModel } from '../models/Task.js';
- import { getQuickTaskModel } from '../models/QuickTask.js';
+import * as TaskService from '../services/task.service.js';
+import mongoose from 'mongoose';
+import { getTaskModel } from '../models/Task.js';
+import { getQuickTaskModel } from '../models/QuickTask.js';
+import { getPersonalTaskModel } from '../models/PersonalTask.js';
 
 export async function list(req, res, next) {
   try {
@@ -29,65 +30,70 @@ export async function list(req, res, next) {
   }
 }
 
-  export async function getOne(req, res, next) {
-    try {
-      const { companyId, workspaceId, sub: userId, role } = req.auth;
-      const taskId = req.params.id;
-      
-      console.log(`[TasksController] Fetching task detail for ID: ${taskId}`);
-      
-      const task = await TaskService.getAnyTaskById({
-        companyId,
-        workspaceId,
-        userId,
-        role,
-        taskId,
-      });
-      
-      if (!task) {
-        console.warn(`[TasksController] Task not found in any collection for ID: ${taskId}`);
-        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
-      }
-      
-      console.log(`[TasksController] Task found successfully: ${task.title} (Type: ${task.type})`);
-      return res.status(200).json({ success: true, data: task });
-    } catch (e) {
-      console.error(`[TasksController] Error in getOne:`, e);
-      return next(e);
+export async function getOne(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const taskId = req.params.id;
+
+    console.log(`[TasksController] Fetching task detail for ID: ${taskId}`);
+
+    const task = await TaskService.getAnyTaskById({
+      companyId,
+      workspaceId,
+      userId,
+      role,
+      taskId,
+    });
+
+    if (!task) {
+      console.warn(`[TasksController] Task not found in any collection for ID: ${taskId}`);
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
     }
+
+    console.log(`[TasksController] Task found successfully: ${task.title} (Type: ${task.type})`);
+    return res.status(200).json({ success: true, data: task });
+  } catch (e) {
+    console.error(`[TasksController] Error in getOne:`, e);
+    return next(e);
+  }
 }
 
 export async function getDetail(req, res, next) {
   try {
     const { id } = req.params;
     const { companyId, role } = req.auth;
-    const Task = getTaskModel(mongoose.connection);
-    const QuickTask = getQuickTaskModel(mongoose.connection);
+    const { Task, QuickTask, PersonalTask } = await getTenantModels(companyId);
 
     const isSuperAdmin = ['super_admin', 'system_admin'].includes(role);
 
     const filter = { _id: id };
     if (!isSuperAdmin) {
-       filter.tenantId = companyId;
+      filter.tenantId = companyId;
     }
 
     let task = await Task.findOne(filter)
       .populate('projectId', 'name')
       .populate('assigneeIds', 'name avatar email role')
       .populate('reporterId', 'name avatar email role')
-      .lean();
+      .populate('subtasks.assigneeId', 'name avatar color');
 
     if (task) {
-      return res.status(200).json({ success: true, data: { ...task, type: 'project' } });
+      return res.status(200).json({ success: true, data: { ...task.toJSON(), type: 'project' } });
     }
 
     task = await QuickTask.findOne(filter)
       .populate('assigneeIds', 'name avatar email role')
-      .populate('reporterId', 'name avatar email role')
-      .lean();
+      .populate('reporterId', 'name avatar email role');
 
     if (task) {
-      return res.status(200).json({ success: true, data: { ...task, type: 'quick' } });
+      return res.status(200).json({ success: true, data: { ...task.toJSON(), type: 'quick' } });
+    }
+
+    task = await PersonalTask.findOne(filter)
+      .populate('userId', 'name avatar email role');
+
+    if (task) {
+      return res.status(200).json({ success: true, data: { ...task.toJSON(), type: 'personal' } });
     }
 
     return res.status(404).json({ success: false, error: { message: 'Task not found' } });
@@ -176,6 +182,7 @@ export async function reviewCompletion(req, res, next) {
 export async function addSubtask(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
+    console.log(`[addSubtask] Task: ${req.params.id}, Title: ${req.body.title}, Assignee: ${req.body.assigneeId}`);
     const task = await TaskService.addSubtask({
       companyId,
       workspaceId,
@@ -184,6 +191,7 @@ export async function addSubtask(req, res, next) {
       taskId: req.params.id,
       title: req.body.title,
       isCompleted: req.body.isCompleted,
+      assigneeId: req.body.assigneeId,
     });
     if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
     return res.status(200).json({ success: true, data: task });
@@ -229,41 +237,41 @@ export async function deleteSubtask(req, res, next) {
   }
 }
 
- export async function uploadAttachments(req, res, next) {
-   try {
-     const { companyId, workspaceId, sub: userId, role } = req.auth;
-     const requestBaseUrl = `${req.protocol}://${req.get('host')}`;
-     const task = await TaskService.addTaskAttachments({
-       companyId,
-       workspaceId,
-       userId,
-       role,
-       taskId: req.params.id,
-       files: req.files || [],
-       requestBaseUrl,
-     });
- 
-     if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
-     return res.status(200).json({ success: true, data: task });
-   } catch (e) {
-     return next(e);
-   }
- }
- 
- export async function addComment(req, res, next) {
-   try {
-     const { companyId, workspaceId, sub: userId, role } = req.auth;
-     const task = await TaskService.addTaskComment({
-       companyId,
-       workspaceId,
-       userId,
-       role,
-       taskId: req.params.id,
-       content: req.body.content,
-     });
-     if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
-     return res.status(200).json({ success: true, data: task });
-   } catch (e) {
-     return next(e);
-   }
- }
+export async function uploadAttachments(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const requestBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const task = await TaskService.addTaskAttachments({
+      companyId,
+      workspaceId,
+      userId,
+      role,
+      taskId: req.params.id,
+      files: req.files || [],
+      requestBaseUrl,
+    });
+
+    if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
+    return res.status(200).json({ success: true, data: task });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function addComment(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const task = await TaskService.addTaskComment({
+      companyId,
+      workspaceId,
+      userId,
+      role,
+      taskId: req.params.id,
+      content: req.body.content,
+    });
+    if (!task) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
+    return res.status(200).json({ success: true, data: task });
+  } catch (e) {
+    return next(e);
+  }
+}

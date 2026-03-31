@@ -157,7 +157,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
       const payload = {
         title: data.title.trim(),
         description: data.description?.trim() || undefined,
-        status: data.status,
+        status: 'todo', // Always start as 'New task'
         priority: data.priority,
         assigneeIds: data.assigneeIds || [],
         dueDate: data.dueDate || undefined,
@@ -257,7 +257,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
             <div>
               <label className="label">Status</label>
               <div className="relative">
-                <select {...register('status')} className="input pr-10 appearance-none">
+                <select {...register('status')} disabled className="input pr-10 appearance-none opacity-80 cursor-not-allowed">
                   <option value="todo">{STATUS_CONFIG.todo.label}</option>
                   <option value="in_progress">{STATUS_CONFIG.in_progress.label}</option>
                   <option value="done">{STATUS_CONFIG.done.label}</option>
