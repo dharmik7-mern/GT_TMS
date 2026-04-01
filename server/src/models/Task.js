@@ -4,6 +4,7 @@ const subtaskSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 300 },
     isCompleted: { type: Boolean, default: false },
+    assigneeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
     order: { type: Number, default: 0 },
     assigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
@@ -32,6 +33,7 @@ const taskSchema = new mongoose.Schema(
 
     parentTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
     phaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Phase', default: null, index: true },
+    subcategoryId: { type: String, trim: true, maxlength: 100, default: null },
     dependencies: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task', index: true }],
     timelineType: { type: String, enum: timelineItemTypes, default: 'task', index: true },
     subtasks: [subtaskSchema],
@@ -128,6 +130,7 @@ taskSchema.set('toJSON', {
     ret.reporterId = ret.reporterId && typeof ret.reporterId === 'object' && ret.reporterId._id ? ret.reporterId : String(ret.reporterId);
     ret.parentTaskId = ret.parentTaskId ? String(ret.parentTaskId) : undefined;
     ret.phaseId = ret.phaseId ? String(ret.phaseId) : undefined;
+    ret.subcategoryId = ret.subcategoryId || undefined;
     ret.dependencies = Array.isArray(ret.dependencies) ? ret.dependencies.map((value) => String(value)) : [];
     const rawSubs = Array.isArray(_doc.subtasks) ? _doc.subtasks : [];
     ret.subtasks = mapSubtasks(rawSubs);

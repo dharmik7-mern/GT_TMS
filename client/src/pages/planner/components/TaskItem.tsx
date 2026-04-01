@@ -5,7 +5,8 @@ import {
   Edit2, Circle, Plus, X, ListTodo, ChevronDown, ChevronUp, AlignLeft, ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { cn, formatDate } from '../../../utils/helpers';
+import { format } from 'date-fns';
+import { cn, formatDate, getTodayDateKey, isDueDateOverdue } from '../../../utils/helpers';
 import type { PersonalTask } from '../../../app/types';
 
 interface TaskItemProps {
@@ -96,9 +97,9 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleDone, onToggle
   const completedSubtasks = task.subtasks?.filter(s => s.isCompleted).length || 0;
   const totalSubtasks = task.subtasks?.length || 0;
 
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
-  const isToday = task.dueDate && new Date(task.dueDate).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
-  const isTomorrow = task.dueDate && new Date(task.dueDate).toISOString().split('T')[0] === new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const isOverdue = isDueDateOverdue(task.dueDate, task.status);
+  const isToday = task.dueDate && task.dueDate === getTodayDateKey();
+  const isTomorrow = task.dueDate && task.dueDate === format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
 
   const getDueDateLabel = () => {
     if (!task.dueDate) return '--';

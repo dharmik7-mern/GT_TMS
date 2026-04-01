@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckSquare, Clock, AlertTriangle, Filter, SortAsc } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { cn, formatDate } from '../../utils/helpers';
+import { cn, formatDate, isDueDateOverdue } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -37,22 +37,22 @@ export const MyTasksPage: React.FC = () => {
 
   const filtered = myTasks.filter(t => {
     if (filter === 'all') return true;
-    if (filter === 'overdue') return t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done';
+    if (filter === 'overdue') return isDueDateOverdue(t.dueDate, t.status);
     return t.status === filter;
   });
 
   const sorted = [...filtered].sort((a, b) => {
     // Sort: overdue first, then by due date, then by priority
-    const aOverdue = a.dueDate && new Date(a.dueDate) < new Date() && a.status !== 'done';
-    const bOverdue = b.dueDate && new Date(b.dueDate) < new Date() && b.status !== 'done';
+    const aOverdue = isDueDateOverdue(a.dueDate, a.status);
+    const bOverdue = isDueDateOverdue(b.dueDate, b.status);
     if (aOverdue && !bOverdue) return -1;
     if (!aOverdue && bOverdue) return 1;
     if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     return 0;
   });
 
-  const overdueCount = myTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length
-    + myQuickTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length;
+  const overdueCount = myTasks.filter(t => isDueDateOverdue(t.dueDate, t.status)).length
+    + myQuickTasks.filter(t => isDueDateOverdue(t.dueDate, t.status)).length;
   const doneCount = myTasks.filter(t => t.status === 'done').length;
 
   React.useEffect(() => {
@@ -167,7 +167,7 @@ export const MyTasksPage: React.FC = () => {
               </div>
               <div className="space-y-2">
                 {myQuickTasks.map((qt, i) => {
-                  const isOverdue = qt.dueDate && new Date(qt.dueDate) < new Date() && qt.status !== 'done';
+                  const isOverdue = isDueDateOverdue(qt.dueDate, qt.status);
                   const priority = PRIORITY_CONFIG[qt.priority];
                   const statusCfg = qt.status === 'todo' ? STATUS_CONFIG.todo : qt.status === 'in_progress' ? STATUS_CONFIG.in_progress : STATUS_CONFIG.done;
                   return (

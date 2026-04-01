@@ -18,9 +18,15 @@ const NOTIF_ICONS = {
   mention: { icon: Bell, color: 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400' },
 };
 
+const getNotificationVisual = (type: string) =>
+  NOTIF_ICONS[type as keyof typeof NOTIF_ICONS] || {
+    icon: Bell,
+    color: 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300',
+  };
+
 const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
   const { users, markNotificationRead } = useAppStore();
-  const { icon: Icon, color } = NOTIF_ICONS[notif.type];
+  const { icon: Icon, color } = getNotificationVisual(notif.type);
   const sender = users[Math.floor(Math.random() * Math.max(users.length, 1))];
 
   return (

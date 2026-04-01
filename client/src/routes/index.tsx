@@ -9,7 +9,6 @@ import type { Role } from '../app/types';
 
 // Auth pages
 import LoginPage from '../pages/auth/Login';
-import RegisterPage from '../pages/auth/Register';
 import { ForgotPasswordPage, ResetPasswordPage } from '../pages/auth/ForgotPassword';
 
 // App pages
@@ -24,6 +23,7 @@ import QuickTasksPage from '../pages/quicktasks/QuickTasks';
 import QuickTaskDetailPage from '../pages/quicktasks/QuickTaskDetail';
 import MyTasksPage from '../pages/tasks/MyTasks';
 import TasksManagement from '../pages/tasks/TasksManagement';
+import TaskRequestsPage from '../pages/tasks/TaskRequests';
 import MISEntry from '../pages/mis/MISEntry';
 import MISManager from '../pages/mis/MISManager';
 import MISReports from '../pages/mis/MISReports';
@@ -90,7 +90,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'register',
-        element: <RequireGuest><RegisterPage /></RequireGuest>,
+        element: <Navigate to="/login" replace />,
+      },
+      {
+        path: 'loginWithId',
+        element: <Navigate to="/login" replace />,
       },
       {
         path: 'forgot-password',
@@ -113,6 +117,7 @@ export const router = createBrowserRouter([
       { path: 'projects', element: <ProjectsPage /> },
       { path: 'projects/:id', element: <ProjectDetailPage /> },
       { path: 'projects/:projectId/todo', element: <ProjectTodoPage /> },
+      { path: 'projects/:id/requests', element: <TaskRequestsPage /> },
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'teams', element: <TeamsPage /> },
       { path: 'reports', element: <ReportsPage /> },
@@ -124,6 +129,7 @@ export const router = createBrowserRouter([
       { path: 'quick-tasks/:id', element: <QuickTaskDetailPage /> },
       { path: 'my-tasks', element: <MyTasksPage /> },
       { path: 'tasks', element: <TasksManagement /> },
+      { path: 'task-requests', element: <TaskRequestsPage /> },
 
       // Super Admin Modules (Separate routes)
       { path: 'companies', element: <SACompanies /> },

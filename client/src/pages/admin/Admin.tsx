@@ -14,7 +14,7 @@ import { UserAvatar } from '../../components/UserAvatar';
 import { Modal } from '../../components/Modal';
 import { Table, ProgressBar, EmptyState } from '../../components/ui';
 import { emitSuccessToast } from '../../context/toastBus';
-import type { User, Role, UserImportResult, UserImportRow } from '../../app/types';
+import type { User, Role, UserImportResult, UserImportRow, UserPerformance } from '../../app/types';
 
 const USER_IMPORT_TEMPLATE_HEADERS = ['name', 'email', 'password', 'role', 'jobTitle', 'department'];
 
@@ -218,9 +218,11 @@ export const AdminUsersPage: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [editForm, setEditForm] = useState({
     role: 'team_member' as Role,
+    email: '',
     jobTitle: '',
     department: '',
     isActive: true,
+    canUsePrivateQuickTasks: false,
   });
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -229,11 +231,16 @@ export const AdminUsersPage: React.FC = () => {
     role: 'team_member' as Role,
     jobTitle: '',
     department: '',
+    canUsePrivateQuickTasks: false,
     sendCredentialsEmail: true,
   });
   const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isLoadingOverview, setIsLoadingOverview] = useState(false);
+  const [userOverview, setUserOverview] = useState<UserPerformance | null>(null);
+  const [passwordForm, setPasswordForm] = useState({ newPassword: '', showPassword: false });
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importFileName, setImportFileName] = useState('');
   const [importRows, setImportRows] = useState<UserImportRow[]>([]);
@@ -273,6 +280,7 @@ export const AdminUsersPage: React.FC = () => {
       role: 'team_member',
       jobTitle: '',
       department: '',
+      canUsePrivateQuickTasks: false,
       sendCredentialsEmail: true,
     });
     setCreateError('');
@@ -291,10 +299,35 @@ export const AdminUsersPage: React.FC = () => {
     if (!selectedUser) return;
     setEditForm({
       role: selectedUser.role,
+      email: selectedUser.email || '',
       jobTitle: selectedUser.jobTitle || '',
       department: selectedUser.department || '',
       isActive: selectedUser.isActive,
+      canUsePrivateQuickTasks: Boolean(selectedUser.canUsePrivateQuickTasks),
     });
+    setPasswordForm({ newPassword: '', showPassword: false });
+  }, [selectedUser]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setUserOverview(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        setIsLoadingOverview(true);
+        const res = await usersService.getPerformance(selectedUser.id);
+        if (!cancelled) setUserOverview(res.data?.data ?? res.data);
+      } catch {
+        if (!cancelled) setUserOverview(null);
+      } finally {
+        if (!cancelled) setIsLoadingOverview(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedUser]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -334,6 +367,17 @@ export const AdminUsersPage: React.FC = () => {
     } catch {
       // shared interceptor shows the error
       console.log("Error occured!! while deleting the user");
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (!selectedUser || passwordForm.newPassword.trim().length < 8) return;
+    setIsSettingPassword(true);
+    try {
+      await usersService.setPassword(selectedUser.id, { newPassword: passwordForm.newPassword.trim() });
+      emitSuccessToast('Password updated successfully.', 'Password Updated');
+    } finally {
+      setIsSettingPassword(false);
     }
   };
 
@@ -452,7 +496,7 @@ export const AdminUsersPage: React.FC = () => {
                 </span>
               )
             },
-            { key: 'createdAt', header: 'Joined', render: (u) => <span className="text-xs text-surface-400">{formatDate(u.createdAt)}</span> },
+            { key: 'employeeId', header: 'Employee ID', render: (u) => <span className="text-xs text-surface-500">{u.employeeId || '—'}</span> },
             {
               key: 'actions', header: '', align: 'right',
               render: (u) => (
@@ -480,6 +524,47 @@ export const AdminUsersPage: React.FC = () => {
                 <p className="text-xs text-surface-400">{selectedUser.email}</p>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-surface-400">Employee ID</p>
+                <p className="mt-1 text-sm font-medium text-surface-800 dark:text-surface-200">{selectedUser.employeeId || 'Not assigned'}</p>
+              </div>
+              <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-surface-400">Joined</p>
+                <p className="mt-1 text-sm font-medium text-surface-800 dark:text-surface-200">{formatDate(selectedUser.createdAt)}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-surface-100 dark:border-surface-800 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">Profile Overview</p>
+                  <p className="text-xs text-surface-400">Admin summary of this user’s current workload and delivery metrics.</p>
+                </div>
+                {isLoadingOverview && <p className="text-xs text-surface-400">Loading...</p>}
+              </div>
+              {userOverview ? (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Assigned</p>
+                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.assignedTasks}</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Completed</p>
+                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.completedTasks}</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Overdue Open</p>
+                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.overdueOpenTasks}</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Performance</p>
+                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.performanceScore}%</p>
+                  </div>
+                </div>
+              ) : (
+                !isLoadingOverview ? <p className="mt-3 text-sm text-surface-400">Overview is not available for this user yet.</p> : null
+              )}
+            </div>
             <div>
               <label className="label">Role</label>
               <select value={editForm.role} onChange={e => setEditForm(prev => ({ ...prev, role: e.target.value as Role }))} className="input">
@@ -487,6 +572,10 @@ export const AdminUsersPage: React.FC = () => {
                   <option key={k} value={k}>{v.label}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="label">Email</label>
+              <input value={editForm.email} onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))} className="input" type="email" />
             </div>
             <div>
               <label className="label">Job Title</label>
@@ -507,6 +596,52 @@ export const AdminUsersPage: React.FC = () => {
                 className={cn('relative w-10 h-6 rounded-full transition-colors', editForm.isActive ? 'bg-brand-600' : 'bg-surface-200')}
               >
                 <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform', editForm.isActive ? 'left-5' : 'left-1')} />
+              </button>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-800 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-300">Private Quick Tasks</p>
+                <p className="text-xs text-surface-400">
+                  Allow this user to assign and manage private quick tasks from their own account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditForm(prev => ({ ...prev, canUsePrivateQuickTasks: !prev.canUsePrivateQuickTasks }))}
+                className={cn('relative w-10 h-6 rounded-full transition-colors', editForm.canUsePrivateQuickTasks ? 'bg-brand-600' : 'bg-surface-200')}
+              >
+                <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform', editForm.canUsePrivateQuickTasks ? 'left-5' : 'left-1')} />
+              </button>
+            </div>
+            <div className="rounded-xl border border-surface-100 dark:border-surface-800 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">Password</p>
+                <p className="text-xs text-surface-400">Admins can set a new password here. Existing passwords cannot be viewed.</p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type={passwordForm.showPassword ? 'text' : 'password'}
+                  minLength={8}
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                  placeholder="Enter new password"
+                  className="input flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPasswordForm((prev) => ({ ...prev, showPassword: !prev.showPassword }))}
+                  className="btn-secondary btn-md"
+                >
+                  {passwordForm.showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => { void handleSetPassword(); }}
+                disabled={isSettingPassword || passwordForm.newPassword.trim().length < 8}
+                className="btn-secondary btn-md w-full"
+              >
+                {isSettingPassword ? 'Updating Password...' : 'Update Password'}
               </button>
             </div>
             <div className="flex gap-3 pt-2">
@@ -686,6 +821,19 @@ export const AdminUsersPage: React.FC = () => {
               <label className="flex items-start gap-3 rounded-2xl border border-surface-100 px-4 py-3 text-sm text-surface-600 dark:border-surface-800 dark:text-surface-300">
                 <input
                   type="checkbox"
+                  checked={createForm.canUsePrivateQuickTasks}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, canUsePrivateQuickTasks: e.target.checked }))}
+                  className="mt-1 h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span>
+                  Enable private quick tasks for this user so they can assign private quick tasks from their own account.
+                </span>
+              </label>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-start gap-3 rounded-2xl border border-surface-100 px-4 py-3 text-sm text-surface-600 dark:border-surface-800 dark:text-surface-300">
+                <input
+                  type="checkbox"
                   checked={createForm.sendCredentialsEmail}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, sendCredentialsEmail: e.target.checked }))}
                   className="mt-1 h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500"
@@ -729,18 +877,22 @@ export const AdminPermissionsPage: React.FC = () => {
   const PERMISSIONS = [
     { key: 'createProjects', label: 'Create Projects', description: 'Can create new projects in the workspace' },
     { key: 'deleteProjects', label: 'Delete Projects', description: 'Can permanently delete projects' },
+    { key: 'seeOtherProjects', label: 'See Other Projects', description: 'Can view projects outside their own memberships and reporting assignments' },
+    { key: 'editOtherProjects', label: 'Edit Other Projects', description: 'Can update or delete projects outside their own memberships and reporting assignments' },
     { key: 'manageUsers', label: 'Manage Users', description: 'Can invite, edit, and remove users' },
     { key: 'viewReports', label: 'View Reports', description: 'Access to analytics and reports' },
-    { key: 'manageBilling', label: 'Manage Billing', description: 'Can view and update billing info' },
+    // { key: 'manageBilling', label: 'Manage Billing', description: 'Can view and update billing info' },
     { key: 'exportData', label: 'Export Data', description: 'Can export workspace data' },
     { key: 'manageSettings', label: 'Manage Settings', description: 'Can edit workspace-level settings' },
     { key: 'createTeams', label: 'Create Teams', description: 'Can create and manage teams' },
   ] as const;
 
-  const ROLES: Role[] = ['super_admin', 'admin', 'manager', 'team_leader', 'team_member'];
+  const VISIBLE_PERMISSION_ROLES: Role[] = ['admin', 'manager', 'team_leader', 'team_member'];
   const DEFAULT_PERMISSIONS: Record<string, Partial<Record<Role, boolean>>> = {
     createProjects: { super_admin: true, admin: true, manager: true, team_leader: false, team_member: false },
     deleteProjects: { super_admin: true, admin: true, manager: false, team_leader: false, team_member: false },
+    seeOtherProjects: { super_admin: true, admin: true, manager: true, team_leader: false, team_member: false },
+    editOtherProjects: { super_admin: true, admin: true, manager: true, team_leader: false, team_member: false },
     manageUsers: { super_admin: true, admin: true, manager: false, team_leader: false, team_member: false },
     viewReports: { super_admin: true, admin: true, manager: true, team_leader: true, team_member: false },
     manageBilling: { super_admin: true, admin: true, manager: false, team_leader: false, team_member: false },
@@ -855,7 +1007,7 @@ export const AdminPermissionsPage: React.FC = () => {
             <thead>
               <tr className="border-b border-surface-100 dark:border-surface-800 bg-surface-50 dark:bg-surface-800/50">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-surface-500 uppercase tracking-wider w-72">Permission</th>
-                {ROLES.map(role => (
+                {VISIBLE_PERMISSION_ROLES.map(role => (
                   <th key={role} className="px-4 py-3 text-center text-xs font-semibold text-surface-500 uppercase tracking-wider">
                     <span className={cn('badge text-[10px]', ROLE_CONFIG[role].bg, ROLE_CONFIG[role].color)}>
                       {ROLE_CONFIG[role].label}
@@ -877,7 +1029,7 @@ export const AdminPermissionsPage: React.FC = () => {
                     <p className="text-sm font-medium text-surface-800 dark:text-surface-200">{perm.label}</p>
                     <p className="text-xs text-surface-400">{perm.description}</p>
                   </td>
-                  {ROLES.map((role) => {
+                  {VISIBLE_PERMISSION_ROLES.map((role) => {
                     const allowed = Boolean(permissionMap[perm.key]?.[role]);
                     return (
                       <td key={role} className="px-4 py-3.5 text-center">

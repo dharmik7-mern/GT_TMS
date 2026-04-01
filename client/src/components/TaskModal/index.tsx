@@ -6,7 +6,7 @@ import {
   Plus, Edit3, Trash2,
   ChevronDown, X, Send, AlertTriangle, ListTodo, UserPlus, PlusCircle
 } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime, generateId } from '../../utils/helpers';
+import { cn, formatDate, formatRelativeTime, generateId, isDueDateOverdue } from '../../utils/helpers';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
@@ -167,12 +167,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   if (!currentTask) return null;
 
   const project = projects.find(p => p.id === currentTask.projectId);
+  const category = project?.subcategories?.find((item) => item.id === currentTask.subcategoryId);
   const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
   const assignees = users.filter(u => currentTask.assigneeIds.includes(u.id));
   const reporter = users.find(u => u.id === currentTask.reporterId);
   const priority = PRIORITY_CONFIG[currentTask.priority] || PRIORITY_CONFIG.medium;
   const statusCfg = STATUS_CONFIG[currentTask.status] || STATUS_CONFIG.todo;
-  const isOverdue = Boolean(currentTask.dueDate && new Date(currentTask.dueDate) < new Date() && currentTask.status !== 'done');
+  const isOverdue = isDueDateOverdue(currentTask.dueDate, currentTask.status);
   const completionReview = currentTask.completionReview;
   const activityItems = buildTaskTimeline(currentTask, comments);
   const isReadOnly = !!(currentTask.isReassignPending || pendingReassign) && !canManageTask;
@@ -261,6 +262,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   <span>{project?.name || 'Project task'}</span>
                   <span>/</span>
                   <span className={cn('rounded-md px-1.5 py-0.5 font-medium', statusCfg.bg, statusCfg.text)}>{statusCfg.label}</span>
+                  {category ? (
+                    <>
+                      <span>/</span>
+                      <span
+                        className="rounded-md px-1.5 py-0.5 font-medium"
+                        style={{ backgroundColor: `${category.color || '#6366f1'}20`, color: category.color || '#6366f1' }}
+                      >
+                        {category.name}
+                      </span>
+                    </>
+                  ) : null}
                 </div>
                 {editingTitle && canManageTask ? (
                   <form onSubmit={handleSubmit(async (data) => { await syncTask(() => tasksService.update(currentTask.id, { title: data.title }), 'Title update failed'); setEditingTitle(false); })}>
@@ -829,6 +841,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
               <div className="flex items-center gap-2">
                 <UserAvatar name={reporter.name} color={reporter.color} size="xs" />
                 <span className="text-xs text-surface-700 dark:text-surface-300">{reporter.name}</span>
+              </div>
+            </div>
+          )}
+
+          {category && (
+            <div>
+              <label className="label">Category</label>
+              <div
+                className="inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold"
+                style={{ backgroundColor: `${category.color || '#6366f1'}20`, color: category.color || '#6366f1' }}
+              >
+                {category.name}
               </div>
             </div>
           )}

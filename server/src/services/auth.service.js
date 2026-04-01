@@ -60,6 +60,7 @@ function toAuthUser(user, workspaceId) {
     workspaceId: workspaceId ? String(workspaceId) : '',
     createdAt: user.createdAt?.toISOString?.() || new Date().toISOString(),
     isActive: user.isActive,
+    canUsePrivateQuickTasks: Boolean(user.canUsePrivateQuickTasks),
     color: user.color,
     preferences: user.preferences,
   };
@@ -127,18 +128,44 @@ export async function register({ name, email, password, workspaceName }) {
   return await issueTokens({ userId: user._id, companyId: company._id, workspaceId: workspace._id });
 }
 
-export async function login({ email, password }) {
+export async function login({ email, companyCode, employeeCode, password }) {
   const infrastructure = await getInfrastructureSettings();
-  const lookup = await AuthLookup.findOne({ email: email.toLowerCase() });
-  if (!lookup) {
-    const err = new Error('Invalid credentials');
-    err.statusCode = 401;
-    err.code = 'INVALID_CREDENTIALS';
-    throw err;
+  let user;
+  let Membership;
+
+  if (typeof email === 'string' && email.trim()) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const lookup = await AuthLookup.findOne({ email: normalizedEmail });
+    if (!lookup) {
+      const err = new Error('Invalid credentials');
+      err.statusCode = 401;
+      err.code = 'INVALID_CREDENTIALS';
+      throw err;
+    }
+
+    const tenantModels = await getTenantModels(lookup.tenantId);
+    Membership = tenantModels.Membership;
+    user = await tenantModels.User.findOne({ email: normalizedEmail, tenantId: lookup.tenantId }).select('+passwordHash');
+  } else {
+    const normalizedCompanyCode = String(companyCode || '').trim().toUpperCase();
+    const normalizedEmployeeCode = String(employeeCode || '').trim().toUpperCase();
+    const company = await Company.findOne({ organizationId: normalizedCompanyCode }).select('_id');
+
+    if (!company || !normalizedEmployeeCode) {
+      const err = new Error('Invalid credentials');
+      err.statusCode = 401;
+      err.code = 'INVALID_CREDENTIALS';
+      throw err;
+    }
+
+    const tenantModels = await getTenantModels(company._id);
+    Membership = tenantModels.Membership;
+    user = await tenantModels.User.findOne({
+      tenantId: company._id,
+      employeeId: normalizedEmployeeCode,
+    }).select('+passwordHash');
   }
 
-  const { User, Membership } = await getTenantModels(lookup.tenantId);
-  const user = await User.findOne({ email: email.toLowerCase(), tenantId: lookup.tenantId }).select('+passwordHash');
   if (!user || !user.isActive) {
     const err = new Error('Invalid credentials');
     err.statusCode = 401;

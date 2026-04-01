@@ -102,10 +102,10 @@ const LOG_LINES = [
 ];
 
 const STATS = [
-  { label: "Panic Level", value: "MAXIMUM", color: "#ef4444" },
-  { label: "Coffee Consumed", value: "∞ cups", color: "#f97316" },
-  { label: "Uptime", value: "F", color: "#ef4444" },
-  { label: "Blame Assigned", value: "Not me™", color: "#22c55e" },
+  // { label: "Panic Level", value: "MAXIMUM", color: "#ef4444" },
+  // { label: "Coffee Consumed", value: "∞ cups", color: "#f97316" },
+  // { label: "Uptime", value: "F", color: "#ef4444" },
+  // { label: "Blame Assigned", value: "Not me™", color: "#22c55e" },
 ];
 
 function Ember({ style }: { style: React.CSSProperties }) {
@@ -369,7 +369,7 @@ export default function Error500Page() {
           </div>
 
           {/* Stats row */}
-          <div className="w-full grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* <div className="w-full grid grid-cols-2 gap-3 sm:grid-cols-4">
             {STATS.map(({ label, value, color }) => (
               <div
                 key={label}
@@ -388,7 +388,7 @@ export default function Error500Page() {
                 <div style={{ fontSize: 16, color, fontWeight: 500 }}>{value}</div>
               </div>
             ))}
-          </div>
+          </div> */}
 
           {/* Terminal log */}
           <div className="w-full">

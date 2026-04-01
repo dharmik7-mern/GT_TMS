@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Filter, List, LayoutGrid, Plus, MoreHorizontal, 
   Calendar, Clock, User, ChevronDown, Check, Mail, AlertCircle,
-  Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon
+  Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon, SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
@@ -33,6 +33,100 @@ interface TaskRow {
   reporterId?: string;
 }
 
+interface SearchableSelectOption {
+  id: string;
+  label: string;
+  meta?: string;
+}
+
+const SearchableSelect: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: SearchableSelectOption[];
+  placeholder: string;
+  searchPlaceholder: string;
+}> = ({ label, value, onChange, options, placeholder, searchPlaceholder }) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!open) setSearch('');
+  }, [open]);
+
+  const selected = options.find((option) => option.id === value);
+  const filteredOptions = options.filter((option) =>
+    `${option.label} ${option.meta || ''}`.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  return (
+    <div ref={rootRef} className="relative">
+      <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-surface-500 ml-1">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={cn(
+          'w-full bg-[#f8f9fc] dark:bg-surface-800 border border-gray-100 dark:border-surface-700 rounded-2xl px-4 py-3 text-[13px] font-semibold flex items-center justify-between gap-3 text-left transition-all',
+          open && 'ring-2 ring-blue-500/15 dark:ring-brand-500/15 border-blue-300 dark:border-brand-500/40'
+        )}
+      >
+        <span className={cn('truncate', !selected && 'text-gray-400 dark:text-surface-500')}>
+          {selected?.label || placeholder}
+        </span>
+        <ChevronDown size={16} className={cn('text-gray-400 dark:text-surface-500 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-2 w-full rounded-2xl border border-gray-200 dark:border-surface-700 bg-white dark:bg-surface-900 p-2 shadow-xl">
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-surface-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full bg-[#f8f9fc] dark:bg-surface-800 border border-gray-100 dark:border-surface-700 rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/15 dark:focus:ring-brand-500/15 text-gray-900 dark:text-surface-100"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-100 dark:border-surface-800 bg-gray-50/60 dark:bg-surface-950/30 p-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-gray-400 dark:text-surface-500">No results found</div>
+            ) : (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    'w-full rounded-xl px-3 py-2.5 text-left transition-colors',
+                    value === option.id
+                      ? 'bg-blue-50 text-blue-700 dark:bg-brand-950/30 dark:text-brand-300'
+                      : 'text-gray-700 dark:text-surface-200 hover:bg-white dark:hover:bg-surface-800'
+                  )}
+                >
+                  <div className="truncate text-sm font-medium">{option.label}</div>
+                  {option.meta ? <div className="truncate text-xs text-gray-400 dark:text-surface-500">{option.meta}</div> : null}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const TasksManagement: React.FC = () => {
   const { user } = useAuthStore();
   const { users, projects } = useAppStore();
@@ -48,6 +142,8 @@ export const TasksManagement: React.FC = () => {
    const [isAddingTask, setIsAddingTask] = useState(false);
    const canCreateTask = user?.role !== 'team_member';
    const [filterStatus, setFilterStatus] = useState('all');
+   const [departmentFilter, setDepartmentFilter] = useState('all');
+   const [personFilter, setPersonFilter] = useState('all');
    const [currentPage, setCurrentPage] = useState(1);
    const [projectsPage, setProjectsPage] = useState(1);
    const [quickPage, setQuickPage] = useState(1);
@@ -68,7 +164,6 @@ export const TasksManagement: React.FC = () => {
       setCurrentPage(1);
       setProjectsPage(1);
       setQuickPage(1);
-      setPersonalPage(1);
     }, [searchTerm, filterStatus]);
 
    useEffect(() => {
@@ -181,7 +276,7 @@ export const TasksManagement: React.FC = () => {
   };
   
   // Kanban columns data
-  const kanbanTasks = [...projectTasks, ...quickTasks, ...personalTasks];
+  const kanbanTasks = [...projectTasks, ...quickTasks];
 
   useEffect(() => {
     fetchTasks();
@@ -204,14 +299,45 @@ export const TasksManagement: React.FC = () => {
   };
 
    const filteredTasks = (list: TaskRow[]) => {
-     let filtered = list.filter(t => 
-       (t.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       t.assignedTo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       t.projectName?.toLowerCase().includes(searchTerm.toLowerCase()))
-     );
+     const query = searchTerm.trim().toLowerCase();
+     let filtered = list.filter((task) => {
+       if (!query) return true;
+       const reporter = task.reporterId ? userMap.get(task.reporterId) : null;
+       const assignees = (task.assigneeIds || [])
+         .map((id) => userMap.get(id)?.name || '')
+         .filter(Boolean)
+         .join(' ');
+       return [
+         task.title,
+         task.assignedTo,
+         task.projectName,
+         task.description || '',
+         reporter?.name || '',
+         assignees,
+       ]
+         .join(' ')
+         .toLowerCase()
+         .includes(query);
+     });
  
      if (filterStatus !== 'all') {
        filtered = filtered.filter(t => t.status === filterStatus);
+     }
+
+     if (departmentFilter !== 'all') {
+       filtered = filtered.filter((task) => {
+         const reporter = task.reporterId ? userMap.get(task.reporterId) : null;
+         const assignees = (task.assigneeIds || []).map((id) => userMap.get(id)).filter(Boolean);
+         const departments = Array.from(new Set([
+           reporter?.department?.trim() || '',
+           ...assignees.map((assignee) => assignee?.department?.trim() || ''),
+         ].filter(Boolean)));
+         return departments.includes(departmentFilter);
+       });
+     }
+
+     if (personFilter !== 'all') {
+       filtered = filtered.filter((task) => task.reporterId === personFilter || (task.assigneeIds || []).includes(personFilter));
      }
  
      return filtered;
@@ -223,7 +349,7 @@ export const TasksManagement: React.FC = () => {
      );
    };
 
-  const allFilteredTasks = [...filteredTasks(projectTasks), ...filteredTasks(quickTasks), ...filteredTasks(personalTasks)];
+  const allFilteredTasks = [...filteredTasks(projectTasks), ...filteredTasks(quickTasks)];
 
   const StatusIcon = ({ status }: { status: string }) => {
     const s = status.toLowerCase().replace('_', '');
@@ -245,25 +371,25 @@ export const TasksManagement: React.FC = () => {
   };
 
    return (
-    <div className="h-full flex flex-col bg-[#f8f9fc] dark:bg-surface-950 p-6 overflow-hidden">
+    <div className="min-h-full flex flex-col bg-[#f8f9fc] dark:bg-surface-950 p-3 sm:p-4 lg:p-6 overflow-x-hidden">
       {/* Bordio Style Top Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+      <div className="mb-4 flex flex-col gap-3 lg:mb-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {canCreateTask && (
             <button 
               onClick={() => setIsAddingTask(true)}
-              className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors shadow-sm"
+              className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-colors shadow-sm w-full sm:w-auto"
             >
               <Plus size={18} />
               Add new
             </button>
           )}
           
-          <div className="flex items-center bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg p-1 shadow-sm">
+          <div className="flex items-center bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg p-1 shadow-sm w-full sm:w-auto overflow-x-auto">
             <button 
               onClick={() => setView('table')}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap",
                 view === 'table' ? "bg-gray-100 dark:bg-surface-800 text-gray-900 dark:text-surface-100 shadow-sm" : "text-gray-500 dark:text-surface-400 hover:text-gray-700 dark:hover:text-surface-200"
               )}
             >
@@ -273,7 +399,7 @@ export const TasksManagement: React.FC = () => {
             <button 
               onClick={() => setView('kanban')}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
+                "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap",
                 view === 'kanban' ? "bg-gray-100 dark:bg-surface-800 text-gray-900 dark:text-surface-100 shadow-sm" : "text-gray-500 dark:text-surface-400 hover:text-gray-700 dark:hover:text-surface-200"
               )}
             >
@@ -283,13 +409,13 @@ export const TasksManagement: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-           <div className="relative">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+           <div className="relative w-full sm:w-auto">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-surface-500" size={16} />
              <input 
                type="text" 
                placeholder="Search projects, tasks, people..." 
-               className="bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-full pl-9 pr-4 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 transition-all shadow-sm text-gray-900 dark:text-surface-100"
+               className="bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-full pl-9 pr-4 py-2 text-sm w-full sm:w-64 lg:w-72 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 transition-all shadow-sm text-gray-900 dark:text-surface-100"
                value={searchTerm}
                onChange={(e) => setSearchTerm(e.target.value)}
              />
@@ -297,43 +423,134 @@ export const TasksManagement: React.FC = () => {
           
 
           
-           <div className="relative">
+           <div className="relative w-full sm:w-auto">
              <div 
                onClick={() => setOpenDropdown(openDropdown === 'filter' ? null : 'filter')}
-               className="flex items-center gap-2 bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg px-3 py-2 shadow-sm text-xs font-bold text-gray-600 dark:text-surface-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 uppercase tracking-tight transition-all"
+               className="flex items-center justify-center gap-2 bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 rounded-lg px-3 py-2 shadow-sm text-xs font-bold text-gray-600 dark:text-surface-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 uppercase tracking-tight transition-all w-full sm:w-auto"
              >
-               <Filter size={14} />
-               Filter: {filterStatus === 'all' ? 'All' : filterStatus.replace('_', ' ')}
+               <SlidersHorizontal size={14} />
+               Filter
+               {activeFilterCount > 0 && (
+                 <span className="rounded-full bg-[#00a3ff] px-1.5 py-0.5 text-[10px] font-bold text-white">{activeFilterCount}</span>
+               )}
              </div>
              {openDropdown === 'filter' && (
-               <div className="absolute top-full mt-2 right-0 bg-white dark:bg-surface-900 border border-gray-100 dark:border-surface-800 rounded-xl shadow-xl p-2 z-50 min-w-[140px] animate-in fade-in zoom-in-95 duration-100">
-                  {['all', 'todo', 'in_progress', 'done', 'blocked'].map(f => (
-                    <div 
-                      key={f} 
-                      onClick={() => { setFilterStatus(f); setOpenDropdown(null); }} 
-                      className="px-3 py-2 text-[11px] font-bold text-gray-600 dark:text-surface-400 hover:bg-gray-50 dark:hover:bg-surface-800 rounded-lg cursor-pointer capitalize transition-colors"
-                    >
-                      {f.replace('_', ' ')}
+               <div className="absolute top-full mt-2 left-0 sm:left-auto sm:right-0 bg-white dark:bg-surface-900 border border-gray-100 dark:border-surface-800 rounded-[1.25rem] shadow-xl p-4 z-50 w-full sm:w-[340px] max-w-[calc(100vw-1.5rem)] animate-in fade-in zoom-in-95 duration-100">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-gray-800 dark:text-surface-200">Task Filters</p>
+                      <p className="text-xs text-gray-400 dark:text-surface-500">Use the same filtering flow as quick tasks.</p>
                     </div>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setOpenDropdown(null)}
+                      className="text-gray-400 dark:text-surface-500 hover:text-gray-600 dark:hover:text-surface-300"
+                    >
+                      <XIcon size={16} />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <SearchableSelect
+                      label="Person"
+                      value={personFilter}
+                      onChange={setPersonFilter}
+                      placeholder="All people"
+                      searchPlaceholder="Search people..."
+                      options={[
+                        { id: 'all', label: 'All people' },
+                        ...personOptions.map((person) => ({
+                          id: person.id,
+                          label: person.name,
+                          meta: [person.employeeId, person.department].filter(Boolean).join(' • '),
+                        })),
+                      ]}
+                    />
+                    <SearchableSelect
+                      label="Department"
+                      value={departmentFilter}
+                      onChange={setDepartmentFilter}
+                      placeholder="All departments"
+                      searchPlaceholder="Search departments..."
+                      options={[
+                        { id: 'all', label: 'All departments' },
+                        ...departmentOptions.map((department) => ({ id: department, label: department })),
+                      ]}
+                    />
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-surface-500 ml-1">Status</label>
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {['all', 'todo', 'in_progress', 'done', 'blocked'].map(f => (
+                          <button 
+                            key={f}
+                            type="button"
+                            onClick={() => setFilterStatus(f)}
+                            className={cn(
+                              'rounded-xl border px-3 py-2 text-[11px] font-bold capitalize transition-all',
+                              filterStatus === f
+                                ? 'border-[#00a3ff] bg-blue-50 text-[#0082cc] dark:border-brand-500 dark:bg-brand-950/30 dark:text-brand-300'
+                                : 'border-gray-100 bg-[#f8f9fc] text-gray-600 hover:bg-gray-50 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-300 dark:hover:bg-surface-700'
+                            )}
+                          >
+                            {f.replace('_', ' ')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+
+
+
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterStatus('all');
+                        setDepartmentFilter('all');
+                        setPersonFilter('all');
+                      }}
+                      className="w-full rounded-2xl bg-[#f1f4fb] dark:bg-surface-800 px-4 py-3 text-sm font-bold text-[#2c4e87] dark:text-surface-200 hover:bg-[#e7edf8] dark:hover:bg-surface-700 transition-colors"
+                    >
+                      Reset Filters
+                    </button>
+                  </div>
                </div>
              )}
            </div>
 
-           <div className="flex -space-x-2">
-             {users.slice(0, 5).map((u, i) => (
-               <UserAvatar key={u.id} name={u.name} size="xs" color={u.color} className="border-2 border-white dark:border-surface-950" />
-             ))}
-             {users.length > 5 && (
-               <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-surface-800 border-2 border-white dark:border-surface-950 flex items-center justify-center text-[10px] font-bold text-gray-500">
-                 +{users.length - 5}
-               </div>
-             )}
+           <div className="flex items-center justify-end overflow-visible pl-2 sm:pl-0">
+             <div className="flex -space-x-1.5 sm:-space-x-2">
+               {users.slice(0, 5).map((u) => (
+                 <UserAvatar key={u.id} name={u.name} size="xs" color={u.color} className="border-2 border-white dark:border-surface-950 ring-1 ring-[#f8f9fc] dark:ring-surface-950" />
+               ))}
+               {users.length > 5 && (
+                 <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-surface-800 border-2 border-white dark:border-surface-950 ring-1 ring-[#f8f9fc] dark:ring-surface-950 flex items-center justify-center text-[10px] font-bold text-gray-500 dark:text-surface-300">
+                   +{users.length - 5}
+                 </div>
+               )}
+             </div>
            </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden relative">
+      <div className="mb-4 mt-2 flex flex-wrap items-center gap-2">
+        {filterStatus !== 'all' && (
+          <span className="rounded-full bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-surface-300 capitalize">
+            Status: {filterStatus.replace('_', ' ')}
+          </span>
+        )}
+        {departmentFilter !== 'all' && (
+          <span className="rounded-full bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-surface-300">
+            Department: {departmentFilter}
+          </span>
+        )}
+        {personFilter !== 'all' && (
+          <span className="rounded-full bg-white dark:bg-surface-900 border border-gray-200 dark:border-surface-800 px-3 py-1 text-[11px] font-bold text-gray-600 dark:text-surface-300">
+            Person: {userMap.get(personFilter)?.name || 'Selected'}
+          </span>
+        )}
+      </div>
+
+      <div className="relative flex-1">
         <AnimatePresence mode="wait">
           {view === 'table' ? (
             <motion.div 
@@ -341,9 +558,9 @@ export const TasksManagement: React.FC = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="h-full flex flex-col"
+              className="flex flex-col"
             >
-               <div className="flex flex-col h-full gap-6 overflow-auto custom-scrollbar">
+               <div className="flex flex-col gap-6 overflow-visible lg:overflow-auto custom-scrollbar">
                  {/* 1. Active Tasks Section */}
                  <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                    <div 
@@ -358,8 +575,8 @@ export const TasksManagement: React.FC = () => {
                    </div>
                    
                    {activeSections.includes('active') && (
-                     <div className="overflow-auto border-gray-100 dark:border-surface-800 border-t">
-                       <table className="w-full text-xs text-left border-collapse">
+                     <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
+                       <table className="min-w-[760px] w-full text-xs text-left border-collapse">
                          <thead className="bg-white dark:bg-surface-900 text-gray-400 dark:text-surface-500 font-semibold border-b border-gray-50 dark:border-surface-800">
                            <tr>
                              <th className="px-5 py-3 font-semibold min-w-[300px]">Task Name</th>
@@ -375,9 +592,7 @@ export const TasksManagement: React.FC = () => {
                            {loading ? (
                              <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">Loading your tasks...</td></tr>
                            ) : allFilteredTasks.length > 0 ? (
-                             allFilteredTasks
-                                .slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage)
-                                .map((task, idx) => (
+                             paginatedActiveTasks.map((task, idx) => (
                                <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
                              ))
                            ) : (
@@ -388,27 +603,13 @@ export const TasksManagement: React.FC = () => {
 
                         {/* Pagination Controls */}
                         {allFilteredTasks.length > tasksPerPage && (
-                          <div className="px-5 py-4 flex items-center justify-between border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
-                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                               Showing {Math.min(allFilteredTasks.length, (currentPage - 1) * tasksPerPage + 1)}-{Math.min(allFilteredTasks.length, currentPage * tasksPerPage)} of {allFilteredTasks.length}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              {Array.from({ length: Math.ceil(allFilteredTasks.length / tasksPerPage) }, (_, i) => i + 1).map(page => (
-                                <button
-                                  key={page}
-                                  onClick={() => setCurrentPage(page)}
-                                  className={cn(
-                                    "w-8 h-8 rounded-lg text-xs font-bold transition-all",
-                                    currentPage === page 
-                                      ? "bg-[#00a3ff] text-white shadow-lg shadow-blue-500/20" 
-                                      : "bg-white dark:bg-surface-900 text-gray-500 dark:text-surface-400 hover:bg-gray-100 dark:hover:bg-surface-800 border border-gray-100 dark:border-surface-800"
-                                  )}
-                                >
-                                  {page}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
+                          <PaginationControls
+                            currentPage={currentPage}
+                            totalPages={activeTasksPageCount}
+                            totalItems={allFilteredTasks.length}
+                            itemsPerPage={tasksPerPage}
+                            onPageChange={setCurrentPage}
+                          />
                         )}
                      </div>
                    )}
@@ -423,30 +624,30 @@ export const TasksManagement: React.FC = () => {
                      <div className="flex items-center gap-2">
                        <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('projects') && "-rotate-90")} />
                        <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Projects</span>
-                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.type === 'project').length}</span>
+                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.projectName !== '-').length}</span>
                      </div>
                    </div>
 
                    {activeSections.includes('projects') && (
-                     <div className="overflow-auto border-gray-100 dark:border-surface-800 border-t">
-                        <table className="w-full text-xs text-left border-collapse">
+                     <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
+                        <table className="min-w-[760px] w-full text-xs text-left border-collapse">
                           <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                             {allFilteredTasks.filter(t => t.type === 'project').length === 0 ? (
+                             {allFilteredTasks.filter(t => t.projectName !== '-').length === 0 ? (
                                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No project tasks found.</td></tr>
                              ) : (
                                (() => {
                                  const groups: Record<string, TaskRow[]> = {};
-                                 allFilteredTasks.filter(t => t.type === 'project').forEach(t => {
+                                 allFilteredTasks.filter(t => t.projectName !== '-').forEach(t => {
                                    if (!groups[t.projectName]) groups[t.projectName] = [];
                                    groups[t.projectName].push(t);
                                  });
                                  
-                                 const pTasks = allFilteredTasks.filter(t => t.type === 'project');
+                                 const pTasks = allFilteredTasks.filter(t => t.projectName !== '-');
                                  const paginatedPTasks = pTasks.slice((projectsPage - 1) * tasksPerPage, projectsPage * tasksPerPage);
                                  
                                  // Re-group paginated tasks
                                  const paginatedGroups: Record<string, TaskRow[]> = {};
-                                 paginatedPTasks.forEach(t => {
+                                 paginatedProjectTasks.forEach(t => {
                                    if (!paginatedGroups[t.projectName]) paginatedGroups[t.projectName] = [];
                                    paginatedGroups[t.projectName].push(t);
                                  });
@@ -466,30 +667,16 @@ export const TasksManagement: React.FC = () => {
                                        </React.Fragment>
                                      ))}
                                      
-                                     {pTasks.length > tasksPerPage && (
+                                     {filteredProjectTasks.length > tasksPerPage && (
                                        <tr>
                                          <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
-                                            <div className="flex items-center justify-between">
-                                              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                                                Showing {Math.min(pTasks.length, (projectsPage - 1) * tasksPerPage + 1)}-{Math.min(pTasks.length, projectsPage * tasksPerPage)} of {pTasks.length}
-                                              </span>
-                                              <div className="flex items-center gap-2">
-                                                {Array.from({ length: Math.ceil(pTasks.length / tasksPerPage) }, (_, i) => i + 1).map(page => (
-                                                  <button
-                                                    key={page}
-                                                    onClick={() => setProjectsPage(page)}
-                                                    className={cn(
-                                                      "w-8 h-8 rounded-lg text-xs font-bold transition-all",
-                                                      projectsPage === page 
-                                                        ? "bg-[#00a3ff] text-white shadow-lg shadow-blue-500/20" 
-                                                        : "bg-white dark:bg-surface-900 text-gray-500 dark:text-surface-400 hover:bg-gray-100 dark:hover:bg-surface-800 border border-gray-100 dark:border-surface-800"
-                                                    )}
-                                                  >
-                                                    {page}
-                                                  </button>
-                                                ))}
-                                              </div>
-                                            </div>
+                                            <PaginationControls
+                                              currentPage={projectsPage}
+                                              totalPages={projectTasksPageCount}
+                                              totalItems={filteredProjectTasks.length}
+                                              itemsPerPage={tasksPerPage}
+                                              onPageChange={setProjectsPage}
+                                            />
                                          </td>
                                        </tr>
                                      )}
@@ -512,26 +699,26 @@ export const TasksManagement: React.FC = () => {
                      <div className="flex items-center gap-2">
                        <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('quick') && "-rotate-90")} />
                        <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Quick Tasks</span>
-                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.type === 'quick').length}</span>
+                       <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.projectName === '-').length}</span>
                      </div>
                    </div>
 
                    {activeSections.includes('quick') && (
-                     <div className="overflow-auto border-gray-100 dark:border-surface-800 border-t">
-                        <table className="w-full text-xs text-left border-collapse">
+                     <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
+                        <table className="min-w-[760px] w-full text-xs text-left border-collapse">
                           <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                             {allFilteredTasks.filter(t => t.type === 'quick').length === 0 ? (
+                             {allFilteredTasks.filter(t => t.projectName === '-').length === 0 ? (
                                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No quick tasks found.</td></tr>
                              ) : (
                                (() => {
-                                 const qTasks = allFilteredTasks.filter(t => t.type === 'quick');
+                                 const qTasks = allFilteredTasks.filter(t => t.projectName === '-');
                                  const paginatedQTasks = qTasks.slice((quickPage - 1) * tasksPerPage, quickPage * tasksPerPage);
                                  return (
                                    <>
-                                     {paginatedQTasks.map((task, idx) => (
+                                     {paginatedQuickTasks.map((task, idx) => (
                                        <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
                                      ))}
-                                     {qTasks.length > tasksPerPage && (
+                                     {filteredQuickTasks.length > tasksPerPage && (
                                        <tr>
                                           <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
                                              <div className="flex items-center justify-between">
@@ -567,71 +754,6 @@ export const TasksManagement: React.FC = () => {
                      </div>
                    )}
                  </div>
-
-                {/* 4. Personal Tasks Section */}
-                <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
-                  <div 
-                    onClick={() => toggleSection('personal')}
-                    className="px-5 py-3 border-b border-gray-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-950/20 sticky top-0 z-10 backdrop-blur-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('personal') && "-rotate-90")} />
-                      <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Personal Tasks</span>
-                      <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{filteredTasks(personalTasks).length}</span>
-                    </div>
-                  </div>
- 
-                  {activeSections.includes('personal') && (
-                    <div className="overflow-auto border-gray-100 dark:border-surface-800 border-t">
-                       <table className="w-full text-xs text-left border-collapse">
-                         <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                            {filteredTasks(personalTasks).length === 0 ? (
-                              <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No personal tasks found.</td></tr>
-                            ) : (
-                              (() => {
-                                const pTasks = filteredTasks(personalTasks);
-                                const paginatedPTasks = pTasks.slice((personalPage - 1) * tasksPerPage, personalPage * tasksPerPage);
-                                return (
-                                  <>
-                                    {paginatedPTasks.map((task, idx) => (
-                                      <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
-                                    ))}
-                                    {pTasks.length > tasksPerPage && (
-                                      <tr>
-                                         <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
-                                            <div className="flex items-center justify-between">
-                                               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                                                 Showing {Math.min(pTasks.length, (personalPage - 1) * tasksPerPage + 1)}-{Math.min(pTasks.length, personalPage * tasksPerPage)} of {pTasks.length}
-                                               </span>
-                                               <div className="flex items-center gap-2">
-                                                 {Array.from({ length: Math.ceil(pTasks.length / tasksPerPage) }, (_, i) => i + 1).map(page => (
-                                                   <button
-                                                     key={page}
-                                                     onClick={() => setPersonalPage(page)}
-                                                     className={cn(
-                                                       "w-8 h-8 rounded-lg text-xs font-bold transition-all",
-                                                       personalPage === page 
-                                                         ? "bg-[#00a3ff] text-white shadow-lg shadow-blue-500/20" 
-                                                         : "bg-white dark:bg-surface-900 text-gray-500 dark:text-surface-400 hover:bg-gray-100 dark:hover:bg-surface-800 border border-gray-100 dark:border-surface-800"
-                                                     )}
-                                                   >
-                                                     {page}
-                                                   </button>
-                                                 ))}
-                                               </div>
-                                            </div>
-                                         </td>
-                                      </tr>
-                                    )}
-                                  </>
-                                );
-                              })()
-                            )}
-                         </tbody>
-                       </table>
-                    </div>
-                  )}
-                </div>
                </div>
             </motion.div>
           ) : (
@@ -748,7 +870,7 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
     >
         <motion.div 
           initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-          className="bg-white dark:bg-surface-900 rounded-[2rem] w-full max-w-2xl shadow-2xl p-10 mt-10"
+          className="mt-4 w-full max-w-2xl rounded-[1.75rem] bg-white p-5 shadow-2xl sm:mt-10 sm:p-10 dark:bg-surface-900"
           onClick={e => e.stopPropagation()}
         >
            <div className="flex items-center justify-between mb-8">
@@ -768,7 +890,7 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
                  />
              </div>
 
-             <div className="grid grid-cols-2 gap-6">
+             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                  <div className="space-y-2">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-surface-500 ml-1">Project</label>
                     <select 
@@ -840,7 +962,7 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
                 />
              </div>
 
-             <div className="flex items-center justify-end gap-4 pt-4">
+             <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row sm:items-center sm:justify-end">
                 <button onClick={onClose} className="px-6 py-3 text-sm font-bold text-gray-500 hover:text-gray-700">Discard</button>
                 <button 
                   onClick={handleCreate}
@@ -885,7 +1007,7 @@ const TaskDetailOverlay: React.FC<{
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-end justify-end bg-black/30 backdrop-blur-[2px] md:items-center"
       onClick={onClose}
     >
        <motion.div 
@@ -893,7 +1015,7 @@ const TaskDetailOverlay: React.FC<{
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 200 }}
-        className="w-full max-w-[950px] h-full bg-white dark:bg-surface-900 shadow-2xl flex flex-col"
+        className="h-[92vh] w-full max-w-[950px] rounded-t-[1.5rem] bg-white shadow-2xl flex flex-col md:h-full md:rounded-none dark:bg-surface-900"
         onClick={e => e.stopPropagation()}
       >
         {/* Detail Header */}
@@ -909,16 +1031,16 @@ const TaskDetailOverlay: React.FC<{
            </div>
         </div>
 
-        <div className="flex-1 overflow-hidden flex">
+        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
           {/* Main Content Side */}
-          <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar sm:p-8 lg:p-10">
              {loading && !fullData ? (
               <div className="flex items-center justify-center h-40 text-gray-400">Loading task details...</div>
             ) : (
               <>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-surface-100 leading-tight">{data.title}</h1>
                 
-                <div className="grid grid-cols-2 gap-y-4 gap-x-10 max-w-lg">
+                <div className="grid max-w-lg grid-cols-1 gap-x-10 gap-y-4 md:grid-cols-2">
                    <div className="flex items-center gap-6">
                      <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Status</span>
                      <select 
@@ -1132,7 +1254,7 @@ const TaskDetailOverlay: React.FC<{
                        <Paperclip size={14} /> Files <span className="bg-gray-100 text-gray-500 px-2.5 py-0.5 rounded-full ml-1 text-[9px]">{data.attachments?.length || 0}</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {data.attachments?.map((file: any) => (
                       <div key={file.id} className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:shadow-md transition-all cursor-pointer group">
                          <div className="w-10 h-10 bg-blue-50 flex items-center justify-center rounded-lg text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
@@ -1158,91 +1280,89 @@ const TaskDetailOverlay: React.FC<{
           </div>
 
           {/* Activity / Chat Sidebar */}
-          {data.type !== 'personal' && (
-            <div className="w-[340px] border-l border-gray-100 bg-[#fbfcff] flex flex-col">
-               <div className="p-8 border-b border-gray-100 bg-white">
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
-                          <AlertCircle size={16} />
-                        </div>
-                        <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
-                          Activity
-                        </span>
-                     </div>
-                     <div className="flex -space-x-2">
-                       <UserAvatar name="M" size="xs" className="border-2 border-white" />
-                       <UserAvatar name="S" size="xs" className="border-2 border-white" />
-                     </div>
-                  </div>
-               </div>
-               <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-gray-50/20">
-                   <div className="text-center py-2 relative">
-                      <span className="bg-white border border-gray-100 text-[#999] text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest relative z-10 shadow-sm">Activity & Chat</span>
-                      <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-gray-100/50 -z-10" />
+          <div className="w-[340px] border-l border-gray-100 bg-[#fbfcff] flex flex-col">
+             <div className="p-8 border-b border-gray-100 bg-white">
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
+                        <AlertCircle size={16} />
+                      </div>
+                      <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
+                        Activity
+                      </span>
                    </div>
-                   
-                   {data.comments?.map((c: any) => {
-                     const author = users.find(u => u.id === c.authorId);
-                     const isMe = c.authorId === user?.id;
-                     return (
-                       <div key={c.id || c._id} className={cn("flex items-start gap-3", isMe ? "flex-row-reverse" : "")}>
-                          <UserAvatar name={author?.name || 'U'} size="xs" color={author?.color} />
-                          <div className={cn(
-                            "max-w-[80%] rounded-2xl p-3 shadow-sm text-[12px]",
-                            isMe ? "bg-blue-500 text-white rounded-tr-none" : "bg-white border border-gray-100 text-gray-800 rounded-tl-none"
-                          )}>
-                             <div className="flex items-center justify-between gap-4 mb-1">
-                                <span className={cn("font-bold text-[10px]", isMe ? "text-blue-100" : "text-gray-400")}>{author?.name}</span>
-                                <span className={cn("text-[9px]", isMe ? "text-blue-200" : "text-gray-300")}>{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                             </div>
-                             <p className="whitespace-pre-wrap leading-relaxed">{c.content}</p>
-                          </div>
-                       </div>
-                     );
-                   })}
-                   
-                   {!data.comments?.length && (
-                      <div className="text-center text-gray-300 text-[11px] font-medium py-10 italic">No messages yet. Start the conversation!</div>
-                   )}
+                   <div className="flex -space-x-2">
+                     <UserAvatar name="M" size="xs" className="border-2 border-white" />
+                     <UserAvatar name="S" size="xs" className="border-2 border-white" />
+                   </div>
                 </div>
+             </div>
+             <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-gray-50/20">
+                 <div className="text-center py-2 relative">
+                    <span className="bg-white border border-gray-100 text-[#999] text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest relative z-10 shadow-sm">Activity & Chat</span>
+                    <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-gray-100/50 -z-10" />
+                 </div>
+                 
+                 {data.comments?.map((c: any) => {
+                   const author = users.find(u => u.id === c.authorId);
+                   const isMe = c.authorId === user?.id;
+                   return (
+                     <div key={c.id || c._id} className={cn("flex items-start gap-3", isMe ? "flex-row-reverse" : "")}>
+                        <UserAvatar name={author?.name || 'U'} size="xs" color={author?.color} />
+                        <div className={cn(
+                          "max-w-[80%] rounded-2xl p-3 shadow-sm text-[12px]",
+                          isMe ? "bg-blue-500 text-white rounded-tr-none" : "bg-white border border-gray-100 text-gray-800 rounded-tl-none"
+                        )}>
+                           <div className="flex items-center justify-between gap-4 mb-1">
+                              <span className={cn("font-bold text-[10px]", isMe ? "text-blue-100" : "text-gray-400")}>{author?.name}</span>
+                              <span className={cn("text-[9px]", isMe ? "text-blue-200" : "text-gray-300")}>{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                           </div>
+                           <p className="whitespace-pre-wrap leading-relaxed">{c.content}</p>
+                        </div>
+                     </div>
+                   );
+                 })}
+                 
+                 {!data.comments?.length && (
+                    <div className="text-center text-gray-300 text-[11px] font-medium py-10 italic">No messages yet. Start the conversation!</div>
+                 )}
+              </div>
 
-               <div className="p-6 bg-white dark:bg-surface-900 border-t border-gray-100 dark:border-surface-800 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
-                  <div className="relative group">
-                    <textarea 
-                      placeholder="Type a message..."
-                      className="w-full bg-gray-50 dark:bg-surface-950/40 border border-gray-200 dark:border-surface-800 rounded-2xl px-5 py-4 text-sm dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 focus:bg-white dark:focus:bg-surface-950/60 resize-none transition-all pr-20"
-                      rows={2}
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      onKeyDown={(e) => {
-                         if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            if (commentText.trim()) {
-                               onPostComment(commentText);
-                               setCommentText('');
-                            }
-                         }
-                      }}
-                    />
-                    <div className="absolute right-4 bottom-4 flex items-center gap-3 text-gray-400">
-                      <button className="hover:text-blue-500 transition-colors"><Paperclip size={18} /></button>
-                      <button 
-                        onClick={() => {
+             <div className="p-6 bg-white dark:bg-surface-900 border-t border-gray-100 dark:border-surface-800 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+                <div className="relative group">
+                  <textarea 
+                    placeholder="Type a message..."
+                    className="w-full bg-gray-50 dark:bg-surface-950/40 border border-gray-200 dark:border-surface-800 rounded-2xl px-5 py-4 text-sm dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-brand-500/20 focus:bg-white dark:focus:bg-surface-950/60 resize-none transition-all pr-20"
+                    rows={2}
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => {
+                       if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
                           if (commentText.trim()) {
                              onPostComment(commentText);
                              setCommentText('');
                           }
-                        }}
-                        className="hover:text-blue-500 transition-colors"
-                      >
-                        <MessageSquare size={18} />
-                      </button>
-                    </div>
+                       }
+                    }}
+                  />
+                  <div className="absolute right-4 bottom-4 flex items-center gap-3 text-gray-400">
+                    <button className="hover:text-blue-500 transition-colors"><Paperclip size={18} /></button>
+                    <button 
+                      onClick={() => {
+                        if (commentText.trim()) {
+                           onPostComment(commentText);
+                           setCommentText('');
+                        }
+                      }}
+                      className="hover:text-blue-500 transition-colors"
+                    >
+                      <MessageSquare size={18} />
+                    </button>
                   </div>
-               </div>
-            </div>
-          )}
+                </div>
+             </div>
+          </div>
         </div>
       </motion.div>
     </motion.div>
@@ -1265,6 +1385,74 @@ const ActivityItem = ({ user: userName, action, time, meta, metaAction }: any) =
         </div>
       )}
       {time && <span className="text-gray-300 text-[9px] font-bold uppercase block tracking-widest">{time}</span>}
+    </div>
+  );
+};
+
+const PaginationControls = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) => {
+  if (totalItems <= itemsPerPage) return null;
+
+  const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter((page) => {
+    if (totalPages <= 5) return true;
+    return page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+  });
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">
+        Showing {Math.min(totalItems, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(totalItems, currentPage * itemsPerPage)} of {totalItems}
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="rounded-lg border border-gray-100 bg-white px-3 py-2 text-[11px] font-bold text-gray-500 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-400 dark:hover:bg-surface-800"
+        >
+          Prev
+        </button>
+        {pages.map((page, index) => {
+          const prevPage = pages[index - 1];
+          const showGap = prevPage && page - prevPage > 1;
+          return (
+            <React.Fragment key={page}>
+              {showGap ? <span className="px-1 text-xs font-bold text-gray-300 dark:text-surface-600">...</span> : null}
+              <button
+                type="button"
+                onClick={() => onPageChange(page)}
+                className={cn(
+                  'h-8 min-w-8 rounded-lg px-2 text-xs font-bold transition-all',
+                  currentPage === page
+                    ? 'bg-[#00a3ff] text-white shadow-lg shadow-blue-500/20'
+                    : 'border border-gray-100 bg-white text-gray-500 hover:bg-gray-100 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-400 dark:hover:bg-surface-800'
+                )}
+              >
+                {page}
+              </button>
+            </React.Fragment>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="rounded-lg border border-gray-100 bg-white px-3 py-2 text-[11px] font-bold text-gray-500 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-400 dark:hover:bg-surface-800"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 };

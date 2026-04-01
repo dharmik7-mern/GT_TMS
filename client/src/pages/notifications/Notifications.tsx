@@ -15,6 +15,12 @@ const NOTIF_ICONS = {
   mention: { icon: Bell, color: 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400' },
 };
 
+const getNotificationVisual = (type: string) =>
+  NOTIF_ICONS[type as keyof typeof NOTIF_ICONS] || {
+    icon: Bell,
+    color: 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300',
+  };
+
 export const NotificationsPage: React.FC = () => {
   const { notifications, users, markNotificationRead, markAllNotificationsRead } = useAppStore();
   const unread = notifications.filter(n => !n.isRead).length;
@@ -75,7 +81,7 @@ export const NotificationsPage: React.FC = () => {
                 <p className="section-title mb-3">{label}</p>
                 <div className="card overflow-hidden divide-y divide-surface-50 dark:divide-surface-800">
                   {notifs.map((notif, i) => {
-                    const { icon: Icon, color } = NOTIF_ICONS[notif.type];
+                    const { icon: Icon, color } = getNotificationVisual(notif.type);
                     const sender = users[i % Math.max(users.length, 1)];
 
                     return (

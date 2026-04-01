@@ -23,6 +23,13 @@ const projectSchema = new mongoose.Schema(
       durationDays: { type: Number, min: 0, default: 0 },
       notes: { type: String, trim: true, maxlength: 500, default: '' },
     }],
+    subcategories: [{
+      id: { type: String, required: true },
+      name: { type: String, trim: true, maxlength: 200, required: true },
+      description: { type: String, trim: true, maxlength: 1000, default: '' },
+      color: { type: String, trim: true, maxlength: 32, default: '#6366f1' },
+      order: { type: Number, default: 0 },
+    }],
     totalPlannedDurationDays: { type: Number, default: 0, min: 0 },
     progress: { type: Number, default: 0, min: 0, max: 100 },
     tasksCount: { type: Number, default: 0, min: 0 },

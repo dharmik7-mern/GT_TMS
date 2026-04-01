@@ -6,7 +6,7 @@ export async function getOverview(req, res, next) {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
     const { Task, QuickTask } = await getTenantModels(companyId);
 
-     const isManagerOrAdmin = ['owner', 'admin', 'manager', 'workspace_admin', 'system_admin', 'super_admin'].includes(role);
+     const isManagerOrAdmin = ['owner', 'admin', 'manager', 'team_leader', 'workspace_admin', 'system_admin', 'super_admin'].includes(role);
     
     if (!companyId || !workspaceId) {
        return res.status(200).json({ success: true, data: [] });
@@ -28,13 +28,14 @@ export async function getOverview(req, res, next) {
       .sort({ dueDate: 1 })
       .lean();
 
-    const isAdmin = ['super_admin', 'admin'].includes(role);
-    const qtFilter = { ...filter };
-    if (!isAdmin) {
-      const uid = new mongoose.Types.ObjectId(userId);
-      const privacyOr = [
-        { isPrivate: false },
+     const isAdmin = ['super_admin', 'admin'].includes(role);
+     const qtFilter = { ...filter };
+     if (!isAdmin && role === 'manager') {
+       const uid = new mongoose.Types.ObjectId(userId);
+       const privacyOr = [
+         { isPrivate: false },
         { isPrivate: { $exists: false } },
+        { assigneeIds: uid },
         { createdBy: uid },
         { reporterId: uid }
       ];
@@ -43,9 +44,15 @@ export async function getOverview(req, res, next) {
         delete qtFilter.$or;
         qtFilter.$and = [{ $or: involvedOr }, { $or: privacyOr }];
       } else {
-        qtFilter.$or = privacyOr;
-      }
-    }
+         qtFilter.$or = privacyOr;
+       }
+     } else if (!isAdmin) {
+       qtFilter.$or = [
+         { assigneeIds: userId },
+         { reporterId: userId },
+         { createdBy: userId },
+       ];
+     }
 
     const quickTasks = await QuickTask.find(qtFilter)
       .populate('assigneeIds', 'name avatar')
@@ -113,13 +120,14 @@ export async function getAllTasks(req, res, next) {
       .sort({ createdAt: -1 })
       .lean();
 
-    const isAdmin = ['super_admin', 'admin'].includes(role);
-    const qtBaseFilter = { ...baseFilter };
-    if (!isAdmin) {
-      const uid = new mongoose.Types.ObjectId(userId);
-      const privacyOr = [
-        { isPrivate: false },
+     const isAdmin = ['super_admin', 'admin'].includes(role);
+     const qtBaseFilter = { ...baseFilter };
+     if (!isAdmin && role === 'manager') {
+       const uid = new mongoose.Types.ObjectId(userId);
+       const privacyOr = [
+         { isPrivate: false },
         { isPrivate: { $exists: false } },
+        { assigneeIds: uid },
         { createdBy: uid },
         { reporterId: uid }
       ];
@@ -128,9 +136,15 @@ export async function getAllTasks(req, res, next) {
         delete qtBaseFilter.$or;
         qtBaseFilter.$and = [{ $or: involvedOr }, { $or: privacyOr }];
       } else {
-        qtBaseFilter.$or = privacyOr;
-      }
-    }
+         qtBaseFilter.$or = privacyOr;
+       }
+     } else if (!isAdmin) {
+       qtBaseFilter.$or = [
+         { assigneeIds: userId },
+         { reporterId: userId },
+         { createdBy: userId },
+       ];
+     }
 
     const quickTasks = await QuickTask.find(qtBaseFilter)
       .populate('assigneeIds', 'name avatar')
@@ -142,29 +156,38 @@ export async function getAllTasks(req, res, next) {
       .lean();
 
     const mappedTasks = tasks.map(t => ({
-      id: t._id,
+      id: String(t._id),
       title: t.title,
       assignedTo: t.assigneeIds?.[0]?.name || 'Unassigned',
-      assigneeAvatar: t.assigneeIds?.[0]?.avatar || '',
-      projectId: t.projectId?._id || null,
+      assigneeIds: (t.assigneeIds || []).map((assignee) => String(assignee?._id || assignee)).filter(Boolean),
+      reporterId: t.reporterId ? String(t.reporterId) : undefined,
+      projectId: t.projectId?._id ? String(t.projectId._id) : null,
       projectName: t.projectId?.name || '-',
       type: 'project',
       status: t.status,
       priority: t.priority,
-      dueDate: t.dueDate
+      dueDate: t.dueDate,
+      estimatedHours: t.estimatedHours ?? undefined,
+      subtasks: t.subtasks || [],
+      attachments: t.attachments || [],
+      description: t.description || '',
     }));
 
     const mappedQuickTasks = quickTasks.map(qt => ({
-      id: qt._id,
+      id: String(qt._id),
       title: qt.title,
       assignedTo: qt.assigneeIds?.[0]?.name || 'Unassigned',
-      assigneeAvatar: qt.assigneeIds?.[0]?.avatar || '',
+      assigneeIds: (qt.assigneeIds || []).map((assignee) => String(assignee?._id || assignee)).filter(Boolean),
+      reporterId: qt.reporterId ? String(qt.reporterId) : undefined,
       projectId: null,
       projectName: '-',
       type: 'quick',
       status: qt.status,
       priority: qt.priority,
-      dueDate: qt.dueDate
+      dueDate: qt.dueDate,
+      estimatedHours: qt.estimatedHours ?? undefined,
+      attachments: qt.attachments || [],
+      description: qt.description || '',
     }));
 
     const mappedPersonalTasks = personalTasks.map(pt => ({

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
@@ -17,6 +17,7 @@ import { Modal } from '../../components/Modal';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type {
   Priority,
+  ProjectCategory,
   Project,
   ProjectImportResult,
   ProjectImportRow,
@@ -58,7 +59,7 @@ const PROJECT_IMPORT_TEMPLATE_HEADERS = [
 
 const PROJECT_IMPORT_HEADER_ALIASES: Record<string, string[]> = {
   projectKey: ['projectkey', 'projectgroup', 'groupkey', 'batchkey'],
-  projectName: ['projectname', 'name', 'projecttitle'],
+  projectName: ['projectname', 'project', 'projecttitle', 'name'],
   projectDescription: ['projectdescription', 'description', 'projectdetails'],
   projectStatus: ['projectstatus', 'status'],
   projectDepartment: ['projectdepartment', 'department'],
@@ -123,6 +124,19 @@ const DEFAULT_SDLC_PLAN: ProjectSdlcPhase[] = [
   { name: 'Deployment', durationDays: 2, notes: '' },
   { name: 'Maintenance', durationDays: 3, notes: '' },
 ];
+
+const DEFAULT_PROJECT_CATEGORIES: ProjectCategory[] = [
+  { id: 'ui-design', name: 'UI Design', color: '#2563eb', order: 0 },
+  { id: 'mobile-app-design', name: 'Mobile Application Design', color: '#ec4899', order: 1 },
+  { id: 'frontend-design', name: 'Frontend Design', color: '#0f766e', order: 2 },
+  { id: 'backend-design', name: 'Backend Design', color: '#ea580c', order: 3 },
+];
+
+const DEFAULT_DEPARTMENTS = ['General', 'Development', 'Design', 'Marketing', 'Product'];
+
+function slugifyCategory(value: string) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
 
 function normalizeHeader(value: string) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -233,7 +247,7 @@ function parseProjectsCsv(content: string) {
     taskSubtasks: resolveHeader('taskSubtasks'),
   };
 
-  const missingHeaders = ['projectKey', 'projectName']
+  const missingHeaders = ['projectName']
     .filter((header) => !mappedHeaders[header as keyof typeof mappedHeaders]);
 
   if (missingHeaders.length > 0) {
@@ -258,10 +272,12 @@ function parseProjectsCsv(content: string) {
 
     if (!projectKey && !projectName) continue;
 
-    if (!projectKey || !projectName) {
-      parseErrors.push(`Row ${lineIndex + 1}: projectKey and projectName are required.`);
+    if (!projectName) {
+      parseErrors.push(`Row ${lineIndex + 1}: projectName is required.`);
       continue;
     }
+
+    const generatedProjectKey = projectKey || `${projectName}-${lineIndex + 1}`;
 
     const projectStatus = normalizeProjectStatusValue(mappedHeaders.projectStatus ? record[mappedHeaders.projectStatus] : '');
     const taskStatus = normalizeTaskStatusValue(mappedHeaders.taskStatus ? record[mappedHeaders.taskStatus] : '');
@@ -302,7 +318,7 @@ function parseProjectsCsv(content: string) {
 
     rows.push({
       rowNumber: lineIndex + 1,
-      projectKey,
+      projectKey: generatedProjectKey,
       projectName,
       projectDescription: mappedHeaders.projectDescription ? record[mappedHeaders.projectDescription]?.trim() || '' : '',
       projectStatus: projectStatus as ProjectStatus,
@@ -337,12 +353,15 @@ function parseProjectsCsv(content: string) {
 const ProjectCard = React.forwardRef<HTMLDivElement, {
   project: Project;
   onDelete: (id: string) => void;
-}>(({ project, onDelete }, ref) => {
+  onEdit: (project: Project) => void;
+}>(({ project, onDelete, onEdit }, ref) => {
   const navigate = useNavigate();
-  const { users } = useAppStore();
+  const { users, workspaces } = useAppStore();
   const members = users.filter(u => project.members.includes(u.id));
   const { user } = useAuthStore();
-  const canManageProjects = user?.role !== 'team_member';
+  const workspacePermissions = workspaces[0]?.settings?.permissions || {};
+  const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
+  const canManageProjects = user?.role !== 'team_member' || canEditOtherProjects;
   const badge = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.todo;
 
   return (
@@ -386,7 +405,10 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
                 className="z-50 min-w-[160px] bg-white dark:bg-surface-900 rounded-xl shadow-modal border border-surface-100 dark:border-surface-800 p-1"
                 sideOffset={4} align="end"
               >
-                <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
+                <DropdownMenu.Item
+                  onClick={() => onEdit(project)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none"
+                >
                   <Edit3 size={14} /> Edit
                 </DropdownMenu.Item>
                 <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
@@ -432,14 +454,16 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
   );
 });
 
-const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }> = ({ project, onDelete }) => {
+const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; onEdit: (project: Project) => void }> = ({ project, onDelete, onEdit }) => {
   const navigate = useNavigate();
-  const { users } = useAppStore();
+  const { users, workspaces } = useAppStore();
   const members = users.filter(u => project.members.includes(u.id));
   const badge = PROJECT_STATUS_BADGES[project.status];
 
   const { user } = useAuthStore();
-  const canManageProjects = user?.role !== 'team_member';
+  const workspacePermissions = workspaces[0]?.settings?.permissions || {};
+  const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
+  const canManageProjects = user?.role !== 'team_member' || canEditOtherProjects;
 
   return (
     <motion.div
@@ -472,10 +496,18 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
         )}
       </div>
       {canManageProjects && (
-        <button onClick={e => { e.stopPropagation(); onDelete(project.id); }}
-          className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-rose-500 dark:hover:bg-rose-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-          <Trash2 size={13} />
-        </button>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+          <button
+            onClick={e => { e.stopPropagation(); onEdit(project); }}
+            className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-brand-600 flex items-center justify-center"
+          >
+            <Edit3 size={13} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(project.id); }}
+            className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-rose-500 dark:hover:bg-rose-950/30 flex items-center justify-center transition-all">
+            <Trash2 size={13} />
+          </button>
+        </div>
       )}
     </motion.div>
   );
@@ -484,7 +516,7 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void }>
 export const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { projects, users, addProject, deleteProject, bootstrap } = useAppStore();
+  const { projects, users, addProject, updateProject, deleteProject, bootstrap } = useAppStore();
   const { user } = useAuthStore();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>(() => {
@@ -493,8 +525,9 @@ export const ProjectsPage: React.FC = () => {
       ? incoming
       : 'all';
   });
-  const canManageProjects = user?.role !== 'team_member';
+  const canCreateProjects = user?.role !== 'team_member';
   const [showModal, setShowModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
@@ -502,6 +535,7 @@ export const ProjectsPage: React.FC = () => {
   const [memberSearch, setMemberSearch] = useState('');
   const [reportingSearch, setReportingSearch] = useState('');
   const [sdlcPlan, setSdlcPlan] = useState<ProjectSdlcPhase[]>(DEFAULT_SDLC_PLAN);
+  const [projectCategories, setProjectCategories] = useState<ProjectCategory[]>(DEFAULT_PROJECT_CATEGORIES);
   const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
   const [importFileName, setImportFileName] = useState('');
   const [importRows, setImportRows] = useState<ProjectImportRow[]>([]);
@@ -517,7 +551,13 @@ export const ProjectsPage: React.FC = () => {
 
   const todayDate = new Date().toISOString().split('T')[0];
   const budgetCurrency = watch('budgetCurrency');
+  const selectedDepartment = watch('department') || 'General';
   const selectedStartDate = watch('startDate') || todayDate;
+  const departmentOptions = useMemo(
+    () => Array.from(new Set([...DEFAULT_DEPARTMENTS, ...projects.map((project) => project.department || 'General').filter(Boolean)])),
+    [projects]
+  );
+  const departmentDropdownValue = departmentOptions.includes(selectedDepartment) ? selectedDepartment : '__custom__';
 
   const filteredAssignableUsers = users.filter((candidate) => {
     const query = memberSearch.trim().toLowerCase();
@@ -551,13 +591,49 @@ export const ProjectsPage: React.FC = () => {
 
   const closeCreateModal = () => {
     setShowModal(false);
+    setEditingProject(null);
     setSelectedColor(PROJECT_COLORS[0]);
     setSelectedMembers([]);
     setSelectedReportingPersons([]);
     setMemberSearch('');
     setReportingSearch('');
     setSdlcPlan(DEFAULT_SDLC_PLAN);
+    setProjectCategories(DEFAULT_PROJECT_CATEGORIES);
     reset();
+  };
+
+  const openCreateModal = () => {
+    closeCreateModal();
+    reset({
+      name: '',
+      description: '',
+      department: 'General',
+      startDate: todayDate,
+      endDate: '',
+      budget: undefined,
+      budgetCurrency: 'INR',
+    });
+    setProjectCategories(DEFAULT_PROJECT_CATEGORIES);
+    setShowModal(true);
+  };
+
+  const openEditModal = (project: Project) => {
+    setEditingProject(project);
+    setShowModal(true);
+    setValue('name', project.name);
+    setValue('description', project.description || '');
+    setValue('department', project.department || 'General');
+    setValue('startDate', project.startDate || '');
+    setValue('endDate', project.endDate || '');
+    setValue('budget', project.budget);
+    setValue('budgetCurrency', project.budgetCurrency || 'INR');
+    setSelectedColor(project.color);
+    setSelectedMembers(project.members || []);
+    setSelectedReportingPersons(project.reportingPersonIds || []);
+    setMemberSearch('');
+    setReportingSearch('');
+    setSdlcPlan(project.sdlcPlan?.length ? project.sdlcPlan : DEFAULT_SDLC_PLAN);
+    setProjectCategories(project.subcategories?.length ? project.subcategories : DEFAULT_PROJECT_CATEGORIES);
   };
 
   React.useEffect(() => {
@@ -661,44 +737,54 @@ export const ProjectsPage: React.FC = () => {
     }
   };
 
-  const onCreateProject = async (data: ProjectFormData) => {
+  const onSaveProject = async (data: ProjectFormData) => {
     try {
       const fallbackMembers = user?.id ? [user.id] : [];
-      const payload = {
+        const payload = {
         name: data.name,
         description: data.description,
         color: selectedColor,
-        status: 'active' as const,
+        status: editingProject?.status || 'active' as const,
         department: data.department || 'General',
         members: selectedMembers.length > 0 ? selectedMembers : fallbackMembers,
         reportingPersonIds: selectedReportingPersons,
         startDate: data.startDate || new Date().toISOString().split('T')[0],
         endDate: data.endDate || undefined,
-        budget: typeof data.budget === 'number' && !Number.isNaN(data.budget) ? data.budget : undefined,
-        budgetCurrency: data.budgetCurrency || 'INR',
-        sdlcPlan: sdlcPlan.filter((phase) => phase.name.trim()),
-      };
+          budget: typeof data.budget === 'number' && !Number.isNaN(data.budget) ? data.budget : undefined,
+          budgetCurrency: data.budgetCurrency || 'INR',
+          sdlcPlan: sdlcPlan.filter((phase) => phase.name.trim()),
+          subcategories: projectCategories
+            .map((category, index) => ({
+              id: category.id || slugifyCategory(category.name) || `category-${index + 1}`,
+              name: category.name.trim(),
+              description: category.description || '',
+              color: category.color || PROJECT_COLORS[index % PROJECT_COLORS.length],
+              order: index,
+            }))
+            .filter((category) => category.name),
+        };
 
-      const res = await projectsService.create(payload);
-      const created = res.data.data ?? res.data;
-
-      addProject(created);
-      setShowModal(false);
-      setSelectedColor(PROJECT_COLORS[0]);
-      setSelectedMembers([]);
-      setSelectedReportingPersons([]);
-      setMemberSearch('');
-      setReportingSearch('');
-      setSdlcPlan(DEFAULT_SDLC_PLAN);
-      reset();
-      emitSuccessToast('Project created successfully.');
-      navigate(`/projects/${created.id}`);
+      if (editingProject) {
+        const res = await projectsService.update(editingProject.id, payload);
+        const updated = res.data.data ?? res.data;
+        updateProject(editingProject.id, updated);
+        closeCreateModal();
+        await bootstrap();
+        emitSuccessToast('Project updated successfully.', 'Project Updated');
+      } else {
+        const res = await projectsService.create(payload);
+        const created = res.data.data ?? res.data;
+        addProject(created);
+        closeCreateModal();
+        emitSuccessToast('Project created successfully.');
+        navigate(`/projects/${created.id}`);
+      }
     } catch (error: any) {
       const message =
         error?.response?.data?.error?.message ||
         error?.response?.data?.message ||
         'Project could not be saved to the database.';
-      emitErrorToast(message, 'Project creation failed');
+      emitErrorToast(message, editingProject ? 'Project update failed' : 'Project creation failed');
     }
   };
 
@@ -761,9 +847,9 @@ export const ProjectsPage: React.FC = () => {
               <Upload size={14} /> Import
             </button>
           )}
-          <button onClick={() => setShowModal(true)} className="btn-primary btn-sm px-4">
+          {canCreateProjects && <button onClick={openCreateModal} className="btn-primary btn-sm px-4">
             <Plus size={14} /> New Project
-          </button>
+          </button>}
           <div className="flex items-center bg-surface-100 dark:bg-surface-800 rounded-xl p-1">
             <button
               onClick={() => setView('grid')}
@@ -823,7 +909,7 @@ export const ProjectsPage: React.FC = () => {
                       <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         <AnimatePresence mode="popLayout">
                           {deptProjects.map(project => (
-                            <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} />
+                            <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} onEdit={openEditModal} />
                           ))}
                         </AnimatePresence>
                       </motion.div>
@@ -840,7 +926,7 @@ export const ProjectsPage: React.FC = () => {
                         </div>
                         <AnimatePresence mode="popLayout">
                           {deptProjects.map(project => (
-                            <ProjectRow key={project.id} project={project} onDelete={handleDeleteProject} />
+                            <ProjectRow key={project.id} project={project} onDelete={handleDeleteProject} onEdit={openEditModal} />
                           ))}
                         </AnimatePresence>
                       </div>
@@ -854,8 +940,13 @@ export const ProjectsPage: React.FC = () => {
       )}
 
       {/* Create Project Modal */}
-      <Modal open={showModal} onClose={closeCreateModal} title="New Project" description="Create a new project for your team">
-        <form onSubmit={handleSubmit(onCreateProject)} className="p-6 space-y-5">
+      <Modal
+        open={canCreateProjects && showModal}
+        onClose={closeCreateModal}
+        title={editingProject ? 'Edit Project' : 'New Project'}
+        description={editingProject ? 'Update the selected project for your team.' : 'Create a new project for your team'}
+      >
+        <form onSubmit={handleSubmit(onSaveProject)} className="p-6 space-y-5">
           <div>
             <label className="label">Project name *</label>
             <input {...register('name', { required: 'Name is required' })} placeholder="e.g. Website Redesign" className={cn('input', errors.name && 'border-rose-400')} />
@@ -869,20 +960,31 @@ export const ProjectsPage: React.FC = () => {
 
           <div>
             <label className="label">Department</label>
-            <input
-              {...register('department')}
-              className="input bg-white dark:bg-surface-900"
-              defaultValue="General"
-              list="department-options"
-              placeholder="e.g. General, Development, Design..."
+            <input type="hidden" {...register('department')} />
+            <Dropdown
+              value={departmentDropdownValue}
+              onChange={(value) => {
+                if (value === '__custom__') {
+                  if (departmentOptions.includes(selectedDepartment)) {
+                    setValue('department', '');
+                  }
+                  return;
+                }
+                setValue('department', value, { shouldDirty: true, shouldValidate: true });
+              }}
+              items={[
+                ...departmentOptions.map((department) => ({ id: department, label: department })),
+                { id: '__custom__', label: 'Custom Department' },
+              ]}
             />
-            <datalist id="department-options">
-              <option value="General" />
-              <option value="Development" />
-              <option value="Design" />
-              <option value="Marketing" />
-              <option value="Product" />
-            </datalist>
+            {departmentDropdownValue === '__custom__' && (
+              <input
+                value={selectedDepartment}
+                onChange={(event) => setValue('department', event.target.value, { shouldDirty: true, shouldValidate: true })}
+                className="input mt-3 bg-white dark:bg-surface-900"
+                placeholder="Enter custom department"
+              />
+            )}
           </div>
 
           <div>
@@ -898,7 +1000,7 @@ export const ProjectsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Start date</label>
-              <input {...register('startDate')} type="date" className="input" defaultValue={todayDate} />
+              <input {...register('startDate')} type="date" className="input" />
             </div>
             <div>
               <label className="label">Due date</label>
@@ -1007,6 +1109,82 @@ export const ProjectsPage: React.FC = () => {
           <div className="rounded-2xl border border-surface-100 p-4 dark:border-surface-800">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
+                <p className="label mb-0">Project Categories</p>
+                <p className="text-xs text-surface-400">Create work buckets like UI Design, Mobile App Design, Frontend, and Backend.</p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => setProjectCategories((prev) => [
+                  ...prev,
+                  {
+                    id: `category-${Date.now()}`,
+                    name: '',
+                    color: PROJECT_COLORS[prev.length % PROJECT_COLORS.length],
+                    order: prev.length,
+                  },
+                ])}
+              >
+                <Plus size={12} /> Add Category
+              </button>
+            </div>
+            <div className="space-y-3">
+              {projectCategories.map((category, index) => (
+                <div key={category.id || `${category.name}-${index}`} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_180px_auto] gap-3 items-center">
+                  <input
+                    value={category.name}
+                    onChange={(e) => {
+                      const next = [...projectCategories];
+                      next[index] = {
+                        ...next[index],
+                        name: e.target.value,
+                        id: next[index].id || slugifyCategory(e.target.value) || `category-${index + 1}`,
+                        order: index,
+                      };
+                      setProjectCategories(next);
+                    }}
+                    className="input"
+                    placeholder="Category name"
+                  />
+                  <div className="flex items-center gap-3 rounded-xl border border-surface-100 bg-surface-50/70 px-3 py-2 dark:border-surface-800 dark:bg-surface-800/40">
+                    <input
+                      type="color"
+                      value={category.color || PROJECT_COLORS[index % PROJECT_COLORS.length]}
+                      onChange={(e) => {
+                        const next = [...projectCategories];
+                        next[index] = { ...next[index], color: e.target.value, order: index };
+                        setProjectCategories(next);
+                      }}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-surface-200 bg-transparent p-1 dark:border-surface-700"
+                      aria-label={`Pick color for ${category.name || `category ${index + 1}`}`}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-surface-400">Category Color</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span
+                          className="h-3 w-3 rounded-full border border-surface-200 dark:border-surface-700"
+                          style={{ backgroundColor: category.color || PROJECT_COLORS[index % PROJECT_COLORS.length] }}
+                        />
+                        <span className="text-sm text-surface-600 dark:text-surface-300">Pick color</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-ghost btn-sm text-rose-500"
+                    onClick={() => setProjectCategories((prev) => prev.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, order: itemIndex })))}
+                    disabled={projectCategories.length === 1}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-surface-100 p-4 dark:border-surface-800">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
                 <p className="label mb-0">SDLC Planning</p>
                 <p className="text-xs text-surface-400">Define each delivery phase and its planned duration in days.</p>
               </div>
@@ -1048,13 +1226,13 @@ export const ProjectsPage: React.FC = () => {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={closeCreateModal} className="btn-secondary btn-md flex-1">Cancel</button>
-            <button type="submit" className="btn-primary btn-md flex-1">Create Project</button>
+            <button type="submit" className="btn-primary btn-md flex-1">{editingProject ? 'Save Changes' : 'Create Project'}</button>
           </div>
         </form>
       </Modal>
 
       <Modal
-        open={importOpen}
+        open={canCreateProjects && importOpen}
         onClose={() => {
           setImportOpen(false);
           resetImportState();
@@ -1067,8 +1245,9 @@ export const ProjectsPage: React.FC = () => {
           <div className="rounded-2xl border border-dashed border-surface-200 bg-surface-50/70 p-5 dark:border-surface-700 dark:bg-surface-800/40">
             <p className="text-sm font-semibold text-surface-800 dark:text-surface-100">Step 1: Prepare your file</p>
             <p className="mt-1 text-xs text-surface-500">
-              Each row belongs to a project using `projectKey`. All rows with the same `projectKey` create one project and attach their tasks into it.
-              Duplicate `projectName` values are allowed. Users can be matched by full name, email, or employee ID. Use `taskSubtasks` like `Draft copy;Review QA;Publish`.
+              `projectName` is required. `projectKey` is optional and will be auto-generated if it is missing.
+              All rows with the same `projectKey` create one project and attach their tasks into it. Duplicate `projectName` values are allowed.
+              Users can be matched by full name, email, or employee ID. Use `taskSubtasks` like `Draft copy;Review QA;Publish`.
             </p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button type="button" onClick={downloadImportTemplate} className="btn-secondary btn-md">

@@ -110,7 +110,7 @@ export const LogsPage: React.FC = () => {
     const incoming = searchParams.get('type');
     return ['all', 'create', 'update', 'delete', 'info'].includes(incoming || '') ? (incoming || 'all') : 'all';
   });
-  const [moduleFilter, setModuleFilter] = useState('all');
+  const [moduleFilter, setModuleFilter] = useState(() => searchParams.get('module') || 'all');
   const [daysFilter, setDaysFilter] = useState<number>(1);
   const [selectedLog, setSelectedLog] = useState<ActivityLogRow | null>(null);
 
@@ -199,6 +199,16 @@ export const LogsPage: React.FC = () => {
     else updatedParams.delete('type');
     setSearchParams(updatedParams, { replace: true });
   }, [searchParams, setSearchParams, typeFilter]);
+
+  useEffect(() => {
+    const next = moduleFilter === 'all' ? null : moduleFilter;
+    const current = searchParams.get('module');
+    if ((current || null) === next) return;
+    const updatedParams = new URLSearchParams(searchParams);
+    if (next) updatedParams.set('module', next);
+    else updatedParams.delete('module');
+    setSearchParams(updatedParams, { replace: true });
+  }, [moduleFilter, searchParams, setSearchParams]);
 
   const exportLogs = () => {
     const csv = buildCsv(filteredLogs);

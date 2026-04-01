@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { addDays, format, formatDistanceToNow, isToday, isYesterday, parseISO } from 'date-fns';
+import { addDays, format, formatDistanceToNow, isBefore, isSameDay, isToday, isYesterday, parseISO, startOfDay } from 'date-fns';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -32,6 +32,22 @@ export function addDaysToDateKey(date: string | Date, days: number): string {
     return format(addDays(base, days), 'yyyy-MM-dd');
   } catch {
     return '';
+  }
+}
+
+export function getTodayDateKey(): string {
+  return format(new Date(), 'yyyy-MM-dd');
+}
+
+export function isDueDateOverdue(dueDate?: string | Date, status?: string): boolean {
+  if (!dueDate || status === 'done') return false;
+
+  try {
+    const due = startOfDay(typeof dueDate === 'string' ? parseISO(dueDate) : dueDate);
+    const today = startOfDay(new Date());
+    return isBefore(due, today) || isSameDay(due, today);
+  } catch {
+    return false;
   }
 }
 

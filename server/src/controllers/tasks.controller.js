@@ -112,6 +112,58 @@ export async function create(req, res, next) {
   }
 }
 
+export async function listTaskRequests(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const requests = await TaskService.listTaskCreationRequests({
+      companyId,
+      workspaceId,
+      userId,
+      role,
+      projectId: req.query.projectId,
+      requestStatus: req.query.requestStatus,
+    });
+    return res.status(200).json({ success: true, data: requests });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function createTaskRequest(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const request = await TaskService.createTaskCreationRequest({
+      companyId,
+      workspaceId,
+      userId,
+      role,
+      data: req.body,
+    });
+    return res.status(201).json({ success: true, data: request });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function reviewTaskRequest(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const result = await TaskService.reviewTaskCreationRequest({
+      companyId,
+      workspaceId,
+      userId,
+      role,
+      requestId: req.params.id,
+      action: req.body.action,
+      reviewNote: req.body.reviewNote,
+    });
+    if (!result) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Task request not found' } });
+    return res.status(200).json({ success: true, data: result });
+  } catch (e) {
+    return next(e);
+  }
+}
+
 export async function update(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;

@@ -68,6 +68,13 @@ api.interceptors.response.use(
 
 export default api;
 
+interface LoginPayload {
+  email?: string;
+  companyCode?: string;
+  employeeCode?: string;
+  password: string;
+}
+
 // Typed service functions (stubbed — replace with real API calls)
 export const projectsService = {
   getAll: () => api.get('/projects'),
@@ -82,12 +89,17 @@ export const tasksService = {
   getAll: (projectId?: string) => api.get('/tasks', { params: { projectId } }),
   getById: (id: string) => api.get(`/tasks/${id}`),
   create: (data: unknown) => api.post('/tasks', data),
+  getRequests: (params?: { projectId?: string; requestStatus?: 'pending' | 'approved' | 'rejected' }) =>
+    api.get('/tasks/requests', { params }),
+  createRequest: (data: unknown) => api.post('/tasks/requests', data),
+  reviewRequest: (id: string, body: { action: 'approve' | 'reject'; reviewNote?: string }) =>
+    api.post(`/tasks/requests/${id}/review`, body),
   update: (id: string, data: unknown) => api.put(`/tasks/${id}`, data),
   delete: (id: string) => api.delete(`/tasks/${id}`),
   move: (id: string, status: string) => api.patch(`/tasks/${id}/status`, { status }),
   review: (id: string, body: { action: 'approve' | 'changes_requested'; rating?: number; reviewRemark?: string }) =>
     api.post(`/tasks/${id}/review`, body),
-  addSubtask: (taskId: string, body: { title: string; assigneeId?: string }) => api.post(`/tasks/${taskId}/subtasks`, body),
+  addSubtask: (taskId: string, body: { title: string; assigneeIds?: string[] }) => api.post(`/tasks/${taskId}/subtasks`, body),
   patchSubtask: (taskId: string, subtaskId: string, body: unknown) =>
     api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, body),
   deleteSubtask: (taskId: string, subtaskId: string) => api.delete(`/tasks/${taskId}/subtasks/${subtaskId}`),
@@ -105,6 +117,7 @@ export const usersService = {
   create: (data: unknown) => api.post('/users', data),
   importBulk: (rows: unknown[]) => api.post('/users/import', { rows }),
   update: (id: string, data: unknown) => api.put(`/users/${id}`, data),
+  setPassword: (id: string, data: { newPassword: string }) => api.put(`/users/${id}/password`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
   me: () => api.get('/users/me'),
   myPerformance: () => api.get('/users/me/performance'),
@@ -139,7 +152,7 @@ export const companiesService = {
 };
 
 export const authService = {
-  login: (email: string, password: string) => api.post('/auth/login', { email, password }),
+  login: (payload: LoginPayload) => api.post('/auth/login', payload),
   register: (data: unknown) => api.post('/auth/register', data),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) => api.post('/auth/reset-password', { token, password }),

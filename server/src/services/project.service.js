@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { logger } from '../utils/logger.js';
 import { initializeProjectPlanning } from './timeline.service.js';
 import { createTask } from './task.service.js';
+import { hasWorkspacePermission } from './permission.service.js';
 
 const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-e243b9.log');
 const PROJECT_IMPORT_FALLBACK_COLOR = '#3366FF';
@@ -27,12 +28,37 @@ function normalizeSdlcPlan(input) {
     .filter((phase) => phase.name);
 }
 
+function normalizeSubcategories(input) {
+  const subcategories = Array.isArray(input) ? input : [];
+  return subcategories
+    .map((subcategory, index) => ({
+      id: String(subcategory?.id ?? '').trim(),
+      name: String(subcategory?.name ?? '').trim(),
+      description: String(subcategory?.description ?? '').trim(),
+      color: String(subcategory?.color ?? '#6366f1').trim() || '#6366f1',
+      order: Number.isFinite(Number(subcategory?.order)) ? Math.max(0, Number(subcategory.order)) : index,
+    }))
+    .filter((subcategory) => subcategory.id && subcategory.name);
+}
+
 function normalizeUserIdentifier(value) {
   return String(value || '').trim().toLowerCase();
 }
 
 function normalizeUserName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function buildImportProjectKey(row, index) {
+  const explicitKey = String(row?.projectKey || '').trim();
+  if (explicitKey) return explicitKey;
+
+  const projectName = String(row?.projectName || '').trim();
+  if (projectName) {
+    return `auto-${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project'}-${index + 2}`;
+  }
+
+  return `auto-project-${index + 2}`;
 }
 
 async function buildUserDirectory(companyId) {
@@ -118,10 +144,73 @@ function parseTaskSubtasks(value) {
     .map((title, index) => ({ title, isCompleted: false, order: index }));
 }
 
-export async function listProjects({ companyId, workspaceId, status, department, q, page = 1, limit = 50 }) {
+function isProjectAdminRole(role) {
+  return ['super_admin', 'admin'].includes(role);
+}
+
+function buildOwnedProjectAccessFilter({ userId }) {
+  return {
+    $or: [
+      { ownerId: userId },
+      { members: userId },
+      { reportingPersonIds: userId },
+    ],
+  };
+}
+
+async function canSeeOtherProjects({ companyId, workspaceId, role }) {
+  return hasWorkspacePermission({
+    companyId,
+    workspaceId,
+    role,
+    permissionKey: 'seeOtherProjects',
+  });
+}
+
+async function canEditOtherProjects({ companyId, workspaceId, role }) {
+  return hasWorkspacePermission({
+    companyId,
+    workspaceId,
+    role,
+    permissionKey: 'editOtherProjects',
+  });
+}
+
+export async function syncProjectStats(companyId, workspaceId, projectId) {
+  if (!projectId) return null;
+
+  const tenantId = companyId;
+  const { Project, Task } = await getTenantModels(companyId);
+  const project = await Project.findOne({ _id: projectId, tenantId, workspaceId });
+  if (!project) return null;
+
+  const taskFilter = {
+    tenantId,
+    workspaceId,
+    projectId,
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+  };
+
+  const [tasksCount, completedTasksCount] = await Promise.all([
+    Task.countDocuments(taskFilter),
+    Task.countDocuments({ ...taskFilter, status: 'done' }),
+  ]);
+
+  const progress = tasksCount > 0 ? Math.round((completedTasksCount / tasksCount) * 100) : 0;
+
+  project.tasksCount = tasksCount;
+  project.completedTasksCount = completedTasksCount;
+  project.progress = progress;
+  await project.save();
+
+  return project;
+}
+
+export async function listProjects({ companyId, workspaceId, userId, role, status, department, q, page = 1, limit = 50 }) {
   const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
-  const filter = { tenantId, workspaceId };
+  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const filter = { tenantId, workspaceId, ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })) };
   if (status) filter.status = status;
   if (department) filter.department = department;
   if (q) filter.$text = { $search: q };
@@ -135,14 +224,27 @@ export async function listProjects({ companyId, workspaceId, status, department,
   return { items, total, page, limit };
 }
 
-export async function getProject({ companyId, workspaceId, projectId }) {
+export async function getProject({ companyId, workspaceId, projectId, userId, role }) {
   const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
-  const project = await Project.findOne({ _id: projectId, tenantId, workspaceId });
+  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const project = await Project.findOne({
+    _id: projectId,
+    tenantId,
+    workspaceId,
+    ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })),
+  });
   return project;
 }
 
-export async function createProject({ companyId, workspaceId, userId, data }) {
+export async function createProject({ companyId, workspaceId, userId, role, data }) {
+  if (role === 'team_member') {
+    const err = new Error('Team members are not allowed to create projects');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
   const tenantId = companyId;
   const { Project, ActivityLog } = await getTenantModels(companyId);
   const incomingMembers = Array.isArray(data.members) ? data.members.filter(Boolean) : [];
@@ -158,6 +260,7 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
       .map(String)
   ));
   const sdlcPlan = normalizeSdlcPlan(data.sdlcPlan);
+  const subcategories = normalizeSubcategories(data.subcategories);
   const totalPlannedDurationDays = sdlcPlan.reduce((sum, phase) => sum + phase.durationDays, 0);
   const teamId = data.teamId && mongoose.Types.ObjectId.isValid(data.teamId) ? data.teamId : null;
 
@@ -178,6 +281,7 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
     budget: Number.isFinite(data.budget) ? Number(data.budget) : null,
     budgetCurrency: String(data.budgetCurrency || 'INR').trim().slice(0, 8) || 'INR',
     sdlcPlan,
+    subcategories,
     totalPlannedDurationDays,
     progress: 0,
     tasksCount: 0,
@@ -246,43 +350,10 @@ export async function createProject({ companyId, workspaceId, userId, data }) {
   return project;
 }
 
-export async function syncProjectStats(companyId, workspaceId, projectId) {
-  const { Project, Task } = await getTenantModels(companyId);
-  if (!projectId) return;
-
-  const tasks = await Task.find({ 
-    projectId, 
-    tenantId: companyId, 
-    workspaceId,
-    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }] 
-  }).select('status').lean();
-
-  const STATUS_WEIGHTS = {
-    backlog: 0,
-    todo: 0,
-    scheduled: 10,
-    in_progress: 50,
-    in_review: 90,
-    blocked: 0,
-    done: 100
-  };
-
-  const total = tasks.length;
-  const completed = tasks.filter((t) => t.status === 'done').length;
-  
-  const totalWeight = tasks.reduce((sum, t) => sum + (STATUS_WEIGHTS[t.status] || 0), 0);
-  const progress = total > 0 ? Math.round(totalWeight / total) : 0;
-
-  await Project.updateOne(
-    { _id: projectId, tenantId: companyId, workspaceId },
-    { $set: { tasksCount: total, completedTasksCount: completed, progress } }
-  );
-}
-
-
-export async function updateProject({ companyId, workspaceId, userId, projectId, updates }) {
+export async function updateProject({ companyId, workspaceId, userId, role, projectId, updates }) {
   const tenantId = companyId;
   const { Project, ActivityLog } = await getTenantModels(companyId);
+  const hasGlobalEdit = isProjectAdminRole(role) || await canEditOtherProjects({ companyId, workspaceId, role });
   const normalizedUpdates = { ...updates };
 
   if (Array.isArray(updates.members)) {
@@ -314,8 +385,12 @@ export async function updateProject({ companyId, workspaceId, userId, projectId,
     normalizedUpdates.totalPlannedDurationDays = normalizedUpdates.sdlcPlan.reduce((sum, phase) => sum + phase.durationDays, 0);
   }
 
+  if (updates.subcategories !== undefined) {
+    normalizedUpdates.subcategories = normalizeSubcategories(updates.subcategories);
+  }
+
   const project = await Project.findOneAndUpdate(
-    { _id: projectId, tenantId, workspaceId },
+    { _id: projectId, tenantId, workspaceId, ...(hasGlobalEdit ? {} : buildOwnedProjectAccessFilter({ userId })) },
     {
       $set: {
         ...normalizedUpdates,
@@ -373,10 +448,16 @@ export async function updateProject({ companyId, workspaceId, userId, projectId,
   return project;
 }
 
-export async function deleteProject({ companyId, workspaceId, userId, projectId }) {
+export async function deleteProject({ companyId, workspaceId, userId, role, projectId }) {
   const tenantId = companyId;
   const { Project, ActivityLog } = await getTenantModels(companyId);
-  const project = await Project.findOneAndDelete({ _id: projectId, tenantId, workspaceId });
+  const hasGlobalEdit = isProjectAdminRole(role) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const project = await Project.findOneAndDelete({
+    _id: projectId,
+    tenantId,
+    workspaceId,
+    ...(hasGlobalEdit ? {} : buildOwnedProjectAccessFilter({ userId })),
+  });
   if (!project) return null;
 
   if (project.chatId) {
@@ -426,9 +507,14 @@ export async function importProjectsBulk({ companyId, workspaceId, userId, actor
   const groups = new Map();
   for (let index = 0; index < normalizedRows.length; index += 1) {
     const row = normalizedRows[index] || {};
-    const projectKey = String(row.projectKey || '').trim();
+    const projectKey = buildImportProjectKey(row, index);
     const items = groups.get(projectKey) || [];
-    items.push({ ...row, rowNumber: Number(row.rowNumber) > 0 ? Number(row.rowNumber) : index + 2 });
+    items.push({
+      ...row,
+      projectKey,
+      projectName: String(row.projectName ?? '').trim(),
+      rowNumber: Number(row.rowNumber) > 0 ? Number(row.rowNumber) : index + 2,
+    });
     groups.set(projectKey, items);
   }
 
@@ -466,6 +552,7 @@ export async function importProjectsBulk({ companyId, workspaceId, userId, actor
         companyId,
         workspaceId,
         userId,
+        role: actorRole,
         data: {
           name: String(seedRow.projectName ?? '').trim(),
           description: String(seedRow.projectDescription ?? '').trim(),

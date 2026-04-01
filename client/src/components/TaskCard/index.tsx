@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, MessageSquare, Paperclip, Clock } from 'lucide-react';
-import { cn, formatDate } from '../../utils/helpers';
+import { cn, formatDate, isDueDateOverdue } from '../../utils/helpers';
 import { PRIORITY_CONFIG } from '../../app/constants';
 import { UserAvatar, AvatarGroup } from '../UserAvatar';
 import { SubtaskBar } from '../SubtaskBar';
@@ -17,9 +17,11 @@ interface TaskCardProps {
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, compact }) => {
   const priority = PRIORITY_CONFIG[task.priority];
-  const { users } = useAppStore();
+  const { users, projects } = useAppStore();
   const assignees = users.filter(u => task.assigneeIds.includes(u.id));
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+  const isOverdue = isDueDateOverdue(task.dueDate, task.status);
+  const project = projects.find((item) => item.id === task.projectId);
+  const category = project?.subcategories?.find((item) => item.id === task.subcategoryId);
 
   if (compact) {
     return (
@@ -34,6 +36,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
       >
         <span className="priority-dot" style={{ backgroundColor: priority.color }} />
         <span className="text-sm text-surface-700 dark:text-surface-300 flex-1 truncate">{task.title}</span>
+        {category && (
+          <span
+            className="rounded-md px-2 py-0.5 text-[10px] font-semibold"
+            style={{ backgroundColor: `${category.color || '#6366f1'}20`, color: category.color || '#6366f1' }}
+          >
+            {category.name}
+          </span>
+        )}
         {task.dueDate && (
           <span className={cn('text-[11px]', isOverdue ? 'text-rose-500' : 'text-surface-400')}>
             {formatDate(task.dueDate, 'MMM d')}
@@ -67,6 +77,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
         {task.labels?.slice(0, 2).map(label => (
           <span key={label} className="badge-gray text-[10px]">{label}</span>
         ))}
+        {category && (
+          <span
+            className="rounded-md px-2 py-0.5 text-[10px] font-semibold"
+            style={{ backgroundColor: `${category.color || '#6366f1'}20`, color: category.color || '#6366f1' }}
+          >
+            {category.name}
+          </span>
+        )}
       </div>
 
       {/* Title */}

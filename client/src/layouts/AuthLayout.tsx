@@ -30,12 +30,14 @@ export const AuthLayout: React.FC = () => {
             transition={{ delay: 0.2 }}
             className="flex items-center justify-center gap-3 mb-8"
           >
-            <div className="w-12 h-12 bg-white backdrop-blur rounded-2xl flex items-center justify-center border border-white/30">
-              {/* <Zap size={24} className="text-white" /> */}
-              <img src='/1.png' />
-            </div>
-            <span className="font-display font-bold text-4xl tracking-tight">Gitakshmi's</span>
+<div className="w-20 h-20 bg-white backdrop-blur rounded-2xl flex items-center justify-center border border-white/30">
+  <img 
+    src="/1.png" 
+    className="w-full h-full object-contain"
+  />
+</div>
           </motion.div>
+            <span className="font-display font-bold text-5xl tracking-tight">Gitakshmi's</span>
 
           <motion.h2
             initial={{ opacity: 0, y: 20 }}

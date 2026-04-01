@@ -266,7 +266,7 @@ function computeTimelineView({ project, timelineDoc, phases, tasks }) {
     summary: {
       totalTasks: tasksWithOffsets.length,
       criticalTasks: critical.size,
-      overdueTasks: tasksWithOffsets.filter((task) => task.status !== 'done' && toUtcMidnight(task.endDate) < toUtcMidnight(new Date())).length,
+      overdueTasks: tasksWithOffsets.filter((task) => task.status !== 'done' && toUtcMidnight(task.endDate) <= toUtcMidnight(new Date())).length,
       milestoneCount: tasksWithOffsets.filter((task) => task.type === 'milestone').length,
     },
   };

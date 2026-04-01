@@ -233,7 +233,7 @@ export const Topbar: React.FC = () => {
             className="flex-shrink-0 hover:opacity-80 transition-opacity"
             aria-label="Open profile menu"
           >
-            <UserAvatar name={user.name} color={user.color} size="sm" isOnline />
+            <UserAvatar name={user.name} avatar={user.avatar} color={user.color} size="sm" isOnline />
           </button>
 
           <AnimatePresence>

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { getTenantModels } from '../config/tenantDb.js';
 import { sendTemplatedEmailSafe } from './mail.service.js';
 import { syncProjectStats } from './project.service.js';
+import { hasWorkspacePermission } from './permission.service.js';
 
 function strId(x) {
   return x ? String(x) : '';
@@ -11,10 +12,32 @@ function isAdminRole(role) {
   return role === 'super_admin' || role === 'admin';
 }
 
+function hasFullProjectAccess(role) {
+  return isAdminRole(role);
+}
+
+function canApproveTaskRequest({ role, userId, project }) {
+  if (isAdminRole(role) || role === 'manager' || role === 'team_leader') return true;
+  const uid = strId(userId);
+  return (project?.reportingPersonIds || []).some((memberId) => strId(memberId) === uid);
+}
+
 /** @returns {Promise<mongoose.Types.ObjectId[]|null>} null = all projects allowed */
 export async function getAccessibleProjectIds({ tenantId, workspaceId, userId, role }) {
   const { Project, Team } = await getTenantModels(tenantId);
-  if (isAdminRole(role)) return null;
+  const canSeeOthers = await hasWorkspacePermission({
+    companyId: tenantId,
+    workspaceId,
+    role,
+    permissionKey: 'seeOtherProjects',
+  });
+  const canEditOthers = await hasWorkspacePermission({
+    companyId: tenantId,
+    workspaceId,
+    role,
+    permissionKey: 'editOtherProjects',
+  });
+  if (hasFullProjectAccess(role) || canSeeOthers || canEditOthers) return null;
 
   const uid = strId(userId);
   const projects = await Project.find({ tenantId, workspaceId }).lean();
@@ -53,6 +76,15 @@ function taskModifyRoles(role, task, userId) {
   if (strId(task.reporterId) === uid) return true;
   if ((task.assigneeIds || []).some((a) => strId(a) === uid)) return true;
   return false;
+}
+
+function buildDirectTaskAccessFilter(userId) {
+  return {
+    $or: [
+      { assigneeIds: userId },
+      { reporterId: userId },
+    ],
+  };
 }
 
 function canViewQuickTask({ role, userId, task }) {
@@ -178,6 +210,40 @@ function addDaysUtc(date, days) {
   return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + days));
 }
 
+function resolveTaskSchedule(data) {
+  const requestedStartDate = data.startDate ? new Date(data.startDate) : new Date();
+  const startDate = Number.isNaN(requestedStartDate.getTime()) ? new Date() : requestedStartDate;
+  const requestedDueDate = data.dueDate ? new Date(data.dueDate) : null;
+  if (requestedDueDate && !Number.isNaN(requestedDueDate.getTime())) {
+    const diffMs = requestedDueDate.getTime() - startDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+    return {
+      startDate,
+      dueDate: requestedDueDate,
+      durationDays: Math.max(1, diffDays),
+    };
+  }
+
+  const rawDurationDays = Number(data.durationDays);
+  if (!Number.isFinite(rawDurationDays) || rawDurationDays < 1) {
+    const err = new Error('Task duration is required.');
+    err.statusCode = 400;
+    err.code = 'TASK_DURATION_REQUIRED';
+    throw err;
+  }
+
+  const durationDays = Math.max(1, Math.round(rawDurationDays));
+  return {
+    startDate,
+    dueDate: addDaysUtc(startDate, durationDays - 1),
+    durationDays,
+  };
+}
+
+function mapRequestWithActivity(request) {
+  return typeof request?.toJSON === 'function' ? request.toJSON() : request;
+}
+
 async function sendTaskAssignmentEmails({ tenantId, assigneeIds, actorId, task, projectName }) {
   const uniqueAssigneeIds = Array.from(new Set(mapIdList(assigneeIds))).filter(Boolean);
   if (!uniqueAssigneeIds.length) return;
@@ -276,15 +342,22 @@ export async function listTasks({
 
   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
   if (allowed !== null) {
-    if (allowed.length === 0) {
-      return { items: [], total: 0, page, limit };
-    }
     if (projectId) {
-      const ok = allowed.some((id) => strId(id) === strId(projectId));
-      if (!ok) return { items: [], total: 0, page, limit };
       filter.projectId = projectId;
+      if (!allowed.some((id) => strId(id) === strId(projectId))) {
+        Object.assign(filter, buildDirectTaskAccessFilter(userId));
+      }
     } else {
-      filter.projectId = { $in: allowed };
+      filter.$and = [
+        { $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }] },
+        {
+          $or: [
+            ...(allowed.length ? [{ projectId: { $in: allowed } }] : []),
+            buildDirectTaskAccessFilter(userId),
+          ],
+        },
+      ];
+      delete filter.$or;
     }
   } else if (projectId) {
     filter.projectId = projectId;
@@ -314,17 +387,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
 
   const { Task, Project, ActivityLog, Notification } = await getTenantModels(companyId);
   const project = await Project.findOne({ _id: data.projectId, tenantId, workspaceId }).select('name').lean();
-  const rawDurationDays = Number(data.durationDays);
-  if (!Number.isFinite(rawDurationDays) || rawDurationDays < 1) {
-    const err = new Error('Task duration is required.');
-    err.statusCode = 400;
-    err.code = 'TASK_DURATION_REQUIRED';
-    throw err;
-  }
-  const durationDays = Math.max(1, Math.round(rawDurationDays));
-
-  const startDate = data.startDate ? new Date(data.startDate) : new Date();
-  const dueDate = addDaysUtc(startDate, durationDays - 1);
+  const { startDate, dueDate, durationDays } = resolveTaskSchedule(data);
   const task = await Task.create({
     tenantId,
     workspaceId,
@@ -340,6 +403,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     dueDate,
     duration: durationDays * 24 * 60,
     phaseId: data.phaseId || null,
+    subcategoryId: data.subcategoryId || null,
     dependencies: Array.isArray(data.dependencies) ? data.dependencies : [],
     timelineType: data.type || 'task',
     estimatedHours: data.estimatedHours ?? null,
@@ -393,6 +457,228 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
   return (await attachTaskActivity({ companyId, workspaceId, tasks: [task] }))[0];
 }
 
+export async function listTaskCreationRequests({ companyId, workspaceId, userId, role, projectId, requestStatus }) {
+  const tenantId = companyId;
+  const { TaskCreationRequest, Project } = await getTenantModels(companyId);
+  const filter = { tenantId, workspaceId };
+  if (projectId) {
+    const ok = await assertProjectAccess({ tenantId, workspaceId, userId, role, projectId });
+    if (!ok) {
+      const err = new Error('Forbidden: no access to this project');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+
+    const project = await Project.findOne({ _id: projectId, tenantId, workspaceId }).lean();
+    if (!project) return [];
+
+    filter.projectId = projectId;
+    if (!canApproveTaskRequest({ role, userId, project })) {
+      filter.requestedBy = userId;
+    }
+  } else if (!isAdminRole(role) && role !== 'manager' && role !== 'team_leader') {
+    filter.$or = [
+      { requestedBy: userId },
+      { requestedToIds: userId },
+    ];
+  }
+  if (requestStatus) filter.requestStatus = requestStatus;
+
+  const requests = await TaskCreationRequest.find(filter).sort({ createdAt: -1 });
+  return requests.map(mapRequestWithActivity);
+}
+
+export async function createTaskCreationRequest({ companyId, workspaceId, userId, role, data }) {
+  const tenantId = companyId;
+  const ok = await assertProjectAccess({ tenantId, workspaceId, userId, role, projectId: data.projectId });
+  if (!ok) {
+    const err = new Error('Forbidden: no access to this project');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  const { TaskCreationRequest, Project, ActivityLog } = await getTenantModels(companyId);
+  const project = await Project.findOne({ _id: data.projectId, tenantId, workspaceId }).lean();
+  if (!project) {
+    const err = new Error('Project not found');
+    err.statusCode = 404;
+    err.code = 'PROJECT_NOT_FOUND';
+    throw err;
+  }
+
+  const reviewerIds = mapIdList(project.reportingPersonIds);
+  if (!reviewerIds.length) {
+    const err = new Error('This project has no reporting person configured for task requests');
+    err.statusCode = 400;
+    err.code = 'REPORTING_PERSON_REQUIRED';
+    throw err;
+  }
+
+  const { startDate, dueDate, durationDays } = resolveTaskSchedule(data);
+
+  const request = await TaskCreationRequest.create({
+    tenantId,
+    workspaceId,
+    projectId: data.projectId,
+    title: data.title,
+    description: data.description,
+    priority: data.priority || 'medium',
+    status: data.status || 'todo',
+    assigneeIds: Array.isArray(data.assigneeIds) ? data.assigneeIds : [],
+    requestedBy: userId,
+    requestedToIds: reviewerIds,
+    startDate,
+    dueDate,
+    durationDays,
+    phaseId: data.phaseId || null,
+    subcategoryId: data.subcategoryId || null,
+    estimatedHours: data.estimatedHours ?? null,
+    order: data.order ?? 0,
+    labels: data.labels || [],
+    subtasks: Array.isArray(data.subtasks)
+      ? data.subtasks.map((subtask, index) => ({
+          title: subtask.title,
+          isCompleted: Boolean(subtask.isCompleted),
+          order: subtask.order ?? index,
+        }))
+      : [],
+  });
+
+  await ActivityLog.create({
+    tenantId,
+    workspaceId,
+    userId,
+    type: 'task_creation_requested',
+    description: `Requested task "${request.title}" in project "${project.name}"`,
+    entityType: 'task_request',
+    entityId: request._id,
+    metadata: { projectId: project._id },
+  });
+
+  await notifyUsers({
+    tenantId,
+    workspaceId,
+    userIds: reviewerIds,
+    type: 'task_creation_request',
+    title: 'New task creation request',
+    message: `${request.title} is awaiting your approval.`,
+    relatedId: request._id,
+  });
+
+  return mapRequestWithActivity(request);
+}
+
+export async function reviewTaskCreationRequest({
+  companyId,
+  workspaceId,
+  userId,
+  role,
+  requestId,
+  action,
+  reviewNote,
+}) {
+  const tenantId = companyId;
+  const { TaskCreationRequest, Project, ActivityLog } = await getTenantModels(companyId);
+  const request = await TaskCreationRequest.findOne({ _id: requestId, tenantId, workspaceId });
+  if (!request) return null;
+
+  const project = await Project.findOne({ _id: request.projectId, tenantId, workspaceId }).lean();
+  if (!project) {
+    const err = new Error('Project not found');
+    err.statusCode = 404;
+    err.code = 'PROJECT_NOT_FOUND';
+    throw err;
+  }
+
+  if (!canApproveTaskRequest({ role, userId, project })) {
+    const err = new Error('Only the reporting person or management can review this request');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  if (request.requestStatus !== 'pending') {
+    const err = new Error('This request has already been reviewed');
+    err.statusCode = 400;
+    err.code = 'TASK_REQUEST_ALREADY_REVIEWED';
+    throw err;
+  }
+
+  request.requestStatus = action === 'approve' ? 'approved' : 'rejected';
+  request.reviewNote = reviewNote || '';
+  request.reviewedAt = new Date();
+  request.reviewedBy = userId;
+
+  let createdTask = null;
+  if (action === 'approve') {
+    createdTask = await createTask({
+      companyId,
+      workspaceId,
+      userId: request.requestedBy,
+      role: 'team_member',
+      data: {
+        projectId: String(request.projectId),
+        title: request.title,
+        description: request.description,
+        status: request.status,
+        priority: request.priority,
+        assigneeIds: mapIdList(request.assigneeIds),
+        startDate: request.startDate ? new Date(request.startDate).toISOString().split('T')[0] : undefined,
+        dueDate: request.dueDate ? new Date(request.dueDate).toISOString().split('T')[0] : undefined,
+        durationDays: request.durationDays,
+        phaseId: request.phaseId ? String(request.phaseId) : undefined,
+        subcategoryId: request.subcategoryId || undefined,
+        estimatedHours: request.estimatedHours,
+        order: request.order,
+        labels: request.labels || [],
+        subtasks: Array.isArray(request.subtasks)
+          ? request.subtasks.map((subtask) => ({
+              title: subtask.title,
+              isCompleted: Boolean(subtask.isCompleted),
+              order: subtask.order ?? 0,
+            }))
+          : [],
+      },
+    });
+    request.createdTaskId = createdTask.id;
+  }
+
+  await request.save();
+
+  await ActivityLog.create({
+    tenantId,
+    workspaceId,
+    userId,
+    type: action === 'approve' ? 'task_creation_request_approved' : 'task_creation_request_rejected',
+    description: `${action === 'approve' ? 'Approved' : 'Rejected'} task request "${request.title}"`,
+    entityType: 'task_request',
+    entityId: request._id,
+    metadata: {
+      projectId: request.projectId,
+      createdTaskId: request.createdTaskId || undefined,
+    },
+  });
+
+  await notifyUsers({
+    tenantId,
+    workspaceId,
+    userIds: [strId(request.requestedBy)].filter(Boolean),
+    type: action === 'approve' ? 'task_request_approved' : 'task_request_rejected',
+    title: action === 'approve' ? 'Task request approved' : 'Task request rejected',
+    message: action === 'approve'
+      ? `${request.title} has been approved and created as a project task.`
+      : `${request.title} has been rejected.`,
+    relatedId: request._id,
+  });
+
+  return {
+    request: mapRequestWithActivity(request),
+    createdTask,
+  };
+}
+
  export async function getTaskById({ companyId, workspaceId, userId, role, taskId }) {
    const tenantId = companyId;
    const { Task } = await getTenantModels(companyId);
@@ -409,7 +695,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
    
    // Use the task's actual workspaceId for project access check
    const ok = await assertProjectAccess({ tenantId, workspaceId: task.workspaceId, userId, role, projectId: task.projectId });
-   if (!ok) return null;
+   if (!ok && !taskModifyRoles(role, task, userId)) return null;
    return (await attachTaskActivity({ companyId, workspaceId: task.workspaceId, tasks: [task] }))[0];
  }
 
@@ -496,16 +782,23 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   const task = await Task.findOneAndUpdate({ _id: taskId, tenantId, workspaceId }, { $set }, { new: true });
   if (!task) return null;
 
-  const activityEntries = [{
-    tenantId,
-    workspaceId,
-    userId,
-    type: 'task_updated',
-    description: `Updated task "${task.title}"`,
-    entityType: 'task',
-    entityId: task._id,
-    metadata: { projectId: task.projectId },
-  }];
+  const changedFields = Object.keys(updates || {});
+  const specializedOnlyFields = new Set(['status', 'assigneeIds']);
+  const hasGenericTaskChanges = changedFields.some((field) => !specializedOnlyFields.has(field));
+  const activityEntries = [];
+
+  if (hasGenericTaskChanges) {
+    activityEntries.push({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'task_updated',
+      description: `Updated task "${task.title}"`,
+      entityType: 'task',
+      entityId: task._id,
+      metadata: { projectId: task.projectId, changedFields },
+    });
+  }
 
   if (previousStatus !== task.status) {
     activityEntries.push({
@@ -534,7 +827,9 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
-  await ActivityLog.insertMany(activityEntries);
+  if (activityEntries.length) {
+    await ActivityLog.insertMany(activityEntries);
+  }
 
   const newlyAssignedIds = afterAssigneeIds.filter((assigneeId) => !beforeAssigneeIds.includes(assigneeId));
   if (newlyAssignedIds.length) {

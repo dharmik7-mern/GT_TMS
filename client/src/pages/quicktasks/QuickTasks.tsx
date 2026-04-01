@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Zap, User, Calendar, CheckCircle2, Upload, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn, formatDate } from '../../utils/helpers';
+import { Plus, Search, Zap, User, Calendar, CheckCircle2, Upload, Lock, ChevronLeft, ChevronRight, SlidersHorizontal, X, ChevronDown } from 'lucide-react';
+import { cn, formatDate, isDueDateOverdue } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
-import { EmptyState, Tabs, TabsContent } from '../../components/ui';
+import { EmptyState } from '../../components/ui';
 import { QuickTaskModal } from '../../components/QuickTaskModal';
 import { Modal } from '../../components/Modal';
 import { emitSuccessToast } from '../../context/toastBus';
@@ -189,16 +189,116 @@ const STATUS_CARDS: Array<{
   label: string;
   tone: string;
 }> = [
-  { value: 'all', label: 'All Tasks', tone: 'text-surface-900 dark:text-surface-100' },
-  { value: 'todo', label: 'To Do', tone: 'text-amber-600 dark:text-amber-300' },
-  { value: 'in_progress', label: 'In Progress', tone: 'text-blue-600 dark:text-blue-300' },
-  { value: 'done', label: 'Done', tone: 'text-emerald-600 dark:text-emerald-300' },
-  { value: 'overdue', label: 'Overdue', tone: 'text-rose-600 dark:text-rose-300' },
-];
+    { value: 'all', label: 'All Tasks', tone: 'text-surface-900 dark:text-surface-100' },
+    { value: 'todo', label: 'To Do', tone: 'text-amber-600 dark:text-amber-300' },
+    { value: 'in_progress', label: 'In Progress', tone: 'text-blue-600 dark:text-blue-300' },
+    { value: 'done', label: 'Done', tone: 'text-emerald-600 dark:text-emerald-300' },
+    { value: 'overdue', label: 'Overdue', tone: 'text-rose-600 dark:text-rose-300' },
+  ];
 
 function isOverdue(task: QuickTask) {
-  return !!task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+  return isDueDateOverdue(task.dueDate, task.status);
 }
+
+interface SearchableSelectOption {
+  id: string;
+  label: string;
+  meta?: string;
+}
+
+const SearchableSelect: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: SearchableSelectOption[];
+  placeholder: string;
+  searchPlaceholder: string;
+}> = ({ label, value, onChange, options, placeholder, searchPlaceholder }) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) setSearch('');
+  }, [open]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selected = options.find((option) => option.id === value);
+  const filteredOptions = options.filter((option) =>
+    `${option.label} ${option.meta || ''}`.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  return (
+    <div ref={rootRef} className="relative">
+      <label className="label">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={cn(
+          'input flex w-full items-center justify-between gap-3 text-left transition-all',
+          open && 'border-brand-400 ring-2 ring-brand-500/10'
+        )}
+      >
+        <span className={cn('truncate', !selected && 'text-surface-400')}>
+          {selected?.label || placeholder}
+        </span>
+        <ChevronDown size={16} className={cn('flex-shrink-0 text-surface-400 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 top-full z-40 mt-2 w-full rounded-2xl border border-surface-200 bg-white p-2 shadow-modal dark:border-surface-700 dark:bg-surface-900">
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="input h-10 pl-9 text-sm"
+            />
+          </div>
+
+          <div className="max-h-56 overflow-y-auto rounded-xl border border-surface-100 bg-surface-50/70 p-1 dark:border-surface-800 dark:bg-surface-950/30">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-surface-400">No results found</div>
+            ) : (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    'flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+                    value === option.id
+                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300'
+                      : 'text-surface-700 hover:bg-white dark:text-surface-200 dark:hover:bg-surface-800'
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{option.label}</span>
+                    {option.meta ? <span className="block truncate text-xs text-surface-400">{option.meta}</span> : null}
+                  </span>
+                  {value === option.id ? <span className="mt-0.5 text-xs font-bold text-brand-500">Selected</span> : null}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
 
 export const QuickTasksPage: React.FC = () => {
   const navigate = useNavigate();
@@ -208,7 +308,10 @@ export const QuickTasksPage: React.FC = () => {
 
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [personFilter, setPersonFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const tasksPerPage = 10;
   const [selected, setSelected] = useState<QuickTask | null>(null);
@@ -222,27 +325,67 @@ export const QuickTasksPage: React.FC = () => {
   const [importServerError, setImportServerError] = useState('');
 
   const canImportQuickTasks = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+  const userMap = useMemo(() => new Map(users.map((item) => [item.id, item])), [users]);
+  const departmentOptions = useMemo(
+    () => Array.from(new Set(users.map((item) => item.department?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
+    [users]
+  );
+  const personOptions = useMemo(
+    () => [...users].sort((a, b) => a.name.localeCompare(b.name)),
+    [users]
+  );
 
-  const filtered = useMemo(() => {
+  const baseFiltered = useMemo(() => {
     const uid = user?.id ?? '';
     return quickTasks
       .filter(t => {
         if (scope === 'assigned_to_me') return (t.assigneeIds || []).includes(uid);
         if (scope === 'created_by_me') return t.reporterId === uid;
-        return true; 
+        return true;
       })
       .filter(t => {
-        if (status === 'all') return true;
-        if (status === 'overdue') return isOverdue(t);
-        return t.status === status;
-      })
-      .filter(t => {
+        const reporter = userMap.get(t.reporterId);
+        const assignees = (t.assigneeIds || [])
+          .map((assigneeId) => userMap.get(assigneeId))
+          .filter(Boolean);
+        const departments = Array.from(new Set([
+          reporter?.department?.trim() || '',
+          ...assignees.map((assignee) => assignee?.department?.trim() || ''),
+        ].filter(Boolean)));
+
+        if (departmentFilter !== 'all' && !departments.includes(departmentFilter)) return false;
+        if (personFilter !== 'all' && t.reporterId !== personFilter && !(t.assigneeIds || []).includes(personFilter)) return false;
+
         const q = query.trim().toLowerCase();
         if (!q) return true;
-        return (
-          t.title.toLowerCase().includes(q) ||
-          (t.description || '').toLowerCase().includes(q)
-        );
+
+        const searchableParts = [
+          t.title,
+          t.description || '',
+          t.status,
+          STATUS_CONFIG[t.status]?.label || '',
+          t.priority,
+          PRIORITY_CONFIG[t.priority]?.label || '',
+          t.dueDate || '',
+          t.dueDate ? formatDate(t.dueDate, 'MMM d, yyyy') : '',
+          t.createdAt || '',
+          t.createdAt ? formatDate(t.createdAt, 'MMM d, yyyy') : '',
+          t.updatedAt || '',
+          t.updatedAt ? formatDate(t.updatedAt, 'MMM d, yyyy') : '',
+          reporter?.name || '',
+          reporter?.email || '',
+          reporter?.employeeId || '',
+          ...assignees.flatMap((assignee) => [
+            assignee?.name || '',
+            assignee?.email || '',
+            assignee?.employeeId || '',
+          ]),
+        ];
+
+        return searchableParts
+          .join(' ')
+          .toLowerCase()
+          .includes(q);
       })
       .sort((a, b) => {
         const aO = isOverdue(a);
@@ -254,12 +397,20 @@ export const QuickTasksPage: React.FC = () => {
         if (!a.dueDate && b.dueDate) return 1;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [quickTasks, scope, status, query, user?.id]);
-  
+  }, [quickTasks, scope, query, departmentFilter, personFilter, user?.id, userMap]);
+
+  const filtered = useMemo(() => {
+    return baseFiltered.filter(t => {
+      if (status === 'all') return true;
+      if (status === 'overdue') return isOverdue(t);
+      return t.status === status;
+    });
+  }, [baseFiltered, status]);
+
   // Reset to first page when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [query, scope, status]);
+  }, [query, scope, status, departmentFilter, personFilter]);
 
   const paginatedTasks = useMemo(() => {
     const start = (currentPage - 1) * tasksPerPage;
@@ -269,20 +420,14 @@ export const QuickTasksPage: React.FC = () => {
   const totalPages = Math.ceil(filtered.length / tasksPerPage);
 
   const counts = useMemo(() => {
-    const uid = user?.id ?? '';
-    const base = quickTasks.filter(t => {
-      if (scope === 'assigned_to_me') return (t.assigneeIds || []).includes(uid);
-      if (scope === 'created_by_me') return t.reporterId === uid;
-      return true;
-    });
     return {
-      total: base.length,
-      todo: base.filter(t => t.status === 'todo').length,
-      in_progress: base.filter(t => t.status === 'in_progress').length,
-      done: base.filter(t => t.status === 'done').length,
-      overdue: base.filter(isOverdue).length,
+      total: baseFiltered.length,
+      todo: baseFiltered.filter(t => t.status === 'todo').length,
+      in_progress: baseFiltered.filter(t => t.status === 'in_progress').length,
+      done: baseFiltered.filter(t => t.status === 'done').length,
+      overdue: baseFiltered.filter(isOverdue).length,
     };
-  }, [quickTasks, scope, user?.id]);
+  }, [baseFiltered]);
 
   const openNew = () => {
     setSelected(null);
@@ -354,8 +499,8 @@ export const QuickTasksPage: React.FC = () => {
       const details = error?.response?.data?.error?.details;
       const fieldErrors = details?.fieldErrors
         ? Object.entries(details.fieldErrors).flatMap(([field, messages]) =>
-            Array.isArray(messages) ? messages.map((message) => `${field}: ${message}`) : []
-          )
+          Array.isArray(messages) ? messages.map((message) => `${field}: ${message}`) : []
+        )
         : [];
       const formErrors = Array.isArray(details?.formErrors) ? details.formErrors : [];
       const message =
@@ -369,249 +514,336 @@ export const QuickTasksPage: React.FC = () => {
     }
   };
 
-  const scopeTabs = [
-    { value: 'all', label: 'All' },
-    { value: 'created_by_me', label: 'Created by me' },
-    { value: 'assigned_to_me', label: 'Assigned to me' },
-  ];
+  const activeFilterCount = [
+    scope !== 'all',
+    status !== 'all',
+    departmentFilter !== 'all',
+    personFilter !== 'all',
+  ].filter(Boolean).length;
 
   return (
     <div className="max-w-full mx-auto">
-
-      <Tabs value={scope} onValueChange={(v) => setScope(v as ScopeFilter)} items={scopeTabs} variant="pill" className="mb-5">
-        <TabsContent value={scope} className="mt-4">
-          <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 xl:grid-cols-5">
-            {STATUS_CARDS.map((card) => {
-              const count =
-                card.value === 'all' ? counts.total :
-                card.value === 'todo' ? counts.todo :
+      <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 xl:grid-cols-5">
+        {STATUS_CARDS.map((card) => {
+          const count =
+            card.value === 'all' ? counts.total :
+              card.value === 'todo' ? counts.todo :
                 card.value === 'in_progress' ? counts.in_progress :
-                card.value === 'done' ? counts.done :
-                counts.overdue;
+                  card.value === 'done' ? counts.done :
+                    counts.overdue;
 
-              const isActive = status === card.value;
+          const isActive = status === card.value;
 
-              return (
-                <button
-                  key={card.value}
-                  type="button"
-                  onClick={() => setStatus(card.value)}
+          return (
+            <button
+              key={card.value}
+              type="button"
+              onClick={() => setStatus(card.value)}
+              className={cn(
+                'card p-4 text-left transition-all border',
+                isActive
+                  ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
+                  : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+              )}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-surface-400">{card.label}</p>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <p className={cn('text-3xl font-display font-bold', card.tone)}>{count}</p>
+                <span
                   className={cn(
-                    'card p-4 text-left transition-all border',
-                    isActive
-                      ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
-                      : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+                    'text-xs font-medium',
+                    isActive ? 'text-brand-600 dark:text-brand-300' : 'text-surface-400'
                   )}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wider text-surface-400">{card.label}</p>
-                  <div className="mt-2 flex items-end justify-between gap-3">
-                    <p className={cn('text-3xl font-display font-bold', card.tone)}>{count}</p>
-                    <span
-                      className={cn(
-                        'text-xs font-medium',
-                        isActive ? 'text-brand-600 dark:text-brand-300' : 'text-surface-400'
-                      )}
-                    >
-                      {isActive ? 'Showing' : 'View'}
-                    </span>
-                  </div>
+                  {isActive ? 'Showing' : 'View'}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="input pl-10"
+            placeholder="Search quick tasks..."
+          />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+        </div>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowFilters((prev) => !prev)}
+            className={cn('btn-secondary btn-sm', showFilters && 'border-brand-500 text-brand-600')}
+          >
+            <SlidersHorizontal size={16} />
+            <span>Filters</span>
+            {activeFilterCount > 0 ? (
+              <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold text-white">{activeFilterCount}</span>
+            ) : null}
+          </button>
+
+          {showFilters ? (
+            <div className="absolute right-0 top-full z-30 mt-2 w-[320px] rounded-2xl border border-surface-200 bg-white p-4 shadow-modal dark:border-surface-700 dark:bg-surface-900">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">Quick Task Filters</p>
+                  <p className="text-xs text-surface-400">Keep all filtering in one compact panel.</p>
+                </div>
+                <button type="button" onClick={() => setShowFilters(false)} className="text-surface-400 hover:text-surface-600">
+                  <X size={16} />
                 </button>
+              </div>
+              <div>
+                <SearchableSelect
+                  label="Person"
+                  value={personFilter}
+                  onChange={setPersonFilter}
+                  placeholder="All people"
+                  searchPlaceholder="Search people..."
+                  options={[
+                    { id: 'all', label: 'All people' },
+                    ...personOptions.map((person) => ({
+                      id: person.id,
+                      label: person.name,
+                      meta: [person.employeeId, person.department].filter(Boolean).join(' • '),
+                    })),
+                  ]}
+                />
+              </div>
+              <div>
+                <SearchableSelect
+                  label="Department"
+                  value={departmentFilter}
+                  onChange={setDepartmentFilter}
+                  placeholder="All departments"
+                  searchPlaceholder="Search departments..."
+                  options={[
+                    { id: 'all', label: 'All departments' },
+                    ...departmentOptions.map((department) => ({
+                      id: department,
+                      label: department,
+                    })),
+                  ]}
+                />
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="label">Scope</label>
+                  <select value={scope} onChange={(e) => setScope(e.target.value as ScopeFilter)} className="input">
+                    <option value="all">All</option>
+                    <option value="created_by_me">Created by me</option>
+                    <option value="assigned_to_me">Assigned to me</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label">Status</label>
+                  <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="input">
+                    {STATUS_FILTERS.map((filterOption) => (
+                      <option key={filterOption.value} value={filterOption.value}>{filterOption.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+
+
+
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScope('all');
+                    setStatus('all');
+                    setDepartmentFilter('all');
+                    setPersonFilter('all');
+                  }}
+                  className="btn-secondary btn-sm w-full"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          {canImportQuickTasks && (
+            <button
+              className="btn-secondary btn-sm"
+              onClick={() => {
+                resetImportState();
+                setImportOpen(true);
+              }}
+            >
+              <Upload size={16} />
+              <span>Import</span>
+            </button>
+          )}
+          <button className="btn-primary btn-sm" onClick={openNew}>
+            <Plus size={16} />
+            <span>New Quick Task</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {scope !== 'all' ? (
+          <span className="badge text-[10px] bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300">
+            {scope === 'created_by_me' ? 'Created by me' : 'Assigned to me'}
+          </span>
+        ) : null}
+        {status !== 'all' ? (
+          <span className="badge text-[10px] bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300">
+            Status: {STATUS_FILTERS.find((item) => item.value === status)?.label || status}
+          </span>
+        ) : null}
+        {departmentFilter !== 'all' ? (
+          <span className="badge text-[10px] bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300">
+            Department: {departmentFilter}
+          </span>
+        ) : null}
+        {personFilter !== 'all' ? (
+          <span className="badge text-[10px] bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300">
+            Person: {userMap.get(personFilter)?.name || 'Selected'}
+          </span>
+        ) : null}
+      </div>
+
+      {paginatedTasks.length === 0 ? (
+        <EmptyState
+          icon={<CheckCircle2 size={28} />}
+          title="No quick tasks found"
+          description="Try changing filters or create a new quick task"
+        // action={<button className="btn-primary btn-sm hidden md:flex" onClick={openNew}><Plus size={16} /> New Quick Task</button>}
+        />
+      ) : (
+        <>
+          <div className="space-y-2">
+            {paginatedTasks.map((t: QuickTask, i) => {
+              const assigneeIds = t.assigneeIds || [];
+              const assignees = assigneeIds
+                .map((id) => users.find((u) => u.id === id))
+                .filter((u): u is (typeof users)[number] => Boolean(u));
+              const reporter = users.find(u => u.id === t.reporterId);
+              const priority = PRIORITY_CONFIG[t.priority];
+              const statusCfg =
+                t.status === 'todo' ? STATUS_CONFIG.todo :
+                  t.status === 'in_progress' ? STATUS_CONFIG.in_progress :
+                    STATUS_CONFIG.done;
+
+              return (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.02 }}
+                  onClick={() => navigate(`/quick-tasks/${t.id}`)}
+                  className={cn(
+                    'card p-4 cursor-pointer hover:shadow-card-hover transition-shadow',
+                    isOverdue(t) && 'border-rose-200 dark:border-rose-900/50'
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <span className={cn('badge text-[10px]', priority.bg, priority.text)}>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: priority.color }} />
+                          {priority.label}
+                        </span>
+                        <span className={cn('badge text-[10px]', statusCfg.bg, statusCfg.text)}>
+                          {statusCfg.label}
+                        </span>
+                        {isOverdue(t) && (
+                          <span className="badge text-[10px] bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-300">
+                            Overdue
+                          </span>
+                        )}
+                        {(t as any).isPrivate && (
+                          <span className="badge text-[10px] bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                            <Lock size={10} />
+                            Private
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">
+                        {t.title}
+                      </p>
+                      {t.description && (
+                        <p className="text-xs text-surface-400 mt-1 line-clamp-2">
+                          {t.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs text-surface-400 flex-shrink-0">
+                      <div className="hidden sm:flex items-center gap-1.5">
+                        <User size={12} />
+                        <span className="max-w-[140px] truncate">
+                          {assignees.length ? assignees.map((a) => a.name).slice(0, 2).join(', ') + (assignees.length > 2 ? ` +${assignees.length - 2}` : '') : 'Unassigned'}
+                        </span>
+                      </div>
+                      <div className="hidden md:flex items-center gap-1.5">
+                        <Calendar size={12} />
+                        <span>{t.dueDate ? formatDate(t.dueDate, 'MMM d') : 'No due date'}</span>
+                      </div>
+                      <div className="hidden lg:block">
+                        <span className="text-[11px] text-surface-400">
+                          Created by {reporter?.name ?? '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
               );
             })}
           </div>
 
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <div className="relative flex-1 min-w-[220px]">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="input pl-10"
-                placeholder="Search quick tasks..."
-              />
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {STATUS_FILTERS.map(f => {
-                const badge =
-                  f.value === 'all' ? counts.total :
-                  f.value === 'todo' ? counts.todo :
-                  f.value === 'in_progress' ? counts.in_progress :
-                  f.value === 'done' ? counts.done :
-                  counts.overdue;
-
-                return (
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-between border-t border-surface-100 dark:border-surface-800 pt-4 px-1">
+              <p className="text-xs font-medium text-surface-500">
+                Showing <span className="text-surface-900 dark:text-white">{(currentPage - 1) * tasksPerPage + 1}</span> to <span className="text-surface-900 dark:text-white">{Math.min(currentPage * tasksPerPage, filtered.length)}</span> of <span className="text-surface-900 dark:text-white">{filtered.length}</span> results
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-lg border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                   <button
-                    key={f.value}
-                    onClick={() => setStatus(f.value)}
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
                     className={cn(
-                      'px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
-                      status === f.value
-                        ? 'bg-brand-600 text-white border-brand-600'
-                        : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300 dark:hover:border-surface-600 hover:text-surface-700 dark:hover:text-surface-300'
+                      "w-8 h-8 rounded-lg text-xs font-semibold flex items-center justify-center transition-all",
+                      currentPage === page
+                        ? "bg-brand-600 text-white shadow-sm"
+                        : "hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-600 dark:text-surface-400"
                     )}
                   >
-                    {f.label}
-                    <span className={cn('ml-2 font-bold', status === f.value ? 'text-white/80' : 'text-surface-400')}>
-                      {badge}
-                    </span>
+                    {page}
                   </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center gap-2 ml-auto">
-              {canImportQuickTasks && (
+                ))}
                 <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => {
-                    resetImportState();
-                    setImportOpen(true);
-                  }}
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 rounded-lg border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                 >
-                  <Upload size={16} />
-                  <span>Import</span>
+                  <ChevronRight size={16} />
                 </button>
-              )}
-              <button className="btn-primary btn-sm" onClick={openNew}>
-                <Plus size={16} />
-                <span>New Quick Task</span>
-              </button>
-            </div>
-          </div>
-
-          {paginatedTasks.length === 0 ? (
-            <EmptyState
-              icon={<CheckCircle2 size={28} />}
-              title="No quick tasks found"
-              description="Try changing filters or create a new quick task"
-              // action={<button className="btn-primary btn-sm hidden md:flex" onClick={openNew}><Plus size={16} /> New Quick Task</button>}
-            />
-          ) : (
-            <>
-              <div className="space-y-2">
-                {paginatedTasks.map((t: QuickTask, i) => {
-                  const assigneeIds = t.assigneeIds || [];
-                  const assignees = assigneeIds
-                    .map((id) => users.find((u) => u.id === id))
-                    .filter((u): u is (typeof users)[number] => Boolean(u));
-                  const reporter = users.find(u => u.id === t.reporterId);
-                  const priority = PRIORITY_CONFIG[t.priority];
-                  const statusCfg =
-                    t.status === 'todo' ? STATUS_CONFIG.todo :
-                    t.status === 'in_progress' ? STATUS_CONFIG.in_progress :
-                    STATUS_CONFIG.done;
-  
-                  return (
-                    <motion.div
-                      key={t.id}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.02 }}
-                      onClick={() => navigate(`/quick-tasks/${t.id}`)}
-                      className={cn(
-                        'card p-4 cursor-pointer hover:shadow-card-hover transition-shadow',
-                        isOverdue(t) && 'border-rose-200 dark:border-rose-900/50'
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            <span className={cn('badge text-[10px]', priority.bg, priority.text)}>
-                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: priority.color }} />
-                              {priority.label}
-                            </span>
-                            <span className={cn('badge text-[10px]', statusCfg.bg, statusCfg.text)}>
-                              {statusCfg.label}
-                            </span>
-                            {isOverdue(t) && (
-                              <span className="badge text-[10px] bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-300">
-                                Overdue
-                              </span>
-                            )}
-                            {(t as any).isPrivate && (
-                              <span className="badge text-[10px] bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-300 flex items-center gap-1">
-                                <Lock size={10} />
-                                Private
-                              </span>
-                            )}
-                          </div>
-  
-                          <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">
-                            {t.title}
-                          </p>
-                          {t.description && (
-                            <p className="text-xs text-surface-400 mt-1 line-clamp-2">
-                              {t.description}
-                            </p>
-                          )}
-                        </div>
-  
-                        <div className="flex items-center gap-4 text-xs text-surface-400 flex-shrink-0">
-                          <div className="hidden sm:flex items-center gap-1.5">
-                            <User size={12} />
-                            <span className="max-w-[140px] truncate">
-                              {assignees.length ? assignees.map((a) => a.name).slice(0, 2).join(', ') + (assignees.length > 2 ? ` +${assignees.length - 2}` : '') : 'Unassigned'}
-                            </span>
-                          </div>
-                          <div className="hidden md:flex items-center gap-1.5">
-                            <Calendar size={12} />
-                            <span>{t.dueDate ? formatDate(t.dueDate, 'MMM d') : 'No due date'}</span>
-                          </div>
-                          <div className="hidden lg:block">
-                            <span className="text-[11px] text-surface-400">
-                              Created by {reporter?.name ?? '—'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
               </div>
-  
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between border-t border-surface-100 dark:border-surface-800 pt-4 px-1">
-                  <p className="text-xs font-medium text-surface-500">
-                    Showing <span className="text-surface-900 dark:text-white">{(currentPage - 1) * tasksPerPage + 1}</span> to <span className="text-surface-900 dark:text-white">{Math.min(currentPage * tasksPerPage, filtered.length)}</span> of <span className="text-surface-900 dark:text-white">{filtered.length}</span> results
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="p-1.5 rounded-lg border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={cn(
-                          "w-8 h-8 rounded-lg text-xs font-semibold flex items-center justify-center transition-all",
-                          currentPage === page
-                            ? "bg-brand-600 text-white shadow-sm"
-                            : "hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-600 dark:text-surface-400"
-                        )}
-                      >
-                        {page}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="p-1.5 rounded-lg border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </>
+      )}
 
       <QuickTaskModal
         open={modalOpen}

@@ -15,7 +15,7 @@ export interface TaskSubtask {
   id: string;
   title: string;
   isCompleted: boolean;
-  assigneeId?: string;
+  assigneeIds?: string[];
   order: number;
   createdAt?: string;
   updatedAt?: string;
@@ -77,6 +77,34 @@ export interface UserPerformance {
   recentEvaluations: PerformanceEvaluation[];
 }
 
+export interface TaskCreationRequest {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  priority: Priority;
+  status: TaskStatus;
+  assigneeIds: string[];
+  requestedBy: string;
+  requestedToIds: string[];
+  startDate?: string;
+  dueDate?: string;
+  durationDays: number;
+  phaseId?: string;
+  subcategoryId?: string;
+  estimatedHours?: number;
+  order: number;
+  labels?: string[];
+  subtasks?: TaskSubtask[];
+  requestStatus: 'pending' | 'approved' | 'rejected';
+  reviewNote?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  createdTaskId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface User {
   id: string;
   employeeId?: string;
@@ -90,6 +118,7 @@ export interface User {
   workspaceId: string;
   createdAt: string;
   isActive: boolean;
+  canUsePrivateQuickTasks?: boolean;
   color?: string;
   preferences?: {
     notifications?: {
@@ -175,7 +204,7 @@ export interface QuickTaskImportResult {
 
 export interface ProjectImportRow {
   rowNumber?: number;
-  projectKey: string;
+  projectKey?: string;
   projectName: string;
   projectDescription?: string;
   projectStatus?: ProjectStatus;
@@ -254,6 +283,16 @@ export interface ProjectSdlcPhase {
   notes?: string;
 }
 
+export interface ProjectSubcategory {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  order?: number;
+}
+
+export type ProjectCategory = ProjectSubcategory;
+
 export interface Project {
   id: string;
   name: string;
@@ -273,6 +312,7 @@ export interface Project {
   budget?: number;
   budgetCurrency?: string;
   sdlcPlan?: ProjectSdlcPhase[];
+  subcategories?: ProjectCategory[];
   totalPlannedDurationDays?: number;
   progress: number;
   tasksCount: number;
@@ -293,6 +333,7 @@ export interface Task {
   reporterId: string;
   parentTaskId?: string;
   phaseId?: string;
+  subcategoryId?: string;
   dependencies?: string[];
   type?: 'task' | 'milestone';
   /** Embedded checklist items (GW-style subtask bar) */
@@ -394,7 +435,7 @@ export interface Team {
 
 export interface Notification {
   id: string;
-  type: 'task_assigned' | 'comment_added' | 'deadline_approaching' | 'project_update' | 'mention';
+  type: string;
   title: string;
   message: string;
   isRead: boolean;

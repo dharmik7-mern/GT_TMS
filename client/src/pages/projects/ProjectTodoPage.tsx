@@ -18,17 +18,17 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { addDaysToDateKey, cn, formatDate } from '../../utils/helpers';
+import { cn, formatDate } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { tasksService, timelineService } from '../../services/api';
 import { STATUS_CONFIG, TASK_TYPE_CONFIG } from '../../app/constants';
 import { SubtaskBar } from '../../components/SubtaskBar';
 import { KanbanBoard } from '../../components/KanbanBoard';
-import { Modal } from '../../components/Modal';
 import { UserAvatar } from '../../components/UserAvatar';
 import { EmptyState } from '../../components/ui';
 import type { Task, TaskStatus, TaskType, TaskSubtask, TimelinePhase } from '../../app/types';
+import { ProjectTaskCreateModal, type ProjectTaskCreateValues } from '../../components/ProjectTaskCreateModal';
 
 function mapApiTask(x: Record<string, unknown>): Task {
   const subs = (Array.isArray(x.subtasks) ? x.subtasks : []) as TaskSubtask[];
@@ -43,6 +43,7 @@ function mapApiTask(x: Record<string, unknown>): Task {
     projectId: String(x.projectId || ''),
     assigneeIds: Array.isArray(x.assigneeIds) ? (x.assigneeIds as string[]) : [],
     reporterId: String(x.reporterId || ''),
+    subcategoryId: x.subcategoryId ? String(x.subcategoryId) : undefined,
     labels: Array.isArray(x.labels) ? (x.labels as string[]) : [],
     order: typeof x.order === 'number' ? x.order : 0,
     dueDate: x.dueDate ? String(x.dueDate) : undefined,
@@ -106,18 +107,11 @@ export const ProjectTodoPage: React.FC = () => {
   const [completedOpen, setCompletedOpen] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newTaskType, setNewTaskType] = useState<TaskType>('operational');
-  const [newStatus, setNewStatus] = useState<TaskStatus>('todo');
-  const [newStartDate, setNewStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [newDurationDays, setNewDurationDays] = useState(1);
-  const [newPhaseId, setNewPhaseId] = useState('');
+  const [defaultStatus, setDefaultStatus] = useState<TaskStatus>('todo');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [timelinePhases, setTimelinePhases] = useState<TimelinePhase[]>([]);
-  const [newPhaseName, setNewPhaseName] = useState('');
-  const [isCreatingPhase, setIsCreatingPhase] = useState(false);
-  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
-  const [newTaskFiles, setNewTaskFiles] = useState<File[]>([]);
   const [subDraft, setSubDraft] = useState<Record<string, string>>({});
+  const [subDraftAssignees, setSubDraftAssignees] = useState<Record<string, string[]>>({});
 
   const project = projects.find((p) => p.id === projectId);
   const memberUsers = useMemo(
@@ -163,37 +157,32 @@ export const ProjectTodoPage: React.FC = () => {
     })();
   }, [projectId]);
 
-  const handleCreatePhase = async () => {
-    const trimmedName = newPhaseName.trim();
-    if (!trimmedName || !projectId) return;
-    try {
-      setIsCreatingPhase(true);
-      const palette = ['#2563eb', '#0f766e', '#7c3aed', '#ea580c', '#dc2626', '#0891b2'];
-      await timelineService.upsert(projectId, {
-        phases: [
-          ...timelinePhases.map(({ id, name, order, color }) => ({ id, name, order, color })),
-          {
-            name: trimmedName,
-            order: timelinePhases.length,
-            color: palette[timelinePhases.length % palette.length],
-          },
-        ],
-      });
-      const response = await timelineService.get(projectId);
-      const phases = (response.data?.data?.phases || []).filter((phase: TimelinePhase) => phase.id !== 'ungrouped');
-      setTimelinePhases(phases);
-      const createdPhase = phases.find((phase: TimelinePhase) => phase.name === trimmedName);
-      if (createdPhase) {
-        setNewPhaseId(createdPhase.id);
-      }
-      setNewPhaseName('');
-    } finally {
-      setIsCreatingPhase(false);
-    }
+  useEffect(() => {
+    if (selectedCategoryId === 'all') return;
+    if ((project?.subcategories || []).some((category) => category.id === selectedCategoryId)) return;
+    setSelectedCategoryId('all');
+  }, [project?.subcategories, selectedCategoryId]);
+
+  const handleCreatePhase = async (newPhase: { id: string; name: string; order: number; color: string }) => {
+    if (!projectId) return;
+    await timelineService.upsert(projectId, {
+      phases: [
+        ...timelinePhases.map(({ id, name, order, color }) => ({ id, name, order, color })),
+        newPhase,
+      ],
+    });
+    const response = await timelineService.get(projectId);
+    const phases = (response.data?.data?.phases || []).filter((phase: TimelinePhase) => phase.id !== 'ungrouped');
+    setTimelinePhases(phases);
+    return phases.find((phase: TimelinePhase) => phase.name === newPhase.name)?.id;
   };
 
-  const activeTasks = useMemo(() => tasks.filter((t) => t.status !== 'done'), [tasks]);
-  const completedTasks = useMemo(() => tasks.filter((t) => t.status === 'done'), [tasks]);
+  const filteredTasks = useMemo(
+    () => selectedCategoryId === 'all' ? tasks : tasks.filter((task) => task.subcategoryId === selectedCategoryId),
+    [selectedCategoryId, tasks]
+  );
+  const activeTasks = useMemo(() => filteredTasks.filter((t) => t.status !== 'done'), [filteredTasks]);
+  const completedTasks = useMemo(() => filteredTasks.filter((t) => t.status === 'done'), [filteredTasks]);
 
   const updateLocalTask = (id: string, patch: Partial<Task>) => {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -227,8 +216,10 @@ export const ProjectTodoPage: React.FC = () => {
     const title = (subDraft[taskId] || '').trim();
     if (!title) return;
     try {
-      await tasksService.addSubtask(taskId, { title });
+      const assigneeIds = subDraftAssignees[taskId] || [];
+      await tasksService.addSubtask(taskId, { title, assigneeIds });
       setSubDraft((d) => ({ ...d, [taskId]: '' }));
+      setSubDraftAssignees((d) => ({ ...d, [taskId]: [] }));
       await loadTasks();
     } catch {
       await loadTasks();
@@ -255,33 +246,31 @@ export const ProjectTodoPage: React.FC = () => {
     }
   };
 
-  const handleCreate = async () => {
-    if (!projectId || !newTitle.trim()) return;
+  const handleCreate = async (values: ProjectTaskCreateValues) => {
+    if (!projectId) return;
     try {
       const res = await tasksService.create({
         projectId,
-        title: newTitle.trim(),
-        taskType: newTaskType,
-        status: newStatus,
-        startDate: newStartDate,
-        dueDate: addDaysToDateKey(newStartDate, newDurationDays - 1),
-        durationDays: newDurationDays,
-        phaseId: newPhaseId || undefined,
-        assigneeIds: newAssigneeIds,
+        title: values.title.trim(),
+        description: values.description || undefined,
+        taskType: values.taskType,
+        priority: values.priority,
+        status: values.status,
+        startDate: values.startDate,
+        dueDate: values.dueDate,
+        durationDays: values.durationDays,
+        phaseId: values.phaseId || undefined,
+        assigneeIds: values.assigneeIds,
+        subcategoryId: values.subcategoryId || undefined,
+        estimatedHours: values.estimatedHours || undefined,
       });
       const created = res.data?.data ?? res.data;
       const createdId = created?.id || created?._id;
 
-      if (createdId && newTaskFiles.length) {
-        await tasksService.uploadAttachments(createdId, newTaskFiles);
+      if (createdId && values.files.length) {
+        await tasksService.uploadAttachments(createdId, values.files);
       }
       setShowCreate(false);
-      setNewTitle('');
-      setNewStartDate(project?.startDate || new Date().toISOString().split('T')[0]);
-      setNewDurationDays(1);
-      setNewPhaseId('');
-      setNewAssigneeIds([]);
-      setNewTaskFiles([]);
       await loadTasks();
       await bootstrap();
     } catch {
@@ -311,6 +300,7 @@ export const ProjectTodoPage: React.FC = () => {
   const renderTaskRow = (task: Task) => {
     const assignee = users.find((u) => task.assigneeIds[0] === u.id);
     const typeCfg = TASK_TYPE_CONFIG[task.taskType || 'operational'];
+    const category = project.subcategories?.find((item) => item.id === task.subcategoryId);
     const commentsCount = task.comments?.length ?? 0;
     const attachCount = task.attachments?.length ?? 0;
     const done = task.subtaskCompleted ?? 0;
@@ -375,6 +365,15 @@ export const ProjectTodoPage: React.FC = () => {
             {task.dueDate ? formatDate(task.dueDate, 'd MMM yyyy') : <CalendarIcon size={16} className="text-surface-400" />}
           </td>
           <td className="py-3 px-2 align-middle">
+            {category ? (
+              <span className="rounded-lg px-2 py-1 text-[11px] font-semibold" style={{ backgroundColor: `${category.color || '#6366f1'}20`, color: category.color || '#6366f1' }}>
+                {category.name}
+              </span>
+            ) : (
+              <span className="text-xs text-surface-400">Uncategorized</span>
+            )}
+          </td>
+          <td className="py-3 px-2 align-middle">
             {assignee ? (
               <div className="flex items-center gap-2">
                 <UserAvatar name={assignee.name} color={assignee.color} size="sm" />
@@ -402,7 +401,7 @@ export const ProjectTodoPage: React.FC = () => {
         <AnimatePresence>
           {expanded && (
             <tr key={`${task.id}-exp`}>
-              <td colSpan={6} className="bg-surface-50/90 dark:bg-surface-900/60 border-b border-surface-100 dark:border-surface-800 p-4">
+              <td colSpan={7} className="bg-surface-50/90 dark:bg-surface-900/60 border-b border-surface-100 dark:border-surface-800 p-4">
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0 }}>
                   <p className="text-xs font-bold text-surface-500 uppercase tracking-wider mb-2">Subtasks</p>
                   <ul className="space-y-2 max-w-xl">
@@ -416,6 +415,18 @@ export const ProjectTodoPage: React.FC = () => {
                           disabled={!canModifySubtasks}
                         />
                         <span className={cn(s.isCompleted && 'line-through text-surface-400')}>{s.title}</span>
+                        {(s.assigneeIds ?? []).length > 0 && (
+                          <div className="flex items-center gap-1 ml-auto">
+                            {(s.assigneeIds ?? []).map((uid) => {
+                              const assignee = users.find((u) => u.id === uid);
+                              return (
+                                <div key={uid} title={assignee?.name} className="text-[10px]">
+                                  <UserAvatar name={assignee?.name || '?'} color={assignee?.color} size="xs" />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                         {canModifySubtasks && (
                           <button
                             type="button"
@@ -429,17 +440,47 @@ export const ProjectTodoPage: React.FC = () => {
                     ))}
                   </ul>
                   {canModifySubtasks && (
-                    <div className="flex gap-2 mt-3 max-w-xl">
-                      <input
-                        className="input input-sm flex-1 text-sm"
-                        placeholder="New subtask…"
-                        value={subDraft[task.id] || ''}
-                        onChange={(e) => setSubDraft((d) => ({ ...d, [task.id]: e.target.value }))}
-                        onKeyDown={(e) => e.key === 'Enter' && addSubtask(task.id)}
-                      />
-                      <button type="button" className="btn-secondary btn-sm" onClick={() => addSubtask(task.id)}>
-                        Add
-                      </button>
+                    <div className="flex gap-2 mt-3 max-w-xl flex-col">
+                      <div className="flex gap-2">
+                        <input
+                          className="input input-sm flex-1 text-sm"
+                          placeholder="New subtask…"
+                          value={subDraft[task.id] || ''}
+                          onChange={(e) => setSubDraft((d) => ({ ...d, [task.id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === 'Enter' && addSubtask(task.id)}
+                        />
+                        <button type="button" className="btn-secondary btn-sm whitespace-nowrap" onClick={() => addSubtask(task.id)}>
+                          Add
+                        </button>
+                      </div>
+                      <div className="text-xs font-medium text-surface-600 dark:text-surface-400 mb-1">Assign to (optional):</div>
+                      <div className="border border-surface-100 dark:border-surface-800 rounded-lg p-2 max-h-40 overflow-y-auto space-y-2">
+                        {memberUsers.length ? (
+                          memberUsers.map((u) => {
+                            const checked = (subDraftAssignees[task.id] || []).includes(u.id);
+                            return (
+                              <label key={u.id} className="flex items-center gap-2 text-[11px]">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    setSubDraftAssignees((prev) => {
+                                      const current = prev[task.id] || [];
+                                      if (current.includes(u.id)) {
+                                        return { ...prev, [task.id]: current.filter((id) => id !== u.id) };
+                                      }
+                                      return { ...prev, [task.id]: [...current, u.id] };
+                                    });
+                                  }}
+                                />
+                                <span>{u.name}</span>
+                              </label>
+                            );
+                          })
+                        ) : (
+                          <p className="text-[11px] text-surface-400">No members</p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </motion.div>
@@ -472,6 +513,7 @@ export const ProjectTodoPage: React.FC = () => {
                   <th className="py-2 px-2 font-semibold">Status</th>
                   <th className="py-2 px-2 font-semibold">Type</th>
                   <th className="py-2 px-2 font-semibold">Due date</th>
+                  <th className="py-2 px-2 font-semibold">Category</th>
                   <th className="py-2 px-2 font-semibold">Responsible</th>
                   <th className="py-2 px-2 font-semibold w-12" />
                 </tr>
@@ -513,7 +555,7 @@ export const ProjectTodoPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="btn-primary btn-md" onClick={() => setShowCreate(true)} disabled={!canEdit}>
+          <button type="button" className="btn-primary btn-md" onClick={() => { setDefaultStatus('todo'); setShowCreate(true); }} disabled={!canEdit}>
             <Plus size={16} /> Add new
           </button>
           <div className="flex rounded-xl border border-surface-200 dark:border-surface-700 p-0.5 bg-surface-50 dark:bg-surface-800/50">
@@ -547,6 +589,39 @@ export const ProjectTodoPage: React.FC = () => {
         </div>
       </div>
 
+      {project.subcategories?.length ? (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedCategoryId('all')}
+            className={cn(
+              'rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors',
+              selectedCategoryId === 'all'
+                ? 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-900/50 dark:bg-brand-950/30 dark:text-brand-300'
+                : 'border-surface-200 text-surface-500 dark:border-surface-800 dark:text-surface-400'
+            )}
+          >
+            All tasks
+          </button>
+          {project.subcategories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => setSelectedCategoryId(category.id)}
+              className={cn(
+                'rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors',
+                selectedCategoryId === category.id
+                  ? 'text-surface-900 dark:text-white border-transparent'
+                  : 'border-surface-200 text-surface-500 dark:border-surface-800 dark:text-surface-400'
+              )}
+              style={selectedCategoryId === category.id ? { backgroundColor: `${category.color || '#6366f1'}20`, borderColor: category.color || '#6366f1' } : undefined}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {err && (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200 px-4 py-2 text-sm">
           {err}
@@ -567,142 +642,29 @@ export const ProjectTodoPage: React.FC = () => {
         <div className="rounded-2xl border border-surface-100 dark:border-surface-800 p-4 bg-white dark:bg-surface-900">
           <KanbanBoard
             projectId={project.id}
-            tasksOverride={tasks}
+            tasksOverride={filteredTasks}
             onMoveTaskRemote={handleKanbanMove}
             onOpenTask={(t) => setExpandedId(t.id)}
-            onAddTask={() => setShowCreate(true)}
+            onAddTask={(status) => {
+              setDefaultStatus(status);
+              setShowCreate(true);
+            }}
           />
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="New task" size="md">
-        <div className="space-y-3 p-1">
-          <div>
-            <label className="text-xs font-semibold text-surface-500">Title</label>
-            <input className="input w-full mt-1" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Task title" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-surface-500">Type</label>
-              <select
-                className="input w-full mt-1"
-                value={newTaskType}
-                onChange={(e) => setNewTaskType(e.target.value as TaskType)}
-              >
-                {(Object.keys(TASK_TYPE_CONFIG) as TaskType[]).map((k) => (
-                  <option key={k} value={k}>
-                    {TASK_TYPE_CONFIG[k].label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-surface-500">Status</label>
-              <select
-                className="input w-full mt-1"
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value as TaskStatus)}
-              >
-                {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map((k) => (
-                  <option key={k} value={k}>
-                    {STATUS_CONFIG[k].label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-surface-500">Start date</label>
-              <input className="input w-full mt-1" type="date" value={newStartDate} onChange={(e) => setNewStartDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-surface-500">Duration (days)</label>
-              <input className="input w-full mt-1" type="number" min={1} step={1} value={newDurationDays} onChange={(e) => setNewDurationDays(Math.max(1, Number(e.target.value) || 1))} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-surface-500">Phase</label>
-              <select className="input w-full mt-1" value={newPhaseId} onChange={(e) => setNewPhaseId(e.target.value)}>
-                <option value="">Ungrouped</option>
-                {timelinePhases.map((phase) => (
-                  <option key={phase.id} value={phase.id}>{phase.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-surface-500">Add phase</label>
-              <div className="mt-1 flex gap-2">
-                <input className="input w-full" value={newPhaseName} onChange={(e) => setNewPhaseName(e.target.value)} placeholder="Phase name" />
-                <button type="button" className="btn-secondary btn-md whitespace-nowrap" onClick={() => void handleCreatePhase()} disabled={isCreatingPhase || !newPhaseName.trim()}>
-                  {isCreatingPhase ? 'Adding...' : 'Add'}
-                </button>
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-surface-500">Assignees</label>
-            <div className="mt-1 border border-surface-100 dark:border-surface-800 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2">
-              {memberUsers.length ? (
-                memberUsers.map((u) => {
-                  const checked = newAssigneeIds.includes(u.id);
-                  return (
-                    <label key={u.id} className="flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            setNewAssigneeIds((prev) => {
-                              if (prev.includes(u.id)) return prev.filter((id) => id !== u.id);
-                              return [...prev, u.id];
-                            });
-                          }}
-                        />
-                        <span className="truncate">{u.name}</span>
-                      </div>
-                      <span className="text-[10px] text-surface-400 flex-shrink-0">{u.role.replace('_', ' ')}</span>
-                    </label>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-surface-400">No members in this project.</p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-surface-500">Files</label>
-            <input
-              type="file"
-              multiple
-              className="input w-full mt-1"
-              onChange={(e) => setNewTaskFiles(e.target.files ? Array.from(e.target.files) : [])}
-            />
-            {newTaskFiles.length ? (
-              <div className="mt-2 space-y-1">
-                {newTaskFiles.map((f, i) => (
-                  <div key={`${f.name}-${i}`} className="flex items-center justify-between gap-3 text-xs text-surface-600 dark:text-surface-300">
-                    <span className="truncate">{f.name}</span>
-                    <button type="button" className="btn-ghost btn-sm p-1 text-rose-500" onClick={() => setNewTaskFiles((prev) => prev.filter((_, idx) => idx !== i))}>
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="btn-secondary btn-md" onClick={() => setShowCreate(false)}>
-              Cancel
-            </button>
-            <button type="button" className="btn-primary btn-md" onClick={handleCreate} disabled={!newTitle.trim()}>
-              Create
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <ProjectTaskCreateModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onSubmit={handleCreate}
+        project={project}
+        members={memberUsers}
+        phases={timelinePhases}
+        defaultStatus={defaultStatus}
+        submitLabel="Create Task"
+        title="New Task"
+        onCreatePhase={handleCreatePhase}
+      />
     </div>
   );
 };

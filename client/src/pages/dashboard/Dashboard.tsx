@@ -6,7 +6,7 @@ import {
   FolderKanban, Users, BarChart3, Plus, Zap, Building2, Activity
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { cn, formatDate, formatRelativeTime, getProgressColor } from '../../utils/helpers';
+import { cn, formatDate, formatRelativeTime, getProgressColor, isDueDateOverdue } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -131,7 +131,7 @@ export const DashboardPage: React.FC = () => {
 
   const chartData = useMemo(() => buildChartDataFromTasks(tasks), [tasks]);
   const myTasks = tasks.filter(t => t.assigneeIds?.includes(user?.id || '') && t.status !== 'done');
-  const overdueTasks = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done');
+  const overdueTasks = tasks.filter(t => isDueDateOverdue(t.dueDate, t.status));
   const completedThisWeek = tasks.filter(t => t.status === 'done');
   const activeProjects = projects.filter(p => p.status === 'active');
 

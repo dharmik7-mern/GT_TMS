@@ -16,9 +16,10 @@ import { getAdminConversationModel } from '../models/admin/AdminConversation.mod
 import { getAdminMessageModel } from '../models/admin/AdminMessage.model.js';
 import { getTaskReassignRequestModel } from '../models/TaskReassignRequest.js';
 import { getPersonalTaskModel } from '../models/PersonalTask.js';
+import { getTaskCreationRequestModel } from '../models/TaskCreationRequest.js';
 
 
-const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'GT_TMS';
+const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'GT_PMS';
 const tenantDbCache = new Map();
 
 function normalizeSegment(value, fallback = 'tenant') {
@@ -102,6 +103,7 @@ export async function getTenantModels(companyId = null) {
     AdminMessage: getAdminMessageModel(conn),
     TaskReassignRequest: getTaskReassignRequestModel(conn),
     PersonalTask: getPersonalTaskModel(conn),
+    TaskCreationRequest: getTaskCreationRequestModel(conn),
   };
 }
 

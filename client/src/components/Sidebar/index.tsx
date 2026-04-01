@@ -27,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'Projects', icon: FolderKanban, path: '/projects' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
+  { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
   { 
@@ -40,7 +41,7 @@ const NAV_ITEMS: NavItem[] = [
     ]
   },
   { label: 'Activity Logs', icon: Activity, path: '/logs', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
-  { label: 'Notifications', icon: Bell, path: '/notifications' },
+  // { label: 'Notifications', icon: Bell, path: '/notifications' },
 ];
 
 const SUPER_ADMIN_NAV: NavItem[] = [
@@ -48,6 +49,7 @@ const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'Projects', icon: FolderKanban, path: '/projects' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
+  { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams' },
   { 
@@ -61,13 +63,14 @@ const SUPER_ADMIN_NAV: NavItem[] = [
     ]
   },
   { label: 'Activity Logs', icon: Activity, path: '/logs' },
-  { label: 'Notifications', icon: Bell, path: '/notifications' },
+  // { label: 'Notifications', icon: Bell, path: '/notifications' },
 ];
 
 const PLATFORM_ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
+  { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Companies', icon: Building2, path: '/companies' },
   { label: 'Users List', icon: UserCircle, path: '/users' },
   { label: 'Reports & Analytics', icon: BarChart3, path: '/reports' },
@@ -236,7 +239,7 @@ export const Sidebar: React.FC = () => {
       </AnimatePresence>
 
       {/* Search */}
-      {!isCollapsed && (
+      {/* {!isCollapsed && (
         <div className="px-3 py-2.5">
           <button
             onClick={() => { }}
@@ -244,10 +247,9 @@ export const Sidebar: React.FC = () => {
           >
             <Search size={14} />
             <span>Search...</span>
-            {/* <kbd className="ml-auto text-[10px] px-1.5 py-0.5 bg-surface-200 dark:bg-surface-700 rounded font-mono text-surface-500">⌘K</kbd> */}
           </button>
         </div>
-      )}
+      )} */}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-hide">
@@ -454,6 +456,18 @@ export const Sidebar: React.FC = () => {
                                                 <ListTodo size={12} className="flex-shrink-0 opacity-70" />
                                                 <span className="truncate">To-do</span>
                                               </NavLink>
+                                              <NavLink
+                                                to={`/projects/${project.id}/requests`}
+                                                className={({ isActive }) =>
+                                                  cn(
+                                                    isActive ? 'nav-item-active' : 'nav-item-inactive',
+                                                    'pl-10 pr-4 py-1 text-[11px] text-surface-500'
+                                                  )
+                                                }
+                                              >
+                                                <Hash size={12} className="flex-shrink-0 opacity-70" />
+                                                <span className="truncate">Requests</span>
+                                              </NavLink>
                                             </motion.div>
                                           )}
                                         </AnimatePresence>
@@ -543,6 +557,18 @@ export const Sidebar: React.FC = () => {
                                     >
                                       <ListTodo size={12} className="flex-shrink-0 opacity-70" />
                                       <span>To-do</span>
+                                    </NavLink>
+                                    <NavLink
+                                      to={`/projects/${project.id}/requests`}
+                                      className={({ isActive }) =>
+                                        cn(
+                                          isActive ? 'nav-item-active' : 'nav-item-inactive',
+                                          'pl-6 pr-4 py-1 text-[11px] text-surface-500'
+                                        )
+                                      }
+                                    >
+                                      <Hash size={12} className="flex-shrink-0 opacity-70" />
+                                      <span>Requests</span>
                                     </NavLink>
                                   </motion.div>
                                 )}
@@ -634,17 +660,17 @@ export const Sidebar: React.FC = () => {
 
       {/* Bottom Section */}
       <div className="border-t border-surface-100 dark:border-surface-800 p-2 space-y-0.5">
-        <NavLink
+        {/* <NavLink
           to="/profile"
           className={({ isActive }) => cn(isActive ? 'nav-item-active' : 'nav-item-inactive', isCollapsed && 'justify-center px-0')}
           title={isCollapsed ? 'Account Settings' : undefined}
         >
           <Settings size={18} className="flex-shrink-0" />
           {!isCollapsed && <span>Account Settings</span>}
-        </NavLink>
+        </NavLink> */}
 
         {/* User Profile */}
-        {!isCollapsed && user && (
+        {/* {!isCollapsed && user && (
           <div className="space-y-2 rounded-xl px-2 py-2 hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors">
             <div className="flex items-center gap-2">
               <UserAvatar name={user.name} color={user.color} size="sm" isOnline={true} />
@@ -652,7 +678,7 @@ export const Sidebar: React.FC = () => {
                 <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{user.name}</p>
                 <p className="text-xs text-surface-400 truncate capitalize">{user.role.replace('_', ' ')}</p>
               </div>
-            </div>
+            </div> */}
             {/* <button
               type="button"
               onClick={logout}
@@ -662,8 +688,8 @@ export const Sidebar: React.FC = () => {
               <LogOut size={14} />
               Logout
             </button> */}
-          </div>
-        )}
+          {/* </div>
+        )} */}
 
         {isCollapsed && user && (
           <button

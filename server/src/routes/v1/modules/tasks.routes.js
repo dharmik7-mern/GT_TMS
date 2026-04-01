@@ -53,6 +53,7 @@ const taskCreateSchema = z.object({
   startDate: z.string().optional(),
   durationDays: z.number().int().min(1).max(3650),
   phaseId: z.string().optional(),
+  subcategoryId: z.string().optional(),
   dependencies: z.array(z.string()).optional(),
   type: timelineTypeEnum.optional(),
   estimatedHours: z.number().optional(),
@@ -92,6 +93,11 @@ const reviewTaskSchema = z.object({
   reviewRemark: z.string().trim().max(5000).optional(),
 });
 
+const taskRequestReviewSchema = z.object({
+  action: z.enum(['approve', 'reject']),
+  reviewNote: z.string().trim().max(5000).optional(),
+});
+
  const addSubtaskSchema = z.object({
    title: z.string().trim().min(1).max(300),
    assigneeId: z.string().optional(),
@@ -111,6 +117,9 @@ const patchSubtaskSchema = z.object({
 
 router.get('/overview', AllTasksController.getOverview);
 router.get('/all', AllTasksController.getAllTasks);
+router.get('/requests', TasksController.listTaskRequests);
+router.post('/requests', validateBody(taskCreateSchema), TasksController.createTaskRequest);
+router.post('/requests/:id/review', validateBody(taskRequestReviewSchema), TasksController.reviewTaskRequest);
 
 // Reassign Requests
 router.post('/reassign-request', ReassignController.createRequest);
