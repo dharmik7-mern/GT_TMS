@@ -481,7 +481,7 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; o
         <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{project.name}</p>
       </div>
       <div className="hidden sm:flex items-center w-24">
-         <span className={cn('badge text-[10px] font-bold uppercase tracking-wider', badge.className)}>{badge.label}</span>
+        <span className={cn('badge text-[10px] font-bold uppercase tracking-wider', badge.className)}>{badge.label}</span>
       </div>
       <div className="hidden md:flex items-center gap-3 w-40">
         <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="sm" className="flex-1" />
@@ -704,8 +704,8 @@ export const ProjectsPage: React.FC = () => {
       const details = error?.response?.data?.error?.details;
       const fieldErrors = details?.fieldErrors
         ? Object.entries(details.fieldErrors).flatMap(([field, messages]) =>
-            Array.isArray(messages) ? messages.map((message) => `${field}: ${message}`) : []
-          )
+          Array.isArray(messages) ? messages.map((message) => `${field}: ${message}`) : []
+        )
         : [];
       const formErrors = Array.isArray(details?.formErrors) ? details.formErrors : [];
       const message =
@@ -740,7 +740,7 @@ export const ProjectsPage: React.FC = () => {
   const onSaveProject = async (data: ProjectFormData) => {
     try {
       const fallbackMembers = user?.id ? [user.id] : [];
-        const payload = {
+      const payload = {
         name: data.name,
         description: data.description,
         color: selectedColor,
@@ -750,19 +750,19 @@ export const ProjectsPage: React.FC = () => {
         reportingPersonIds: selectedReportingPersons,
         startDate: data.startDate || new Date().toISOString().split('T')[0],
         endDate: data.endDate || undefined,
-          budget: typeof data.budget === 'number' && !Number.isNaN(data.budget) ? data.budget : undefined,
-          budgetCurrency: data.budgetCurrency || 'INR',
-          sdlcPlan: sdlcPlan.filter((phase) => phase.name.trim()),
-          subcategories: projectCategories
-            .map((category, index) => ({
-              id: category.id || slugifyCategory(category.name) || `category-${index + 1}`,
-              name: category.name.trim(),
-              description: category.description || '',
-              color: category.color || PROJECT_COLORS[index % PROJECT_COLORS.length],
-              order: index,
-            }))
-            .filter((category) => category.name),
-        };
+        budget: typeof data.budget === 'number' && !Number.isNaN(data.budget) ? data.budget : undefined,
+        budgetCurrency: data.budgetCurrency || 'INR',
+        sdlcPlan: sdlcPlan.filter((phase) => phase.name.trim()),
+        subcategories: projectCategories
+          .map((category, index) => ({
+            id: category.id || slugifyCategory(category.name) || `category-${index + 1}`,
+            name: category.name.trim(),
+            description: category.description || '',
+            color: category.color || PROJECT_COLORS[index % PROJECT_COLORS.length],
+            order: index,
+          }))
+          .filter((category) => category.name),
+      };
 
       if (editingProject) {
         const res = await projectsService.update(editingProject.id, payload);
@@ -885,7 +885,7 @@ export const ProjectsPage: React.FC = () => {
             }, {} as Record<string, Project[]>)
           ).map(([dept, deptProjects]) => (
             <div key={dept} className="space-y-4">
-              <div 
+              <div
                 onClick={() => setCollapsedDepts(prev => ({ ...prev, [dept]: !prev[dept] }))}
                 className="flex items-center gap-2 group cursor-pointer"
               >
@@ -1031,7 +1031,7 @@ export const ProjectsPage: React.FC = () => {
             </div>
             <div>
               <label className="label">Currency</label>
-              <Dropdown 
+              <Dropdown
                 value={budgetCurrency}
                 onChange={(val) => setValue('budgetCurrency', val)}
                 items={[

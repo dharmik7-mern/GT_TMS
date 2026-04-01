@@ -230,12 +230,12 @@ export const LogsPage: React.FC = () => {
           <h1 className="page-title">{roleCopy.title}</h1>
           <p className="page-subtitle">{roleCopy.subtitle}</p>
         </div>
-        <button className="btn-secondary btn-md" onClick={exportLogs} disabled={filteredLogs.length === 0}>
+        <button className="btn-secondary btn-md w-full sm:w-auto" onClick={exportLogs} disabled={filteredLogs.length === 0}>
           <Download size={15} /> Export Logs
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {LOG_SUMMARY_CARDS.map((item) => {
           const count =
             item.value === 'all' ? summary.total :

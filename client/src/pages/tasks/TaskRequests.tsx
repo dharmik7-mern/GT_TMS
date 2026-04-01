@@ -38,12 +38,11 @@ const TaskRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<TaskCreationRequest[]>([]);
   const [allRequests, setAllRequests] = useState<TaskCreationRequest[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<RequestStatusFilter>('pending');
+  const [statusFilter, setStatusFilter] = useState<RequestStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
-  const project = projects.find((item) => item.id === projectId);
   const isProjectView = Boolean(projectId);
 
   useEffect(() => {
@@ -156,30 +155,21 @@ const TaskRequestsPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="page-header flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
+        <div className="flex flex-col gap-2">
           {isProjectView ? (
             <Link
               to={`/projects/${projectId}`}
-              className="mb-3 inline-flex items-center gap-1 text-sm text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300"
+              className="inline-flex items-center gap-1 text-sm text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300"
             >
               <ArrowLeft size={14} />
               Back to project
             </Link>
           ) : null}
-          <h1 className="page-title flex items-center gap-2">
-            <FolderKanban size={24} />
-            {isProjectView ? `${project?.name || 'Project'} Requests` : 'Task Creation Requests'}
-          </h1>
-          <p className="page-subtitle">
-            {isProjectView
-              ? 'Review and track task creation requests for this project.'
-              : 'Handle all project task creation requests from one place.'}
-          </p>
           {['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '') ? (
             <button
               type="button"
               onClick={() => navigate('/logs?module=task_request')}
-              className="mt-3 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 self-start"
             >
               Open task request activity logs
             </button>

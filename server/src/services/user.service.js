@@ -88,7 +88,10 @@ export async function getUserPerformance({ companyId, workspaceId, targetUserId 
   const rated = approved.filter((task) => typeof task.completionReview?.rating === 'number');
   const overdueOpen = allAssigned.filter((task) => {
     const due = asDate(task.dueDate);
-    return due && due < new Date() && task.status !== 'done';
+    if (!due || task.status === 'done') return false;
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return due < todayMidnight;
   });
   const onTimeCompleted = completed.filter((task) => {
     const completedAt = asDate(task.completionReview?.completedAt);

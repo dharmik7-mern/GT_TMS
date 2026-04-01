@@ -38,7 +38,8 @@ interface ProjectTaskCreateModalProps {
 const CATEGORY_COLORS = ['#2563eb', '#0f766e', '#7c3aed', '#ea580c', '#dc2626', '#0891b2'];
 
 function createDefaultValues(project: Project, defaultStatus: TaskStatus): ProjectTaskCreateValues {
-  const startDate = project.startDate || new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+  const startDate = project.startDate && project.startDate >= today ? project.startDate : today;
   return {
     title: '',
     description: '',
@@ -227,11 +228,25 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="label">Start Date *</label>
-            <input className="input" type="date" value={form.startDate} onChange={(event) => handleStartDateChange(event.target.value)} required />
+            <input 
+              className="input" 
+              type="date" 
+              min={new Date().toISOString().split('T')[0]}
+              value={form.startDate} 
+              onChange={(event) => handleStartDateChange(event.target.value)} 
+              required 
+            />
           </div>
           <div>
             <label className="label">Due Date *</label>
-            <input className="input" type="date" min={form.startDate} value={form.dueDate} onChange={(event) => handleDueDateChange(event.target.value)} required />
+            <input 
+              className="input" 
+              type="date" 
+              min={form.startDate} 
+              value={form.dueDate} 
+              onChange={(event) => handleDueDateChange(event.target.value)} 
+              required 
+            />
           </div>
           <div>
             <label className="label">Duration (days)</label>

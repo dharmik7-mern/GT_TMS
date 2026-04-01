@@ -45,7 +45,7 @@ export function isDueDateOverdue(dueDate?: string | Date, status?: string): bool
   try {
     const due = startOfDay(typeof dueDate === 'string' ? parseISO(dueDate) : dueDate);
     const today = startOfDay(new Date());
-    return isBefore(due, today) || isSameDay(due, today);
+    return isBefore(due, today);
   } catch {
     return false;
   }
@@ -114,7 +114,7 @@ export function getAvatarColor(name: string): string {
 export function getAvatarUrl(avatar?: string): string | undefined {
   if (!avatar) return undefined;
   if (avatar.startsWith('http') || avatar.startsWith('data:') || avatar.startsWith('blob:')) return avatar;
-  
+
   // Return the path as is (e.g., /uploads/...).
   // The Vite proxy configurated in vite.config.ts will map this to http://localhost:5000/uploads
   return avatar;

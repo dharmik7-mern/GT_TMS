@@ -127,7 +127,7 @@ const TeamCard: React.FC<{
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-2xl bg-surface-50 px-3 py-3 text-center dark:bg-surface-800/60">
             <p className="text-lg font-semibold text-surface-900 dark:text-white">{members.length}</p>
             <p className="text-[10px] uppercase tracking-[0.16em] text-surface-400">Members</p>

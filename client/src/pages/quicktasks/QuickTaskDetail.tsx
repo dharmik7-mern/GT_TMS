@@ -586,6 +586,12 @@ export const QuickTaskDetailPage: React.FC = () => {
             <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-3">Dates</h3>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between gap-3">
+                <span className="text-surface-400">Created</span>
+                <span className="font-medium text-surface-700 dark:text-surface-300">
+                  {task.createdAt ? formatDate(task.createdAt) : '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-surface-400">Due</span>
                 <span className={cn('font-medium', isOverdue ? 'text-rose-600 dark:text-rose-300' : 'text-surface-700 dark:text-surface-300')}>
                   {task.dueDate ? formatDate(task.dueDate) : 'No due date'}

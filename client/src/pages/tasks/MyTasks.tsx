@@ -29,7 +29,7 @@ export const MyTasksPage: React.FC = () => {
     const incoming = searchParams.get('filter');
     return FILTERS.some((item) => item.value === incoming) ? incoming as typeof FILTERS[0]['value'] : 'all';
   });
- const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const myTasks = tasks.filter(t => t.assigneeIds.includes(user?.id || ''));
@@ -143,7 +143,7 @@ export const MyTasksPage: React.FC = () => {
             <span className={cn('font-bold', filter === f.value ? 'text-white/80' : 'text-surface-400')}>
               {f.value === 'all' ? myTasks.length
                 : f.value === 'overdue' ? overdueCount
-                : myTasks.filter(t => t.status === f.value).length}
+                  : myTasks.filter(t => t.status === f.value).length}
             </span>
           </button>
         ))}

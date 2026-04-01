@@ -84,7 +84,7 @@ type ActivityRow = { id: string; type: string; description: string; createdAt: s
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { projects, tasks, users } = useAppStore();
+  const { projects, tasks, users, quickTasks } = useAppStore();
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [platformActivity, setPlatformActivity] = useState<ActivityRow[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
@@ -108,17 +108,17 @@ export const DashboardPage: React.FC = () => {
   }, [isSuperAdmin]);
 
   useEffect(() => {
-     const canViewActivity = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
-     if (canViewActivity) {
-       setActivityLoading(true);
-       activityService.getRecent(20)
-         .then((res) => {
-           const data = res.data?.data ?? res.data ?? [];
-           setPlatformActivity(Array.isArray(data) ? data : []);
-         })
-         .catch(() => setPlatformActivity([]))
-         .finally(() => setActivityLoading(false));
-     }
+    const canViewActivity = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+    if (canViewActivity) {
+      setActivityLoading(true);
+      activityService.getRecent(20)
+        .then((res) => {
+          const data = res.data?.data ?? res.data ?? [];
+          setPlatformActivity(Array.isArray(data) ? data : []);
+        })
+        .catch(() => setPlatformActivity([]))
+        .finally(() => setActivityLoading(false));
+    }
 
     if (!isSuperAdmin) {
       setOverviewLoading(true);
@@ -129,25 +129,50 @@ export const DashboardPage: React.FC = () => {
     }
   }, []);
 
-  const chartData = useMemo(() => buildChartDataFromTasks(tasks), [tasks]);
-  const myTasks = tasks.filter(t => t.assigneeIds?.includes(user?.id || '') && t.status !== 'done');
-  const overdueTasks = tasks.filter(t => isDueDateOverdue(t.dueDate, t.status));
-  const completedThisWeek = tasks.filter(t => t.status === 'done');
+  const chartData = useMemo(() => buildChartDataFromTasks([...tasks, ...quickTasks]), [tasks, quickTasks]);
+
+  const isManagerOrAdmin = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+
+  const myTasks = [
+    ...tasks.filter(t => t.assigneeIds?.includes(user?.id || '') && t.status !== 'done'),
+    ...quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || '') && t.status !== 'done')
+  ];
+
+  const overdueTasks = isManagerOrAdmin
+    ? [
+      ...tasks.filter(t => isDueDateOverdue(t.dueDate, t.status)),
+      ...quickTasks.filter(t => isDueDateOverdue(t.dueDate, t.status))
+    ]
+    : [
+      ...tasks.filter(t => t.assigneeIds?.includes(user?.id || '') && isDueDateOverdue(t.dueDate, t.status)),
+      ...quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || '') && isDueDateOverdue(t.dueDate, t.status))
+    ];
+
+  const completedThisWeek = isManagerOrAdmin
+    ? [
+      ...tasks.filter(t => t.status === 'done'),
+      ...quickTasks.filter(t => t.status === 'done')
+    ]
+    : [
+      ...tasks.filter(t => t.assigneeIds?.includes(user?.id || '') && t.status === 'done'),
+      ...quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || '') && t.status === 'done')
+    ];
+
   const activeProjects = projects.filter(p => p.status === 'active');
 
   const planCounts = isSuperAdmin && companies.length > 0
     ? (() => {
-        const byStatus = companies.reduce<Record<string, number>>((acc, c) => {
-          acc[c.status || 'active'] = (acc[c.status || 'active'] || 0) + 1;
-          return acc;
-        }, {});
-        const total = companies.length;
-        return [
-          { label: 'Active', count: byStatus['active'] ?? 0, color: 'bg-indigo-500', percent: total ? Math.round(((byStatus['active'] ?? 0) / total) * 100) : 0 },
-          { label: 'Trial', count: byStatus['trial'] ?? 0, color: 'bg-brand-500', percent: total ? Math.round(((byStatus['trial'] ?? 0) / total) * 100) : 0 },
-          { label: 'Suspended', count: byStatus['suspended'] ?? 0, color: 'bg-amber-500', percent: total ? Math.round(((byStatus['suspended'] ?? 0) / total) * 100) : 0 },
-        ].filter(p => p.count > 0);
-      })()
+      const byStatus = companies.reduce<Record<string, number>>((acc, c) => {
+        acc[c.status || 'active'] = (acc[c.status || 'active'] || 0) + 1;
+        return acc;
+      }, {});
+      const total = companies.length;
+      return [
+        { label: 'Active', count: byStatus['active'] ?? 0, color: 'bg-indigo-500', percent: total ? Math.round(((byStatus['active'] ?? 0) / total) * 100) : 0 },
+        { label: 'Trial', count: byStatus['trial'] ?? 0, color: 'bg-brand-500', percent: total ? Math.round(((byStatus['trial'] ?? 0) / total) * 100) : 0 },
+        { label: 'Suspended', count: byStatus['suspended'] ?? 0, color: 'bg-amber-500', percent: total ? Math.round(((byStatus['suspended'] ?? 0) / total) * 100) : 0 },
+      ].filter(p => p.count > 0);
+    })()
     : null;
 
   const platformEvents = useMemo(() => {
@@ -336,9 +361,9 @@ export const DashboardPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<FolderKanban size={20} />} label="Active Projects" value={activeProjects.length} sub="across workspace" color="#3366ff" trend={12} delay={0} onClick={() => navigate('/projects?status=active')} />
-          <StatCard icon={<CheckCircle2 size={20} />} label="Tasks Completed" value={completedThisWeek.length} sub="this week" color="#10b981" trend={8} delay={0.05} onClick={() => navigate('/my-tasks?filter=done')} />
-          <StatCard icon={<Clock size={20} />} label="My Open Tasks" value={myTasks.length} sub="assigned to me" color="#f59e0b" trend={-3} delay={0.1} onClick={() => navigate('/my-tasks?filter=in_progress')} />
-          <StatCard icon={<AlertTriangle size={20} />} label="Overdue Tasks" value={overdueTasks.length} sub="need attention" color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate('/my-tasks?filter=overdue')} />
+          <StatCard icon={<CheckCircle2 size={20} />} label={isManagerOrAdmin ? "Total Tasks Done" : "Tasks Completed"} value={completedThisWeek.length} sub={isManagerOrAdmin ? "all projects" : "this week"} color="#10b981" trend={8} delay={0.05} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=done' : '/my-tasks?filter=done')} />
+          <StatCard icon={<Clock size={20} />} label={isManagerOrAdmin ? "Workspace Open Tasks" : "My Open Tasks"} value={isManagerOrAdmin ? (tasks.length + quickTasks.length) - completedThisWeek.length : myTasks.length} sub={isManagerOrAdmin ? "active now" : "assigned to me"} color="#f59e0b" trend={-3} delay={0.1} onClick={() => navigate(isManagerOrAdmin ? '/tasks' : '/my-tasks?filter=in_progress')} />
+          <StatCard icon={<AlertTriangle size={20} />} label={isManagerOrAdmin ? "Project Overdue" : "Overdue Tasks"} value={overdueTasks.length} sub={isManagerOrAdmin ? "need attention" : "need attention"} color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=overdue' : '/my-tasks?filter=overdue')} />
         </div>
       )}
 
@@ -405,8 +430,8 @@ export const DashboardPage: React.FC = () => {
           >
             <div className="flex items-center justify-between p-5 pb-3">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white">Active Projects</h3>
-              <button 
-                onClick={() => navigate('/projects')} 
+              <button
+                onClick={() => navigate('/projects')}
                 className="btn-ghost btn-sm text-xs text-brand-600 dark:text-brand-400"
               >
                 View all <ArrowRight size={12} />
@@ -432,7 +457,7 @@ export const DashboardPage: React.FC = () => {
                       <p className="text-xs text-surface-400 mt-1">{company.usersCount ?? 0} users • {company.projectsCount ?? 0} projects</p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold uppercase', 
+                      <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold uppercase',
                         (company.status || 'Active') === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                       )}>{company.status || 'Active'}</span>
                       <ArrowRight size={14} className="text-surface-300" />
@@ -442,6 +467,9 @@ export const DashboardPage: React.FC = () => {
               ) : (
                 activeProjects.slice(0, 5).map((project, i) => {
                   const assignees = users.filter(u => project.members.includes(u.id));
+                  const projectTasks = tasks.filter(t => t.projectId === project.id);
+                  const projectOverdueCount = projectTasks.filter(t => isDueDateOverdue(t.dueDate, t.status)).length;
+
                   return (
                     <motion.div
                       key={project.id}
@@ -458,8 +486,14 @@ export const DashboardPage: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{project.name}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <ProgressBar value={project.progress} size="sm" color={getProgressColor(project.progress)} className="w-24" />
+                          <ProgressBar value={project.progress} size="sm" color={getProgressColor(project.progress)} className="w-20 sm:w-24" />
                           <span className="text-xs text-surface-400">{project.progress}%</span>
+                          {isManagerOrAdmin && projectOverdueCount > 0 && (
+                            <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded ml-1">
+                              <AlertTriangle size={10} />
+                              {projectOverdueCount} Overdue
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
@@ -497,7 +531,7 @@ export const DashboardPage: React.FC = () => {
                 In-Progress
               </span>
             </div>
-            
+
             <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-hide">
               <table className="w-full text-xs text-left">
                 <thead className="bg-surface-50 dark:bg-surface-900 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px] sticky top-0 border-b border-surface-100 dark:border-surface-800">
@@ -541,9 +575,9 @@ export const DashboardPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-            
+
             <div className="p-3 border-t border-surface-100 dark:border-surface-800 flex justify-end bg-surface-50 dark:bg-surface-950/50">
-              <button 
+              <button
                 onClick={() => navigate('/tasks')}
                 className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:text-brand-800 transition-colors flex items-center gap-1"
               >

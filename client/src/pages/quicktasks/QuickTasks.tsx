@@ -323,6 +323,7 @@ export const QuickTasksPage: React.FC = () => {
   const [importResult, setImportResult] = useState<QuickTaskImportResult | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importServerError, setImportServerError] = useState('');
+  const isMyTasks = personFilter === (user?.id || '') && scope === 'all';
 
   const canImportQuickTasks = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
   const userMap = useMemo(() => new Map(users.map((item) => [item.id, item])), [users]);
@@ -442,6 +443,16 @@ export const QuickTasksPage: React.FC = () => {
     setParams(params, { replace: true });
   };
 
+  const toggleMyTasks = () => {
+    if (!user?.id) return;
+    if (isMyTasks) {
+      setPersonFilter('all');
+    } else {
+      setPersonFilter(user.id);
+      setScope('all');
+    }
+  };
+
   const resetImportState = () => {
     setImportFileName('');
     setImportRows([]);
@@ -523,7 +534,7 @@ export const QuickTasksPage: React.FC = () => {
 
   return (
     <div className="max-w-full mx-auto">
-      <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {STATUS_CARDS.map((card) => {
           const count =
             card.value === 'all' ? counts.total :
@@ -563,8 +574,8 @@ export const QuickTasksPage: React.FC = () => {
         })}
       </div>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="relative flex-1 min-w-[220px]">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[220px] w-full sm:w-auto">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -574,7 +585,7 @@ export const QuickTasksPage: React.FC = () => {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
         </div>
 
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setShowFilters((prev) => !prev)}
@@ -671,10 +682,19 @@ export const QuickTasksPage: React.FC = () => {
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex flex-wrap items-center gap-2 ml-auto w-full sm:w-auto justify-end">
+          {['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '') && (
+            <button
+              type="button"
+              onClick={toggleMyTasks}
+              className={cn('btn-secondary btn-sm w-full sm:w-auto', isMyTasks && 'border-brand-500 text-brand-600')}
+            >
+              My Quick Tasks
+            </button>
+          )}
           {canImportQuickTasks && (
             <button
-              className="btn-secondary btn-sm"
+              className="btn-secondary btn-sm w-full sm:w-auto"
               onClick={() => {
                 resetImportState();
                 setImportOpen(true);
@@ -684,7 +704,7 @@ export const QuickTasksPage: React.FC = () => {
               <span>Import</span>
             </button>
           )}
-          <button className="btn-primary btn-sm" onClick={openNew}>
+          <button className="btn-primary btn-sm w-full sm:w-auto" onClick={openNew}>
             <Plus size={16} />
             <span>New Quick Task</span>
           </button>
