@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   Calendar, Clock, Flag, Tag, Users, Paperclip,
   Plus, Edit3, Trash2,
-  ChevronDown, X, Send, AlertTriangle, ListTodo, UserPlus
+  ChevronDown, X, Send, AlertTriangle, ListTodo, UserPlus, PlusCircle
 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, generateId, isDueDateOverdue } from '../../utils/helpers';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -111,6 +111,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const [labelInput, setLabelInput] = useState('');
   const [isReassigning, setIsReassigning] = useState(false);
   const [pendingReassign, setPendingReassign] = useState<any>(null);
+  const [selectedSubtaskAssigneeId, setSelectedSubtaskAssigneeId] = useState<string | null>(null);
+  const [isSubtaskAssigneeOpen, setIsSubtaskAssigneeOpen] = useState(false);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const assigneeRef = React.useRef<HTMLDivElement>(null);
@@ -144,6 +147,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
       setSubtaskTitle('');
       setAssigneeOpen(false);
       setAssigneeQuery('');
+      setSelectedSubtaskAssigneeId(null);
+      setIsSubtaskAssigneeOpen(false);
+      setEditingSubtaskId(null);
     }
   }, [open]);
 
@@ -425,17 +431,236 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   </div>
                   {canManageTask && (
                     <div className="mb-3 flex items-center gap-2">
-                      <input value={subtaskTitle} onChange={(event) => setSubtaskTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void syncTask(() => tasksService.addSubtask(currentTask.id, { title: subtaskTitle.trim() }), 'Subtask failed', 'Subtask added successfully.'); setSubtaskTitle(''); } }} className="input h-9 text-sm" placeholder="Add a subtask..." />
-                      <button type="button" onClick={() => { void syncTask(() => tasksService.addSubtask(currentTask.id, { title: subtaskTitle.trim() }), 'Subtask failed', 'Subtask added successfully.'); setSubtaskTitle(''); }} disabled={!subtaskTitle.trim()} className="btn-secondary btn-sm">Add</button>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setIsSubtaskAssigneeOpen(!isSubtaskAssigneeOpen)}
+                          className={cn(
+                            "flex h-9 w-9 items-center justify-center rounded-xl border transition-all",
+                            selectedSubtaskAssigneeId 
+                              ? "border-brand-200 bg-brand-50 text-brand-600 dark:border-brand-900/50 dark:bg-brand-950/20" 
+                              : "border-surface-200 bg-white text-surface-400 hover:border-brand-300 hover:text-brand-500 dark:border-surface-700 dark:bg-surface-800"
+                          )}
+                          title="Assign subtask"
+                        >
+                          {selectedSubtaskAssigneeId ? (
+                            <UserAvatar 
+                              name={users.find(u => u.id === selectedSubtaskAssigneeId)?.name || '?'} 
+                              color={users.find(u => u.id === selectedSubtaskAssigneeId)?.color} 
+                              size="xs" 
+                            />
+                          ) : (
+                            <UserPlus size={16} />
+                          )}
+                        </button>
+
+                        {isSubtaskAssigneeOpen && (
+                          <div className="absolute left-0 top-full z-50 mt-2 w-56 rounded-xl border border-surface-200 bg-white p-1 shadow-xl dark:border-surface-700 dark:bg-surface-900">
+                            <div className="max-h-48 overflow-y-auto">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSubtaskAssigneeId(null);
+                                  setIsSubtaskAssigneeOpen(false);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-surface-500 hover:bg-surface-50 dark:hover:bg-surface-800"
+                              >
+                                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-100 dark:bg-surface-800">
+                                  <X size={10} />
+                                </div>
+                                <span>Unassigned</span>
+                              </button>
+                              {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                                <button
+                                  key={u.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedSubtaskAssigneeId(u.id);
+                                    setIsSubtaskAssigneeOpen(false);
+                                  }}
+                                  className={cn(
+                                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors",
+                                    selectedSubtaskAssigneeId === u.id
+                                      ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
+                                      : "text-surface-600 hover:bg-surface-50 dark:text-surface-400 dark:hover:bg-surface-800"
+                                  )}
+                                >
+                                  <UserAvatar name={u.name} color={u.color} size="xs" />
+                                  <span className="truncate">{u.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <input 
+                        value={subtaskTitle} 
+                        onChange={(event) => setSubtaskTitle(event.target.value)} 
+                        onKeyDown={(event) => { 
+                          if (event.key === 'Enter') { 
+                            event.preventDefault(); 
+                            if (!subtaskTitle.trim()) return;
+                            void syncTask(
+                              () => {
+                                console.log(`[addSubtask] Task: ${currentTask.id}, Title: ${subtaskTitle.trim()}, Assignee: ${selectedSubtaskAssigneeId}`);
+                                return tasksService.addSubtask(currentTask.id, { 
+                                  title: subtaskTitle.trim(), 
+                                  assigneeId: selectedSubtaskAssigneeId || undefined 
+                                });
+                              }, 
+                              'Subtask failed', 
+                              'Subtask added successfully.'
+                            ); 
+                            setSubtaskTitle(''); 
+                            setSelectedSubtaskAssigneeId(null);
+                          } 
+                        }} 
+                        className="input h-9 flex-1 text-sm" 
+                        placeholder="Add a subtask..." 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => { 
+                          if (!subtaskTitle.trim()) return;
+                          void syncTask(
+                            () => tasksService.addSubtask(currentTask.id, { 
+                              title: subtaskTitle.trim(), 
+                              assigneeId: selectedSubtaskAssigneeId || undefined 
+                            }), 
+                            'Subtask failed', 
+                            'Subtask added successfully.'
+                          ); 
+                          setSubtaskTitle(''); 
+                          setSelectedSubtaskAssigneeId(null);
+                        }} 
+                        disabled={!subtaskTitle.trim()} 
+                        className="btn-secondary btn-sm h-9"
+                      >
+                        Add
+                      </button>
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    {(currentTask.subtasks || []).map((subtask) => (
-                      <div key={subtask.id} className="flex items-center gap-2 rounded-xl border border-surface-100 bg-surface-50 p-2.5 dark:border-surface-700 dark:bg-surface-800">
-                        <input type="checkbox" checked={subtask.isCompleted} onChange={() => { void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { isCompleted: !subtask.isCompleted }), 'Subtask update failed'); }} className="rounded" />
-                        <span className={cn('flex-1 text-sm', subtask.isCompleted && 'line-through text-surface-400')}>{subtask.title}</span>
-                      </div>
-                    ))}
+                    {(currentTask.subtasks || []).map((subtask) => {
+                      const rawAssignee = subtask.assigneeId;
+                      const subAssignee = rawAssignee 
+                        ? (typeof rawAssignee === 'object' && (rawAssignee as any).name 
+                            ? (rawAssignee as any) 
+                            : users.find(u => String(u.id) === String(rawAssignee) || String((u as any)._id) === String(rawAssignee)))
+                        : null;
+                      return (
+                        <div key={subtask.id} className="group flex items-center gap-2 rounded-xl border border-surface-100 bg-surface-50 p-2.5 transition-all hover:border-surface-200 dark:border-surface-700 dark:bg-surface-800 dark:hover:border-surface-600">
+                          <input 
+                            type="checkbox" 
+                            checked={subtask.isCompleted} 
+                            onChange={() => { void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { isCompleted: !subtask.isCompleted }), 'Subtask update failed'); }} 
+                            className="h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500" 
+                          />
+                          <span className={cn('flex-1 text-sm font-medium', subtask.isCompleted ? 'line-through text-surface-400' : 'text-surface-700 dark:text-surface-200')}>
+                            {subtask.title}
+                          </span>
+                          
+                          {subAssignee ? (
+                            <div className="relative group/subassignee">
+                              <button 
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingSubtaskId(editingSubtaskId === subtask.id ? null : subtask.id);
+                                }}
+                                className="flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-sm dark:bg-surface-900 border border-surface-100 dark:border-surface-700 hover:border-brand-300 transition-colors"
+                              >
+                                <UserAvatar name={subAssignee.name} color={subAssignee.color} size="xs" />
+                                <span className="text-[10px] font-bold text-surface-500 whitespace-nowrap">{subAssignee.name.split(' ')[0]}</span>
+                              </button>
+                              
+                              {editingSubtaskId === subtask.id && (
+                                <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-surface-200 bg-white p-1 shadow-xl dark:border-surface-700 dark:bg-surface-950">
+                                   <div className="max-h-40 overflow-y-auto">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeId: null }), 'Update failed');
+                                          setEditingSubtaskId(null);
+                                        }}
+                                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-surface-500 hover:bg-surface-50 dark:hover:bg-surface-800"
+                                      >
+                                        <X size={10} />
+                                        <span>Remove Assignee</span>
+                                      </button>
+                                      {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                                        <button
+                                          key={u.id}
+                                          type="button"
+                                          onClick={() => {
+                                            void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeId: u.id }), 'Update failed');
+                                            setEditingSubtaskId(null);
+                                          }}
+                                          className={cn(
+                                            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
+                                            (String(u.id) === String(subtask.assigneeId) || String((u as any)._id) === String(subtask.assigneeId))
+                                              ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
+                                              : "text-surface-600 hover:bg-surface-50 dark:text-surface-400 dark:hover:bg-surface-800"
+                                          )}
+                                        >
+                                          <UserAvatar name={u.name} color={u.color} size="xs" />
+                                          <span className="truncate">{u.name}</span>
+                                        </button>
+                                      ))}
+                                   </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : subtask.assigneeId ? (
+                            <div className="flex items-center gap-1 text-[10px] text-surface-400 opacity-60">
+                               <Clock size={10} />
+                               <span>Syncing...</span>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                               <button 
+                                 title="Assign subtask"
+                                 onClick={() => setEditingSubtaskId(editingSubtaskId === subtask.id ? null : subtask.id)}
+                                 className="opacity-0 group-hover:opacity-100 flex items-center gap-1 rounded-full border border-dashed border-surface-300 px-2 py-1 text-[10px] text-surface-400 hover:border-brand-400 hover:text-brand-500 transition-all"
+                               >
+                                 <Plus size={10} />
+                                 Unassigned
+                               </button>
+
+                               {editingSubtaskId === subtask.id && (
+                                <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-surface-200 bg-white p-1 shadow-xl dark:border-surface-700 dark:bg-surface-950">
+                                   <div className="max-h-40 overflow-y-auto">
+                                      {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                                        <button
+                                          key={u.id}
+                                          type="button"
+                                          onClick={() => {
+                                            void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeId: u.id }), 'Update failed');
+                                            setEditingSubtaskId(null);
+                                          }}
+                                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-surface-600 hover:bg-surface-50 dark:text-surface-400 dark:hover:bg-surface-800 transition-colors"
+                                        >
+                                          <UserAvatar name={u.name} color={u.color} size="xs" />
+                                          <span className="truncate">{u.name}</span>
+                                        </button>
+                                      ))}
+                                   </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => { void syncTask(() => tasksService.deleteSubtask(currentTask.id, subtask.id), 'Delete failed', 'Subtask removed.'); }}
+                            className="ml-1 opacity-0 group-hover:opacity-100 p-1 text-surface-400 hover:text-rose-500 transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      );
+                    })}
                     {(!currentTask.subtasks || currentTask.subtasks.length === 0) && <p className="text-sm italic text-surface-400">No subtasks yet</p>}
                   </div>
                 </div>
@@ -587,7 +812,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                             const next = current.includes(u.id) 
                               ? current.filter(id => id !== u.id)
                               : [...current, u.id];
-                            await persistTaskUpdate({ assigneeIds: next }, 'Assignee update failed');
+                            // Any assignment action resets status to 'todo' as requested
+                            await persistTaskUpdate({ assigneeIds: next, status: 'todo' }, 'Assignee update failed');
                             setIsEditingAssignee(false);
                           }}
                           className={cn(
@@ -630,6 +856,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
               </div>
             </div>
           )}
+
+          <div>
+            <label className="label">Created Date</label>
+            <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
+              <PlusCircle size={14} className="text-brand-500" />
+              <span>{new Date(currentTask.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            </div>
+          </div>
 
           <div>
             <label className="label">Due Date</label>

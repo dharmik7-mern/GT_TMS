@@ -38,6 +38,7 @@ const subtaskInputSchema = z.object({
   title: z.string().trim().min(1).max(300),
   isCompleted: z.boolean().optional(),
   order: z.number().optional(),
+  assigneeId: z.string().optional(),
 });
 
 const taskCreateSchema = z.object({
@@ -99,6 +100,8 @@ const taskRequestReviewSchema = z.object({
 
  const addSubtaskSchema = z.object({
    title: z.string().trim().min(1).max(300),
+   assigneeId: z.string().optional(),
+   isCompleted: z.boolean().optional(),
  });
  
  const addCommentSchema = z.object({
@@ -109,6 +112,7 @@ const patchSubtaskSchema = z.object({
   title: z.string().trim().min(1).max(300).optional(),
   isCompleted: z.boolean().optional(),
   order: z.number().optional(),
+  assigneeId: z.string().nullable().optional(),
 });
 
 router.get('/overview', AllTasksController.getOverview);

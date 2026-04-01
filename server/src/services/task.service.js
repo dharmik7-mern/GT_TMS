@@ -120,6 +120,22 @@ function defaultCompletionReview() {
   };
 }
 
+async function createSubtaskNotification({ tenantId, workspaceId, assigneeId, taskTitle, subtaskTitle, taskId }) {
+  if (!assigneeId) return;
+  const { Notification } = await getTenantModels(tenantId);
+  await Notification.create({
+    tenantId,
+    workspaceId,
+    userId: assigneeId,
+    type: 'task_assigned',
+    title: 'You were assigned a subtask',
+    message: `${subtaskTitle} · ${taskTitle}`,
+    relatedId: String(taskId),
+    audienceType: 'user',
+    audienceLabel: 'Direct',
+  });
+}
+
 function buildCompletionState({ existingReview, existingStatus, nextStatus, updates, userId }) {
   const review = {
     ...defaultCompletionReview(),
@@ -996,8 +1012,9 @@ export async function deleteTask({ companyId, workspaceId, userId, role, taskId 
   return task;
 }
 
-export async function addSubtask({ companyId, workspaceId, userId, role, taskId, title, isCompleted }) {
+export async function addSubtask({ companyId, workspaceId, userId, role, taskId, title, isCompleted, assigneeId }) {
   const tenantId = companyId;
+  const mongoose = (await import('mongoose')).default;
   const { Task } = await getTenantModels(companyId);
   const task = await Task.findOne({
       _id: taskId,
@@ -1021,8 +1038,21 @@ export async function addSubtask({ companyId, workspaceId, userId, role, taskId,
   }
 
   const order = (task.subtasks?.length || 0) + 1;
-  task.subtasks.push({ title, isCompleted: Boolean(isCompleted), order });
+  const subAssignee = assigneeId && mongoose.Types.ObjectId.isValid(assigneeId) ? new mongoose.Types.ObjectId(assigneeId) : null;
+  task.subtasks.push({ title, isCompleted: Boolean(isCompleted), order, assigneeId: subAssignee });
   await task.save();
+
+  if (subAssignee) {
+    await createSubtaskNotification({
+      tenantId,
+      workspaceId,
+      assigneeId: subAssignee,
+      taskTitle: task.title,
+      subtaskTitle: title,
+      taskId,
+    });
+  }
+
   return task;
 }
 
@@ -1052,10 +1082,27 @@ export async function updateSubtask({ companyId, workspaceId, userId, role, task
 
   const sub = task.subtasks.id(subtaskId);
   if (!sub) return null;
+  const prevAssignee = sub.assigneeId ? String(sub.assigneeId) : null;
   if (updates.title !== undefined) sub.title = updates.title;
   if (updates.isCompleted !== undefined) sub.isCompleted = Boolean(updates.isCompleted);
   if (updates.order !== undefined) sub.order = updates.order;
+  if (updates.assigneeId !== undefined) {
+    sub.assigneeId = updates.assigneeId && mongoose.Types.ObjectId.isValid(updates.assigneeId) ? new mongoose.Types.ObjectId(updates.assigneeId) : null;
+  }
   await task.save();
+
+  const newAssignee = sub.assigneeId ? String(sub.assigneeId) : null;
+  if (newAssignee && newAssignee !== prevAssignee) {
+    await createSubtaskNotification({
+      tenantId,
+      workspaceId,
+      assigneeId: sub.assigneeId,
+      taskTitle: task.title,
+      subtaskTitle: sub.title,
+      taskId,
+    });
+  }
+
   return task;
 }
 

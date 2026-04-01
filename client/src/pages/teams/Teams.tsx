@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Briefcase,
   Calendar,
@@ -68,13 +69,21 @@ function getTeamMetrics(team: Team, users: User[], projects: Project[], tasks: T
   };
 }
 
-const MetricCard: React.FC<{ icon: React.ReactNode; label: string; value: string; tone?: string }> = ({
+const MetricCard: React.FC<{ icon: React.ReactNode; label: string; value: string; tone?: string; onClick?: () => void }> = ({
   icon,
   label,
   value,
   tone = 'bg-surface-50 dark:bg-surface-900/60',
+  onClick,
 }) => (
-  <div className={cn('rounded-2xl border border-surface-100 p-4 dark:border-surface-800', tone)}>
+  <div
+    onClick={onClick}
+    className={cn(
+      'rounded-2xl border border-surface-100 p-4 dark:border-surface-800 transition-all duration-200',
+      tone,
+      onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''
+    )}
+  >
     <div className="flex items-center gap-2 text-surface-500 dark:text-surface-400">
       {icon}
       <span className="text-[11px] font-bold uppercase tracking-[0.18em]">{label}</span>
@@ -467,12 +476,41 @@ const TeamDetailModal: React.FC<{
   );
 };
 
+const UserListModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  usersList: User[];
+}> = ({ open, onClose, title, usersList }) => {
+  return (
+    <Modal open={open} onClose={onClose} title={title}>
+      <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3 custom-scrollbar">
+        {usersList.length === 0 ? (
+          <p className="text-sm text-surface-500 text-center py-4">No users found.</p>
+        ) : (
+          usersList.map((u) => (
+            <div key={u.id} className="flex items-center gap-3 rounded-2xl border border-surface-100 p-3 hover:bg-surface-50 dark:border-surface-800 dark:hover:bg-surface-800/60 transition-colors">
+              <UserAvatar name={u.name} color={u.color} size="sm" isOnline={u.isActive} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-surface-800 dark:text-surface-200">{u.name}</p>
+                <p className="truncate text-xs text-surface-400">{u.jobTitle || u.email}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 export const TeamsPage: React.FC = () => {
   const { teams, users, projects, tasks, deleteTeam } = useAppStore();
+  const navigate = useNavigate();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [search, setSearch] = useState('');
+  const [listModalConfig, setListModalConfig] = useState<{ open: boolean; title: string; list: User[] }>({ open: false, title: '', list: [] });
 
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) || null;
 
@@ -492,15 +530,16 @@ export const TeamsPage: React.FC = () => {
     const linkedTaskCount = tasks.filter((task) => linkedProjectIds.has(task.projectId)).length;
     const completedTaskCount = tasks.filter((task) => linkedProjectIds.has(task.projectId) && task.status === 'done').length;
     const leaderIds = new Set(teams.flatMap((team) => (team.leaderIds?.length ? team.leaderIds : [team.leaderId])));
+    const memberIds = new Set(teams.flatMap((team) => team.members));
 
     return {
       teamsCount: teams.length,
-      uniqueMembers: new Set(teams.flatMap((team) => team.members)).size,
-      uniqueLeaders: leaderIds.size,
+      uniqueMembers: users.filter((u) => memberIds.has(u.id)),
+      uniqueLeaders: users.filter((u) => leaderIds.has(u.id)),
       linkedProjects: linkedProjectIds.size,
       taskCompletion: linkedTaskCount ? Math.round((completedTaskCount / linkedTaskCount) * 100) : 0,
     };
-  }, [projects, tasks, teams]);
+  }, [projects, tasks, teams, users]);
 
   const openCreate = () => {
     setEditingTeam(null);
@@ -522,37 +561,30 @@ export const TeamsPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-surface-400">Teams Workspace</p>
-          <h1 className="mt-2 font-display text-3xl font-semibold text-surface-900 dark:text-white">Run teams like a delivery hub</h1>
-          <p className="mt-2 max-w-2xl text-sm text-surface-400">
-            Create multiple teams, assign leads and members, link projects, and monitor delivery health from one place.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative min-w-[260px]">
+    <div className="max-w-7xl mx-auto space-y-4 -mt-2">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end mb-2">
+        <div className="flex items-center gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 lg:min-w-[260px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search teams, members, or projects..." className="input pl-9" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search teams..." className="input pl-9 w-full" />
           </div>
           <button onClick={openCreate} className="btn-primary btn-md whitespace-nowrap"><Plus size={14} />Create Team</button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={<Users size={14} />} label="Teams" value={String(globalStats.teamsCount)} />
-        <MetricCard icon={<ShieldCheck size={14} />} label="Leads" value={String(globalStats.uniqueLeaders)} />
-        <MetricCard icon={<Users size={14} />} label="Members" value={String(globalStats.uniqueMembers)} />
-        <MetricCard icon={<FolderKanban size={14} />} label="Linked Projects" value={String(globalStats.linkedProjects)} />
-        <MetricCard icon={<CheckCircle2 size={14} />} label="Completion" value={`${globalStats.taskCompletion}%`} tone="bg-emerald-50 dark:bg-emerald-950/20" />
+        <MetricCard onClick={() => setSearch('')} icon={<Users size={14} />} label="Teams" value={String(globalStats.teamsCount)} />
+        <MetricCard onClick={() => setListModalConfig({ open: true, title: 'All Team Leads', list: globalStats.uniqueLeaders })} icon={<ShieldCheck size={14} />} label="Leads" value={String(globalStats.uniqueLeaders.length)} />
+        <MetricCard onClick={() => setListModalConfig({ open: true, title: 'All Team Members', list: globalStats.uniqueMembers })} icon={<Users size={14} />} label="Members" value={String(globalStats.uniqueMembers.length)} />
+        <MetricCard onClick={() => navigate('/projects')} icon={<FolderKanban size={14} />} label="Linked Projects" value={String(globalStats.linkedProjects)} />
+        <MetricCard onClick={() => navigate('/tasks')} icon={<CheckCircle2 size={14} />} label="Completion" value={`${globalStats.taskCompletion}%`} tone="bg-emerald-50 dark:bg-emerald-950/20" />
       </div>
 
       {teams.length === 0 ? (
         <EmptyState
           icon={<Users size={28} />}
           title="No teams yet"
-          description="Create your first team workspace to organize members, leads, and linked delivery projects."
+          description="Get started by creating a new team."
           action={<button onClick={openCreate} className="btn-primary btn-md"><Plus size={14} /> Create Team</button>}
         />
       ) : filteredTeams.length === 0 ? (
@@ -592,6 +624,13 @@ export const TeamsPage: React.FC = () => {
           setEditingTeam(null);
           setSelectedTeamId(team.id);
         }}
+      />
+
+      <UserListModal 
+        open={listModalConfig.open} 
+        onClose={() => setListModalConfig(prev => ({ ...prev, open: false }))} 
+        title={listModalConfig.title} 
+        usersList={listModalConfig.list} 
       />
     </div>
   );

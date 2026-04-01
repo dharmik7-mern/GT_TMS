@@ -142,7 +142,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
       const payload = {
         title: data.title.trim(),
         description: data.description?.trim() || undefined,
-        status: data.status,
+        status: 'todo', // Always start as 'New task'
         priority: data.priority,
         assigneeIds: data.assigneeIds || [],
         dueDate: data.dueDate || undefined,

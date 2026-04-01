@@ -6,6 +6,7 @@ const subtaskSchema = new mongoose.Schema(
     isCompleted: { type: Boolean, default: false },
     assigneeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
     order: { type: Number, default: 0 },
+    assigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { _id: true, timestamps: true }
 );
@@ -91,15 +92,27 @@ taskSchema.index({ projectId: 1, assigneeIds: 1 });
 
 function mapSubtasks(subs) {
   if (!Array.isArray(subs)) return [];
-  return subs.map((s) => ({
-    id: String(s._id),
-    title: s.title,
-    isCompleted: Boolean(s.isCompleted),
-    assigneeIds: Array.isArray(s.assigneeIds) ? s.assigneeIds.map((a) => String(a)) : [],
-    order: s.order ?? 0,
-    createdAt: s.createdAt?.toISOString?.() || undefined,
-    updatedAt: s.updatedAt?.toISOString?.() || undefined,
-  }));
+  return subs.map((s) => {
+    const assigneeObj = s.assigneeId && typeof s.assigneeId === 'object' && s.assigneeId._id ? s.assigneeId : null;
+    const assignee = assigneeObj
+      ? {
+        id: String(assigneeObj._id),
+        name: assigneeObj.name,
+        avatar: assigneeObj.avatar,
+        color: assigneeObj.color,
+      }
+      : undefined;
+    return {
+      id: String(s._id),
+      title: s.title,
+      isCompleted: Boolean(s.isCompleted),
+      order: s.order ?? 0,
+      assigneeId: s.assigneeId ? String(s.assigneeId) : undefined,
+      assignee,
+      createdAt: s.createdAt?.toISOString?.() || undefined,
+      updatedAt: s.updatedAt?.toISOString?.() || undefined,
+    };
+  });
 }
 
 function subtaskProgress(subs) {
@@ -113,8 +126,8 @@ taskSchema.set('toJSON', {
   transform: (_doc, ret) => {
     ret.id = String(ret._id);
     ret.projectId = String(ret.projectId);
-    ret.assigneeIds = Array.isArray(ret.assigneeIds) ? ret.assigneeIds.map((a) => String(a)) : [];
-    ret.reporterId = String(ret.reporterId);
+    ret.assigneeIds = Array.isArray(ret.assigneeIds) ? ret.assigneeIds.map((a) => (typeof a === 'object' && a !== null && a._id ? a : String(a))) : [];
+    ret.reporterId = ret.reporterId && typeof ret.reporterId === 'object' && ret.reporterId._id ? ret.reporterId : String(ret.reporterId);
     ret.parentTaskId = ret.parentTaskId ? String(ret.parentTaskId) : undefined;
     ret.phaseId = ret.phaseId ? String(ret.phaseId) : undefined;
     ret.subcategoryId = ret.subcategoryId || undefined;
@@ -134,42 +147,42 @@ taskSchema.set('toJSON', {
     ret.endTime = ret.endTime?.toISOString?.() || ret.endTime;
     ret.comments = Array.isArray(ret.comments)
       ? ret.comments.map((c) => ({
-          id: String(c._id),
-          content: c.content,
-          authorId: String(c.authorId),
-          taskId: String(ret._id),
-          createdAt: new Date(c.createdAt).toISOString(),
-          updatedAt: new Date(c.updatedAt).toISOString(),
-        }))
+        id: String(c._id),
+        content: c.content,
+        authorId: String(c.authorId),
+        taskId: String(ret._id),
+        createdAt: new Date(c.createdAt).toISOString(),
+        updatedAt: new Date(c.updatedAt).toISOString(),
+      }))
       : [];
     ret.attachments = Array.isArray(ret.attachments)
       ? ret.attachments.map((a) => ({
-          id: String(a._id),
-          name: a.name,
-          url: a.url,
-          size: a.size,
-          type: a.type,
-          uploadedBy: String(a.uploadedBy),
-          createdAt: new Date(a.createdAt).toISOString(),
-        }))
+        id: String(a._id),
+        name: a.name,
+        url: a.url,
+        size: a.size,
+        type: a.type,
+        uploadedBy: String(a.uploadedBy),
+        createdAt: new Date(a.createdAt).toISOString(),
+      }))
       : [];
     ret.completionReview = ret.completionReview
       ? {
-          completedAt: ret.completionReview.completedAt ? new Date(ret.completionReview.completedAt).toISOString() : undefined,
-          completedBy: ret.completionReview.completedBy ? String(ret.completionReview.completedBy) : undefined,
-          completionRemark: ret.completionReview.completionRemark || '',
-          reviewStatus: ret.completionReview.reviewStatus || 'pending',
-          rating: typeof ret.completionReview.rating === 'number' ? ret.completionReview.rating : undefined,
-          reviewRemark: ret.completionReview.reviewRemark || '',
-          reviewedAt: ret.completionReview.reviewedAt ? new Date(ret.completionReview.reviewedAt).toISOString() : undefined,
-          reviewedBy: ret.completionReview.reviewedBy ? String(ret.completionReview.reviewedBy) : undefined,
-        }
+        completedAt: ret.completionReview.completedAt ? new Date(ret.completionReview.completedAt).toISOString() : undefined,
+        completedBy: ret.completionReview.completedBy ? String(ret.completionReview.completedBy) : undefined,
+        completionRemark: ret.completionReview.completionRemark || '',
+        reviewStatus: ret.completionReview.reviewStatus || 'pending',
+        rating: typeof ret.completionReview.rating === 'number' ? ret.completionReview.rating : undefined,
+        reviewRemark: ret.completionReview.reviewRemark || '',
+        reviewedAt: ret.completionReview.reviewedAt ? new Date(ret.completionReview.reviewedAt).toISOString() : undefined,
+        reviewedBy: ret.completionReview.reviewedBy ? String(ret.completionReview.reviewedBy) : undefined,
+      }
       : {
-          reviewStatus: 'pending',
-          rating: undefined,
-          completionRemark: '',
-          reviewRemark: '',
-        };
+        reviewStatus: 'pending',
+        rating: undefined,
+        completionRemark: '',
+        reviewRemark: '',
+      };
     ret.isReassignPending = !!ret.isReassignPending;
     ret.requestedAssigneeId = ret.requestedAssigneeId ? String(ret.requestedAssigneeId) : undefined;
     ret.reassignRequestedBy = ret.reassignRequestedBy ? String(ret.reassignRequestedBy) : undefined;

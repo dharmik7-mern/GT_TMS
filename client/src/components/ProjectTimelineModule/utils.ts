@@ -268,7 +268,7 @@ export function buildMonthSegments(startDate: string, totalDays: number) {
 }
 
 export function getDayWidth(zoom: 'day' | 'week' | 'month') {
-  if (zoom === 'day') return 40;
-  if (zoom === 'week') return 22;
-  return 10;
+  if (zoom === 'day') return 72;
+  if (zoom === 'week') return 48;
+  return 24;
 }

@@ -109,7 +109,10 @@ export const ProjectDetailPage: React.FC = () => {
   };
 
   const handleAddTask = (status: TaskStatus = 'todo') => {
-    setDefaultStatus(status);
+    setDefaultStatus('todo');
+    setValue('startDate', project?.startDate || todayDate);
+    setValue('durationDays', 1);
+    setValue('phaseId', '');
     setShowAddTask(true);
   };
 
@@ -260,6 +263,7 @@ export const ProjectDetailPage: React.FC = () => {
     { value: 'list', label: 'List', icon: <List size={14} /> },
     { value: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
     { value: 'overview', label: 'Overview', icon: <BarChart3 size={14} /> },
+    { value: 'team', label: 'Team', icon: <Users size={14} /> },
   ];
 
   return (
@@ -627,6 +631,102 @@ export const ProjectDetailPage: React.FC = () => {
             </div>
           </div>
         </TabsContent>
+
+        <TabsContent value="team" className="pt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {members.map(member => {
+              const memberTasks = projectTasks.filter(t => t.assigneeIds.includes(member.id));
+              const doneTasks = memberTasks.filter(t => t.status === 'done').length;
+              const activeTasks = memberTasks.filter(t => t.status !== 'done');
+              const isReportingPerson = (project?.reportingPersonIds || []).includes(member.id);
+              const progress = memberTasks.length > 0 ? (doneTasks / memberTasks.length) * 100 : 0;
+              
+              return (
+                <div key={member.id} className="card p-5 flex flex-col h-full bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <UserAvatar name={member.name} avatar={member.avatar} color={member.color} size="md" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-display font-bold text-surface-900 dark:text-white">{member.name}</h4>
+                          {isReportingPerson && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-purple-50 text-purple-700 border border-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800">
+                              Lead
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-surface-500">{member.jobTitle || 'Team Member'}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-display font-bold text-surface-900 dark:text-white">{Math.round(progress)}%</p>
+                      <p className="text-[10px] text-surface-400 font-bold uppercase tracking-tight">Completion</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-5">
+                    <div className="flex items-center justify-between text-[11px] mb-1.5">
+                      <span className="text-surface-500 font-medium">Monthly Workload</span>
+                      <span className="text-surface-700 dark:text-surface-300 font-bold">{doneTasks} / {memberTasks.length} Tasks</span>
+                    </div>
+                    <div className="h-1.5 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: member.color || '#3b82f6' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex-1">
+                    <h5 className="text-[10px] font-bold text-surface-400 uppercase tracking-wider mb-3">Active Tasks ({activeTasks.length})</h5>
+                    {activeTasks.length > 0 ? (
+                      <div className="space-y-2">
+                        {activeTasks.slice(0, 3).map(task => (
+                          <div key={task.id} className="group p-2.5 rounded-xl bg-surface-50 dark:bg-surface-800/40 border border-transparent hover:border-surface-200 dark:hover:border-surface-700 transition-all cursor-pointer" onClick={() => openTask(task)}>
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-xs font-semibold text-surface-800 dark:text-surface-200 truncate flex-1">{task.title}</p>
+                              <span className={cn(
+                                "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase",
+                                (STATUS_CONFIG[task.status] || STATUS_CONFIG.todo).bg,
+                                (STATUS_CONFIG[task.status] || STATUS_CONFIG.todo).text
+                              )}>
+                                {(STATUS_CONFIG[task.status] || STATUS_CONFIG.todo).label.split(' ')[0]}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-surface-400 font-medium flex items-center gap-1">
+                                <Calendar size={10} />
+                                {task.dueDate ? formatDate(task.dueDate) : 'No date'}
+                              </span>
+                              <span className="text-[10px] text-surface-400 font-medium px-1.5 py-0.5 rounded-md bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 shadow-sm">
+                                {task.priority.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {activeTasks.length > 3 && (
+                          <p className="text-[11px] text-surface-400 text-center font-medium pt-1">
+                            + {activeTasks.length - 3} more tasks
+                          </p>
+                        )}
+                      </div>
+                    ) : memberTasks.length > 0 ? (
+                      <div className="text-center py-5 rounded-xl border border-dashed border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/20 dark:bg-emerald-900/10">
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">All assigned tasks completed</p>
+                      </div>
+                    ) : (
+                      <div className="text-center py-5 rounded-xl border border-dashed border-surface-200 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-800/20">
+                        <p className="text-[11px] text-surface-400 font-medium">No tasks assigned yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Task Detail Modal */}
@@ -636,18 +736,99 @@ export const ProjectDetailPage: React.FC = () => {
         onClose={() => { setShowTaskModal(false); setSelectedTaskId(null); }}
       />
 
-      <ProjectTaskCreateModal
-        open={showAddTask}
-        onClose={() => setShowAddTask(false)}
-        onSubmit={onCreateTask}
-        project={project}
-        members={members}
-        phases={timelinePhases}
-        defaultStatus={defaultStatus}
-        submitLabel={canCreateTask ? 'Create Task' : 'Send Request'}
-        title={canCreateTask ? 'New Task' : 'Request Task'}
-        onCreatePhase={handleCreatePhase}
-      />
+      {/* Add Task Modal */}
+      <Modal open={showAddTask} onClose={() => setShowAddTask(false)} title="New Task">
+        <form onSubmit={handleSubmit(onCreateTask)} className="p-6 space-y-4">
+          <div>
+            <label className="label">Title *</label>
+            <input {...register('title', { required: true })} placeholder="Task title" className="input" />
+          </div>
+          <div>
+            <label className="label">Description</label>
+            <textarea {...register('description')} placeholder="Optional description" className="input h-auto py-2 resize-none" rows={2} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Priority</label>
+              <Dropdown 
+                value={watchPriority} 
+                onChange={(val) => setValue('priority', val as Priority)}
+                items={Object.entries(PRIORITY_CONFIG).map(([k, v]) => ({ 
+                  id: k, 
+                  label: v.label,
+                  icon: <Flag size={12} style={{ color: v.color }} />
+                }))}
+              />
+            </div>
+            <div>
+              <label className="label">Status</label>
+              <Dropdown 
+                value={defaultStatus} 
+                onChange={(val) => setDefaultStatus(val as TaskStatus)}
+                items={Object.entries(STATUS_CONFIG).map(([k, v]) => ({ 
+                  id: k, 
+                  label: v.label,
+                  icon: <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: v.color }} />
+                }))}
+                disabled
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Assignee</label>
+              <Dropdown 
+                value={watchAssignee} 
+                onChange={(val) => setValue('assigneeId', val)}
+                placeholder="Unassigned"
+                items={assignableUsers.map(u => ({ 
+                  id: u.id, 
+                  label: u.name,
+                  icon: <UserAvatar name={u.name} color={u.color} size="xs" />
+                }))}
+              />
+            </div>
+            <div>
+              <label className="label">Phase</label>
+              <select {...register('phaseId')} className="input">
+                <option value="">Ungrouped</option>
+                {timelinePhases.map((phase) => (
+                  <option key={phase.id} value={phase.id}>{phase.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+            <div>
+              <label className="label">Add New Phase</label>
+              <input value={newPhaseName} onChange={(e) => setNewPhaseName(e.target.value)} placeholder="e.g. Development" className="input" />
+            </div>
+            <button type="button" onClick={() => void handleCreatePhase()} disabled={isCreatingPhase || !newPhaseName.trim()} className="btn-secondary btn-md">
+              {isCreatingPhase ? 'Adding...' : 'Add Phase'}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Start Date *</label>
+              <input {...register('startDate', { required: true })} type="date" className="input" min={todayDate} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Duration (days) *</label>
+              <input {...register('durationDays', { required: true, valueAsNumber: true, min: 1 })} type="number" min={1} step={1} className="input" />
+            </div>
+            <div>
+              <label className="label">Estimated hours</label>
+              <input {...register('estimatedHours', { valueAsNumber: true })} type="number" placeholder="0" className="input" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={() => setShowAddTask(false)} className="btn-secondary btn-md flex-1">Cancel</button>
+            <button type="submit" className="btn-primary btn-md flex-1">Create Task</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

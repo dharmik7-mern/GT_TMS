@@ -1,12 +1,10 @@
 import mongoose from 'mongoose';
-import { getTaskModel } from '../models/Task.js';
-import { getQuickTaskModel } from '../models/QuickTask.js';
+import { getTenantModels } from '../config/tenantDb.js';
 
 export async function getOverview(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const Task = getTaskModel(mongoose.connection);
-    const QuickTask = getQuickTaskModel(mongoose.connection);
+    const { Task, QuickTask } = await getTenantModels(companyId);
 
      const isManagerOrAdmin = ['owner', 'admin', 'manager', 'team_leader', 'workspace_admin', 'system_admin', 'super_admin'].includes(role);
     
@@ -66,6 +64,7 @@ export async function getOverview(req, res, next) {
         id: t._id,
         title: t.title,
         assignedTo: t.assigneeIds?.[0]?.name || 'Unassigned',
+        assigneeAvatar: t.assigneeIds?.[0]?.avatar || '',
         projectId: t.projectId?._id || null,
         projectName: t.projectId?.name || '-',
         type: 'project',
@@ -77,6 +76,7 @@ export async function getOverview(req, res, next) {
         id: qt._id,
         title: qt.title,
         assignedTo: qt.assigneeIds?.[0]?.name || 'Unassigned',
+        assigneeAvatar: qt.assigneeIds?.[0]?.avatar || '',
         projectId: null,
         projectName: '-',
         type: 'quick',
@@ -101,24 +101,19 @@ export async function getOverview(req, res, next) {
 export async function getAllTasks(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const Task = getTaskModel(mongoose.connection);
-    const QuickTask = getQuickTaskModel(mongoose.connection);
+    const { Task, QuickTask } = await getTenantModels(companyId);
+    const PersonalTask = mongoose.connection.model('PersonalTask') || require('../models/PersonalTask.js').getPersonalTaskModel(mongoose.connection);
 
-     const isManagerOrAdmin = ['owner', 'admin', 'manager', 'workspace_admin', 'system_admin', 'super_admin'].includes(role);
-    
     if (!companyId || !workspaceId) {
-       return res.status(200).json({ success: true, data: { projectTasks: [], quickTasks: [] } });
+       return res.status(200).json({ success: true, data: { projectTasks: [], quickTasks: [], personalTasks: [] } });
     }
 
-     const baseFilter = { 
+    const baseFilter = { 
         tenantId: new mongoose.Types.ObjectId(companyId), 
         workspaceId: new mongoose.Types.ObjectId(workspaceId)
-     };
- 
-     if (!isManagerOrAdmin) {
-       baseFilter.$or = [{ assigneeIds: userId }, { reporterId: userId }];
-     }
+    };
 
+    // Project tasks are fetched without role restriction to ensure visibility for all tasks associated to the project
     const tasks = await Task.find(baseFilter)
       .populate('assigneeIds', 'name avatar')
       .populate('projectId', 'name')
@@ -153,6 +148,10 @@ export async function getAllTasks(req, res, next) {
 
     const quickTasks = await QuickTask.find(qtBaseFilter)
       .populate('assigneeIds', 'name avatar')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const personalTasks = await PersonalTask.find({ userId: new mongoose.Types.ObjectId(userId) })
       .sort({ createdAt: -1 })
       .lean();
 
@@ -191,9 +190,22 @@ export async function getAllTasks(req, res, next) {
       description: qt.description || '',
     }));
 
+    const mappedPersonalTasks = personalTasks.map(pt => ({
+      id: pt._id,
+      title: pt.title,
+      assignedTo: 'Me',
+      assigneeAvatar: '',
+      projectId: null,
+      projectName: 'Personal',
+      type: 'personal',
+      status: pt.status,
+      priority: pt.priority,
+      dueDate: pt.dueDate
+    }));
+
     return res.status(200).json({ 
       success: true, 
-      data: { projectTasks: mappedTasks, quickTasks: mappedQuickTasks } 
+      data: { projectTasks: mappedTasks, quickTasks: mappedQuickTasks, personalTasks: mappedPersonalTasks } 
     });
   } catch (err) {
     next(err);
