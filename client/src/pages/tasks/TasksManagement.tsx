@@ -1376,35 +1376,24 @@ const TaskDetailOverlay: React.FC<{
                          }
                       }}
                     />
-                    <div className="absolute right-4 bottom-4 flex items-center gap-3 text-gray-400">
-                      <button className="hover:text-blue-500 transition-colors"><Paperclip size={18} /></button>
-                      <button 
-                        onClick={() => {
-                          if (commentText.trim()) {
+                     <div className="absolute right-4 bottom-4 flex items-center gap-3 text-gray-400">
+                       <button className="hover:text-blue-500 transition-colors"><Paperclip size={18} /></button>
+                       <button 
+                         onClick={() => {
+                           if (commentText.trim()) {
                              onPostComment(commentText);
                              setCommentText('');
-                          }
-                       }
-                    }}
-                  />
-                  <div className="absolute right-4 bottom-4 flex items-center gap-3 text-gray-400">
-                    <button className="hover:text-blue-500 transition-colors"><Paperclip size={18} /></button>
-                    <button 
-                      onClick={() => {
-                        if (commentText.trim()) {
-                           onPostComment(commentText);
-                           setCommentText('');
-                        }
-                      }}
-                      className="hover:text-blue-500 transition-colors"
-                    >
-                      <MessageSquare size={18} />
-                    </button>
-                  </div>
+                           }
+                         }}
+                         className="hover:text-blue-500 transition-colors"
+                       >
+                         <MessageSquare size={18} />
+                       </button>
+                     </div>
+                 </div>
                 </div>
              </div>
           </div>
-        </div>
       </motion.div>
     </motion.div>
   );
