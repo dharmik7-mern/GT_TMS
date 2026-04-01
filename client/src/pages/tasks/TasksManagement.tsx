@@ -31,6 +31,7 @@ interface TaskRow {
   attachments?: any[];
   description?: string;
   reporterId?: string;
+  reporterName?: string;
 }
 
 interface SearchableSelectOption {
@@ -181,8 +182,8 @@ export const TasksManagement: React.FC = () => {
     try {
       setFullTaskLoading(true);
       console.log(`[TasksManagement] Initiating fetch for Task ID: ${id}`);
-      // New Unified Endpoint: no more guesswork between collections!
-      const res = await api.get(`/tasks/detail/${id}`);
+      // Unified detail endpoint
+      const res = await api.get(`/tasks/${id}`);
       if (res.data?.success) {
         setFullTaskData(res.data.data);
       }
@@ -607,6 +608,15 @@ export const TasksManagement: React.FC = () => {
                   {activeSections.includes('active') && (
                     <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
                       <table className="min-w-[760px] w-full text-xs text-left border-collapse">
+                        <colgroup>
+                          <col style={{ width: '32%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '6%' }} />
+                        </colgroup>
                         <thead className="bg-white dark:bg-surface-900 text-gray-400 dark:text-surface-500 font-semibold border-b border-gray-50 dark:border-surface-800">
                           <tr>
                             <th className="px-5 py-3 font-semibold min-w-[300px]">Task Name</th>
@@ -661,6 +671,15 @@ export const TasksManagement: React.FC = () => {
                   {activeSections.includes('projects') && (
                     <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
                       <table className="min-w-[760px] w-full text-xs text-left border-collapse">
+                        <colgroup>
+                          <col style={{ width: '32%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '6%' }} />
+                        </colgroup>
                         <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
                           {allFilteredTasks.filter(t => t.type === 'project').length === 0 ? (
                             <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No project tasks found.</td></tr>
@@ -688,7 +707,7 @@ export const TasksManagement: React.FC = () => {
                                     <React.Fragment key={groupName}>
                                       <tr className="bg-gray-50/50 dark:bg-surface-950/30">
                                         <td colSpan={7} className="px-5 py-2 text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest border-y border-gray-100 dark:border-surface-800">
-                                          {groupName} — {tasks.length} tasks
+                                          {groupName} - {tasks.length} tasks
                                         </td>
                                       </tr>
                                       {tasks.map((task, idx) => (
@@ -736,6 +755,15 @@ export const TasksManagement: React.FC = () => {
                   {activeSections.includes('quick') && (
                     <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
                       <table className="min-w-[760px] w-full text-xs text-left border-collapse">
+                        <colgroup>
+                          <col style={{ width: '32%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '6%' }} />
+                        </colgroup>
                         <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
                           {allFilteredTasks.filter(t => t.type === 'quick').length === 0 ? (
                             <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No quick tasks found.</td></tr>
@@ -1030,7 +1058,7 @@ const TaskDetailOverlay: React.FC<{
   const project = projects.find(p => p.id === task.projectId);
   const data = fullData || task;
   const responsible = users.find(u => (data.assigneeIds || []).includes(u.id)) || { name: task.assignedTo || 'Unassigned', color: 'gray' };
-  const reporter = users.find(u => u.id === data.reporterId) || { name: 'System', color: 'gray' };
+  const reporter = users.find(u => u.id === data.reporterId) || { name: data.reporterName || 'System', color: 'gray' };
 
   return (
     <motion.div
@@ -1493,21 +1521,21 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
       onClick={onClick}
       className="hover:bg-blue-50/30 dark:hover:bg-surface-800/50 transition-colors cursor-pointer group animate-in fade-in duration-300"
     >
-      <td className="px-5 py-3">
-        <div className="flex flex-col">
-          <span className="text-[13px] font-bold text-gray-900 dark:text-surface-100 drop-shadow-sm">{task.title}</span>
+      <td className="px-5 py-3 align-middle">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="truncate text-[13px] font-bold text-gray-900 dark:text-surface-100 drop-shadow-sm">{task.title}</span>
           {task.projectName !== '-' && (
-            <span className="text-[9px] text-blue-500 dark:text-brand-400 font-bold uppercase tracking-[0.1em] mt-0.5">{task.projectName}</span>
+            <span className="whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-blue-600 dark:bg-brand-950/30 dark:text-brand-300">{task.projectName}</span>
           )}
         </div>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 align-middle whitespace-nowrap">
         <div className="flex items-center gap-2.5 whitespace-nowrap">
           <div className={cn("w-1.5 h-1.5 rounded-full", task.status === 'done' ? 'bg-emerald-500' : 'bg-blue-500')} style={{ backgroundColor: STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.color }} />
           <span className="text-gray-600 font-bold text-[11px] uppercase tracking-tight">{STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.label || task.status.replace('_', ' ')}</span>
         </div>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 align-middle whitespace-nowrap">
         <div className={cn(
           "inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.05em]",
           task.priority === 'urgent' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
@@ -1517,26 +1545,26 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
           {task.priority}
         </div>
       </td>
-      <td className="px-3 py-3 text-gray-500 dark:text-surface-400 whitespace-nowrap">
+      <td className="px-3 py-3 align-middle text-gray-500 dark:text-surface-400 whitespace-nowrap">
         {task.dueDate ? (
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 dark:text-surface-500">
             <Calendar size={12} />
             {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
           </div>
         ) : (
-          <span className="text-gray-200 dark:text-surface-800">—</span>
+          <span className="text-gray-300 dark:text-surface-700">-</span>
         )}
       </td>
-      <td className="px-3 py-3 text-[11px] font-bold text-gray-400/80 dark:text-surface-500/80 text-center">
-        {task.estimatedHours ? `${task.estimatedHours}h` : '—'}
+      <td className="px-3 py-3 align-middle text-[11px] font-bold text-gray-400/80 dark:text-surface-500/80 text-center whitespace-nowrap">
+        {task.estimatedHours ? `${task.estimatedHours}h` : '-'}
       </td>
-      <td className="px-3 py-3 whitespace-nowrap">
+      <td className="px-3 py-3 align-middle whitespace-nowrap">
         <div className="flex items-center gap-2">
           <UserAvatar name={task.assignedTo || 'U'} avatar={task.assigneeAvatar} size="xs" />
           <span className="text-gray-700 dark:text-surface-300 font-bold text-[11px]">{task.assignedTo || 'Unassigned'}</span>
         </div>
       </td>
-      <td className="px-5 py-3 text-right">
+      <td className="px-5 py-3 align-middle text-right">
         <MoreHorizontal size={14} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
       </td>
     </tr>

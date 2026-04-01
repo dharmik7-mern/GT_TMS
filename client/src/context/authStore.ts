@@ -36,11 +36,30 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const res = await authService.login(payload);
           const { token, refreshToken, user } = res.data.data;
+
+          // The backend now also sets the SSO cookie (httpOnly) automatically.
+          // We still persist token + user in localStorage for offline-resilience.
           set({ user, token, refreshToken, isAuthenticated: true, isLoading: false });
+
+          // ── SSO redirect support ─────────────────────────────────────────
+          // If the user was sent here from another app (e.g. HRMS), redirect back.
+          const params = new URLSearchParams(window.location.search);
+          const redirectTo = params.get('redirect');
+          if (redirectTo) {
+            // Brief timeout lets the store persist before navigating away
+            setTimeout(() => {
+              window.location.href = decodeURIComponent(redirectTo);
+            }, 100);
+          }
+          // ─────────────────────────────────────────────────────────────────
+
           return { success: true };
         } catch (e: any) {
           set({ isLoading: false });
-          const msg = e?.response?.data?.error?.message || e?.response?.data?.message || 'Login failed';
+          const msg =
+            e?.response?.data?.error?.message ||
+            e?.response?.data?.message ||
+            'Login failed';
           return { success: false, error: msg };
         }
       },
@@ -51,6 +70,7 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const res = await authService.refresh(rt);
           const { token, refreshToken, user } = res.data.data;
+          // The backend also rotates the SSO cookie on refresh
           set({ token, refreshToken, user, isAuthenticated: true });
           return true;
         } catch {
@@ -61,7 +81,7 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: () => {
         const rt = get().refreshToken;
-        // fire and forget
+        // Fire-and-forget: server clears refresh token record AND SSO cookie
         authService.logout(rt).catch(() => {});
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
       },
@@ -75,7 +95,12 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'flowboard-auth',
-      partialize: (state) => ({ user: state.user, token: state.token, refreshToken: state.refreshToken, isAuthenticated: state.isAuthenticated }),
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );

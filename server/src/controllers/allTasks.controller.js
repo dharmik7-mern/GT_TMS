@@ -24,6 +24,7 @@ export async function getOverview(req, res, next) {
 
     const tasks = await Task.find(filter)
       .populate('assigneeIds', 'name avatar')
+      .populate('reporterId', 'name avatar')
       .populate('projectId', 'name')
       .sort({ dueDate: 1 })
       .lean();
@@ -56,6 +57,7 @@ export async function getOverview(req, res, next) {
 
     const quickTasks = await QuickTask.find(qtFilter)
       .populate('assigneeIds', 'name avatar')
+      .populate('reporterId', 'name avatar')
       .sort({ dueDate: 1 })
       .lean();
 
@@ -101,8 +103,7 @@ export async function getOverview(req, res, next) {
 export async function getAllTasks(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const { Task, QuickTask } = await getTenantModels(companyId);
-    const PersonalTask = mongoose.connection.model('PersonalTask') || require('../models/PersonalTask.js').getPersonalTaskModel(mongoose.connection);
+    const { Task, QuickTask, PersonalTask } = await getTenantModels(companyId);
 
     if (!companyId || !workspaceId) {
        return res.status(200).json({ success: true, data: { projectTasks: [], quickTasks: [], personalTasks: [] } });
@@ -116,6 +117,7 @@ export async function getAllTasks(req, res, next) {
     // Project tasks are fetched without role restriction to ensure visibility for all tasks associated to the project
     const tasks = await Task.find(baseFilter)
       .populate('assigneeIds', 'name avatar')
+      .populate('reporterId', 'name avatar')
       .populate('projectId', 'name')
       .sort({ createdAt: -1 })
       .lean();
@@ -148,6 +150,7 @@ export async function getAllTasks(req, res, next) {
 
     const quickTasks = await QuickTask.find(qtBaseFilter)
       .populate('assigneeIds', 'name avatar')
+      .populate('reporterId', 'name avatar')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -159,8 +162,11 @@ export async function getAllTasks(req, res, next) {
       id: String(t._id),
       title: t.title,
       assignedTo: t.assigneeIds?.[0]?.name || 'Unassigned',
+      assigneeAvatar: t.assigneeIds?.[0]?.avatar,
       assigneeIds: (t.assigneeIds || []).map((assignee) => String(assignee?._id || assignee)).filter(Boolean),
-      reporterId: t.reporterId ? String(t.reporterId) : undefined,
+      reporterId: t.reporterId ? String(t.reporterId._id || t.reporterId) : undefined,
+      reporterName: t.reporterId?.name,
+      reporterAvatar: t.reporterId?.avatar,
       projectId: t.projectId?._id ? String(t.projectId._id) : null,
       projectName: t.projectId?.name || '-',
       type: 'project',
@@ -177,8 +183,11 @@ export async function getAllTasks(req, res, next) {
       id: String(qt._id),
       title: qt.title,
       assignedTo: qt.assigneeIds?.[0]?.name || 'Unassigned',
+      assigneeAvatar: qt.assigneeIds?.[0]?.avatar,
       assigneeIds: (qt.assigneeIds || []).map((assignee) => String(assignee?._id || assignee)).filter(Boolean),
-      reporterId: qt.reporterId ? String(qt.reporterId) : undefined,
+      reporterId: qt.reporterId ? String(qt.reporterId._id || qt.reporterId) : undefined,
+      reporterName: qt.reporterId?.name,
+      reporterAvatar: qt.reporterId?.avatar,
       projectId: null,
       projectName: '-',
       type: 'quick',

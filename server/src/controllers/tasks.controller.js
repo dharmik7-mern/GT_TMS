@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { getTaskModel } from '../models/Task.js';
 import { getQuickTaskModel } from '../models/QuickTask.js';
 import { getPersonalTaskModel } from '../models/PersonalTask.js';
+import { getTenantModels } from '../config/tenantDb.js';
 
 export async function list(req, res, next) {
   try {

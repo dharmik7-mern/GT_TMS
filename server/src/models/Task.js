@@ -126,8 +126,14 @@ taskSchema.set('toJSON', {
   transform: (_doc, ret) => {
     ret.id = String(ret._id);
     ret.projectId = String(ret.projectId);
-    ret.assigneeIds = Array.isArray(ret.assigneeIds) ? ret.assigneeIds.map((a) => (typeof a === 'object' && a !== null && a._id ? a : String(a))) : [];
-    ret.reporterId = ret.reporterId && typeof ret.reporterId === 'object' && ret.reporterId._id ? ret.reporterId : String(ret.reporterId);
+    ret.assigneeIds = Array.isArray(ret.assigneeIds)
+      ? ret.assigneeIds.map((a) => {
+          if (!a) return undefined;
+          const id = typeof a === 'object' && a._id ? a._id : a;
+          return String(id);
+        }).filter(Boolean)
+      : [];
+    ret.reporterId = ret.reporterId ? String(ret.reporterId._id || ret.reporterId) : undefined;
     ret.parentTaskId = ret.parentTaskId ? String(ret.parentTaskId) : undefined;
     ret.phaseId = ret.phaseId ? String(ret.phaseId) : undefined;
     ret.subcategoryId = ret.subcategoryId || undefined;

@@ -679,17 +679,25 @@ export async function reviewTaskCreationRequest({
   };
 }
 
- export async function getTaskById({ companyId, workspaceId, userId, role, taskId }) {
-   const tenantId = companyId;
-   const { Task } = await getTenantModels(companyId);
-   
-   // Try strict lookup first
-   let task = await Task.findOne({ _id: taskId, tenantId, workspaceId });
-   
-   // Admin fallback: handle metadata/workspace mismatches
-   if (!task && (role === 'admin' || role === 'super_admin')) {
-     task = await Task.findOne({ _id: taskId, tenantId });
-   }
+export async function getTaskById({ companyId, workspaceId, userId, role, taskId }) {
+  const tenantId = companyId;
+  const { Task } = await getTenantModels(companyId);
+  
+  // Try strict lookup first
+  let task = await Task.findOne({ _id: taskId, tenantId, workspaceId })
+    .populate('assigneeIds', 'name avatar color fontColor')
+    .populate('reporterId', 'name avatar color fontColor')
+    .populate('projectId', 'name')
+    .populate('subtasks.assigneeId', 'name avatar color fontColor');
+  
+  // Admin fallback: handle metadata/workspace mismatches
+  if (!task && (role === 'admin' || role === 'super_admin')) {
+    task = await Task.findOne({ _id: taskId, tenantId })
+      .populate('assigneeIds', 'name avatar color fontColor')
+      .populate('reporterId', 'name avatar color fontColor')
+      .populate('projectId', 'name')
+      .populate('subtasks.assigneeId', 'name avatar color fontColor');
+  }
    
    if (!task) return null;
    
@@ -703,9 +711,14 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
    if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
    
    // Try project task
-   const task = await getTaskById({ companyId, workspaceId, userId, role, taskId });
-   if (task) {
-     const t = task.toJSON();
+   const projectTask = await getTaskById({ companyId, workspaceId, userId, role, taskId });
+   if (projectTask) {
+     const t = typeof projectTask.toJSON === 'function' ? projectTask.toJSON() : projectTask;
+     const reporterObj = projectTask?.reporterId;
+     t.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
+     t.reporterName = reporterObj?.name || t.reporterName;
+     // FIX: map to ID string if populated
+     t.assigneeIds = Array.isArray(t.assigneeIds) ? t.assigneeIds.map((a) => String(a?._id || a)) : [];
      t.type = 'project';
      return t;
    }
@@ -713,16 +726,25 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
    // Try quick task
    const { QuickTask } = await getTenantModels(companyId);
    // Fallback: search by ID and tenant only to avoid workspace metadata mismatches
-   const quickTask = await QuickTask.findOne({ _id: taskId, tenantId: companyId });
+   const quickTask = await QuickTask.findOne({ _id: taskId, tenantId: companyId })
+     .populate('assigneeIds', 'name avatar color fontColor')
+     .populate('reporterId', 'name avatar color fontColor');
    
    if (quickTask) {
      if (!canViewQuickTask({ role, userId, task: quickTask })) {
        return null;
      }
-     const qt = quickTask.toJSON();
-     qt.type = 'quick';
-     return qt;
-   }
+    const qtDoc = typeof quickTask.toJSON === 'function' ? quickTask.toJSON() : quickTask;
+    qtDoc.type = 'quick';
+    const reporterObj = quickTask.reporterId;
+    qtDoc.reporterName = reporterObj?.name || qtDoc.reporterName;
+    qtDoc.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
+    qtDoc.assigneeIds = Array.isArray(qtDoc.assigneeIds) ? qtDoc.assigneeIds.map((a) => String(a?._id || a)) : [];
+    if (quickTask.assigneeIds?.length) {
+      qtDoc.assigneeNames = quickTask.assigneeIds.map((u) => u?.name).filter(Boolean);
+    }
+    return qtDoc;
+  }
    
    return null;
  }
