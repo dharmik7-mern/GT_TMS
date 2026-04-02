@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { requireAuth } from '../../../middleware/auth.middleware.js';
 import { validateBody } from '../../../middleware/validate.middleware.js';
 import * as QuickTasksController from '../../../controllers/quickTasks.controller.js';
+import { isReservedTaskTitle, reservedTaskTitleMessage } from '../../../utils/taskTitleValidation.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -48,7 +49,9 @@ const optionalEmailString = () =>
   );
 
 const createSchema = z.object({
-  title: z.string().trim().min(2).max(300),
+  title: z.string().trim().min(2).max(300).refine((value) => !isReservedTaskTitle(value), {
+    message: reservedTaskTitleMessage(),
+  }),
   description: z.string().trim().max(10000).optional(),
   status: z.enum(['todo', 'in_progress', 'done']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
@@ -75,7 +78,9 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
-  title: z.string().trim().min(2).max(300).optional(),
+  title: z.string().trim().min(2).max(300).refine((value) => !isReservedTaskTitle(value), {
+    message: reservedTaskTitleMessage(),
+  }).optional(),
   description: z.string().trim().max(10000).optional(),
   status: z.enum(['todo', 'in_progress', 'done']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
@@ -105,7 +110,9 @@ const importSchema = z.object({
   rows: z.array(
     z.object({
       rowNumber: z.number().int().positive().optional(),
-      title: z.string().trim().min(2).max(300),
+      title: z.string().trim().min(2).max(300).refine((value) => !isReservedTaskTitle(value), {
+        message: reservedTaskTitleMessage(),
+      }),
       description: optionalTrimmedString(10000),
       status: z.enum(['todo', 'in_progress', 'done']).optional(),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),

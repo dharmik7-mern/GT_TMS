@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { addDaysToDateKey, generateId } from '../../utils/helpers';
+import { getReservedTaskTitleError } from '../../utils/taskTitleValidation';
 import { PRIORITY_CONFIG, STATUS_CONFIG, TASK_TYPE_CONFIG } from '../../app/constants';
 import { Modal } from '../Modal';
 import { UserAvatar } from '../UserAvatar';
@@ -74,6 +75,7 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
   const [showNewPhaseInput, setShowNewPhaseInput] = useState(false);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const titleError = getReservedTaskTitleError(form.title);
 
   const categories = useMemo<ProjectCategory[]>(() => project.subcategories || [], [project.subcategories]);
 
@@ -158,7 +160,7 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.title.trim() || !form.startDate || !form.dueDate) return;
+    if (submitting || !form.title.trim() || !form.startDate || !form.dueDate || titleError) return;
     try {
       setSubmitting(true);
       await onSubmit({
@@ -186,6 +188,7 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
             placeholder="Task title"
             required
           />
+          {titleError ? <p className="mt-1 text-xs text-rose-500">{titleError}</p> : null}
         </div>
 
         <div>
@@ -350,7 +353,7 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
 
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary btn-md flex-1">Cancel</button>
-          <button type="submit" disabled={!canSubmit || submitting || !form.title.trim()} className="btn-primary btn-md flex-1">
+          <button type="submit" disabled={!canSubmit || submitting || !form.title.trim() || Boolean(titleError)} className="btn-primary btn-md flex-1">
             {submitting ? 'Saving...' : submitLabel}
           </button>
         </div>

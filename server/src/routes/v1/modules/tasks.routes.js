@@ -9,6 +9,7 @@ import { validateBody } from '../../../middleware/validate.middleware.js';
 import * as TasksController from '../../../controllers/tasks.controller.js';
 import * as AllTasksController from '../../../controllers/allTasks.controller.js';
 import * as ReassignController from '../../../controllers/reassign.controller.js';
+import { isReservedTaskTitle, reservedTaskTitleMessage } from '../../../utils/taskTitleValidation.js';
 
 const router = express.Router();
 
@@ -43,7 +44,9 @@ const subtaskInputSchema = z.object({
 
 const taskCreateSchema = z.object({
   projectId: z.string().min(10),
-  title: z.string().trim().min(2).max(300),
+  title: z.string().trim().min(2).max(300).refine((value) => !isReservedTaskTitle(value), {
+    message: reservedTaskTitleMessage(),
+  }),
   description: z.string().trim().max(10000).optional(),
   status: statusEnum.optional(),
   taskType: taskTypeEnum.optional(),
@@ -64,7 +67,9 @@ const taskCreateSchema = z.object({
 
 const taskUpdateSchema = z
   .object({
-    title: z.string().trim().min(2).max(300).optional(),
+    title: z.string().trim().min(2).max(300).refine((value) => !isReservedTaskTitle(value), {
+      message: reservedTaskTitleMessage(),
+    }).optional(),
     description: z.string().trim().max(10000).optional(),
     status: statusEnum.optional(),
     taskType: taskTypeEnum.optional(),

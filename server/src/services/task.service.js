@@ -3,6 +3,7 @@ import { getTenantModels } from '../config/tenantDb.js';
 import { sendTemplatedEmailSafe } from './mail.service.js';
 import { syncProjectStats } from './project.service.js';
 import { hasWorkspacePermission } from './permission.service.js';
+import { assertAllowedTaskTitle, normalizeTaskTitle } from '../utils/taskTitleValidation.js';
 
 function strId(x) {
   return x ? String(x) : '';
@@ -85,6 +86,19 @@ function buildDirectTaskAccessFilter(userId) {
       { reporterId: userId },
     ],
   };
+}
+
+function sameIdList(left, right) {
+  const normalizedLeft = Array.from(new Set((left || []).map((value) => strId(value)).filter(Boolean))).sort();
+  const normalizedRight = Array.from(new Set((right || []).map((value) => strId(value)).filter(Boolean))).sort();
+  if (normalizedLeft.length !== normalizedRight.length) return false;
+  return normalizedLeft.every((value, index) => value === normalizedRight[index]);
+}
+
+function sameDateValue(left, right) {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return new Date(left).getTime() === new Date(right).getTime();
 }
 
 function canViewQuickTask({ role, userId, task }) {
@@ -387,17 +401,48 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
 
   const { Task, Project, ActivityLog, Notification } = await getTenantModels(companyId);
   const project = await Project.findOne({ _id: data.projectId, tenantId, workspaceId }).select('name').lean();
+  const normalizedTitle = normalizeTaskTitle(data.title);
+  assertAllowedTaskTitle(normalizedTitle);
   const { startDate, dueDate, durationDays } = resolveTaskSchedule(data);
+  const normalizedAssigneeIds = Array.isArray(data.assigneeIds) ? data.assigneeIds : [];
+
+  const recentMatchingTasks = await Task.find({
+    tenantId,
+    workspaceId,
+    projectId: data.projectId,
+    reporterId: userId,
+    title: normalizedTitle,
+    createdAt: { $gte: new Date(Date.now() - 15000) },
+  })
+    .sort({ createdAt: -1 })
+    .limit(5);
+
+  const duplicateTask = recentMatchingTasks.find((item) =>
+    String(item.description || '') === String(data.description || '') &&
+    String(item.status || 'todo') === String(data.status || 'todo') &&
+    String(item.taskType || 'operational') === String(data.taskType || 'operational') &&
+    String(item.priority || 'medium') === String(data.priority || 'medium') &&
+    sameIdList(item.assigneeIds, normalizedAssigneeIds) &&
+    sameDateValue(item.startDate, startDate) &&
+    sameDateValue(item.dueDate, dueDate) &&
+    String(item.phaseId || '') === String(data.phaseId || '') &&
+    String(item.subcategoryId || '') === String(data.subcategoryId || '')
+  );
+
+  if (duplicateTask) {
+    return (await attachTaskActivity({ companyId, workspaceId, tasks: [duplicateTask] }))[0];
+  }
+
   const task = await Task.create({
     tenantId,
     workspaceId,
     projectId: data.projectId,
-    title: data.title,
+    title: normalizedTitle,
     description: data.description,
     status: data.status || 'todo',
     taskType: data.taskType || 'operational',
     priority: data.priority || 'medium',
-    assigneeIds: data.assigneeIds || [],
+    assigneeIds: normalizedAssigneeIds,
     reporterId: userId,
     startDate,
     dueDate,

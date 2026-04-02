@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { getTenantModels } from '../config/tenantDb.js';
 import { sendTemplatedEmailSafe } from './mail.service.js';
+import { assertAllowedTaskTitle, normalizeTaskTitle } from '../utils/taskTitleValidation.js';
 
 function strId(value) {
   return value ? String(value) : '';
@@ -97,6 +98,19 @@ function formatMailDate(value) {
     month: 'short',
     year: 'numeric',
   });
+}
+
+function sameIdList(left, right) {
+  const normalizedLeft = Array.from(new Set((left || []).map((value) => strId(value)).filter(Boolean))).sort();
+  const normalizedRight = Array.from(new Set((right || []).map((value) => strId(value)).filter(Boolean))).sort();
+  if (normalizedLeft.length !== normalizedRight.length) return false;
+  return normalizedLeft.every((value, index) => value === normalizedRight[index]);
+}
+
+function sameDateValue(left, right) {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return new Date(left).getTime() === new Date(right).getTime();
 }
 
 async function sendQuickTaskAssignmentEmails({ tenantId, assigneeIds, actorId, quickTask }) {
@@ -258,6 +272,7 @@ export async function createQuickTask({ companyId, workspaceId, userId, data, ro
   const tenantId = companyId;
   const { QuickTask, ActivityLog, Notification } = await getTenantModels(companyId);
 
+  const normalizedTitle = normalizeTaskTitle(data.title);
   const assigneeIds = normalizeAssigneeIds(data);
   const reporterId = data.reporterId || userId;
   const migrationMode = Boolean(data.migrationMode);
@@ -269,12 +284,14 @@ export async function createQuickTask({ companyId, workspaceId, userId, data, ro
 
   const isPrivate = Boolean(data.isPrivate);
 
-  if (!String(data.title || '').trim()) {
+  if (!normalizedTitle) {
     const err = new Error('Title is required');
     err.statusCode = 400;
     err.code = 'TITLE_REQUIRED';
     throw err;
   }
+
+  assertAllowedTaskTitle(normalizedTitle);
 
   if (!data.dueDate) {
     const err = new Error('Due date is required');
@@ -294,10 +311,33 @@ export async function createQuickTask({ companyId, workspaceId, userId, data, ro
     await assertActorCanAssignPrivateQuickTasks({ companyId, userId, role });
   }
 
+  const recentMatchingTasks = await QuickTask.find({
+    tenantId,
+    workspaceId,
+    reporterId,
+    title: normalizedTitle,
+    createdAt: { $gte: new Date(Date.now() - 15000) },
+  })
+    .sort({ createdAt: -1 })
+    .limit(5);
+
+  const duplicateTask = recentMatchingTasks.find((item) =>
+    sameIdList(item.assigneeIds, assigneeIds) &&
+    sameDateValue(item.dueDate, data.dueDate) &&
+    String(item.description || '') === String(data.description || '') &&
+    String(item.priority || 'medium') === String(data.priority || 'medium') &&
+    String(item.status || 'todo') === String(data.status || 'todo') &&
+    Boolean(item.isPrivate) === isPrivate
+  );
+
+  if (duplicateTask) {
+    return (await attachQuickTaskActivity({ companyId, workspaceId, tasks: [duplicateTask] }))[0];
+  }
+
   let quickTask = await QuickTask.create({
     tenantId,
     workspaceId,
-    title: data.title,
+    title: normalizedTitle,
     description: data.description,
     status: data.status || 'todo',
     priority: data.priority || 'medium',

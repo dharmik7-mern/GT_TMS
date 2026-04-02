@@ -323,7 +323,8 @@ export const QuickTasksPage: React.FC = () => {
   const [importResult, setImportResult] = useState<QuickTaskImportResult | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importServerError, setImportServerError] = useState('');
-  const isMyTasks = personFilter === (user?.id || '') && scope === 'all';
+  const isCreatedByMeActive = scope === 'created_by_me';
+  const isAssignedToMeActive = scope === 'assigned_to_me';
 
   const canImportQuickTasks = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
   const userMap = useMemo(() => new Map(users.map((item) => [item.id, item])), [users]);
@@ -389,14 +390,12 @@ export const QuickTasksPage: React.FC = () => {
           .includes(q);
       })
       .sort((a, b) => {
-        const aO = isOverdue(a);
-        const bO = isOverdue(b);
-        if (aO && !bO) return -1;
-        if (!aO && bO) return 1;
-        if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-        if (a.dueDate && !b.dueDate) return -1;
-        if (!a.dueDate && b.dueDate) return 1;
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        const createdAtDiff =
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+
+        if (createdAtDiff !== 0) return createdAtDiff;
+
+        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
       });
   }, [quickTasks, scope, query, departmentFilter, personFilter, user?.id, userMap]);
 
@@ -443,14 +442,12 @@ export const QuickTasksPage: React.FC = () => {
     setParams(params, { replace: true });
   };
 
-  const toggleMyTasks = () => {
-    if (!user?.id) return;
-    if (isMyTasks) {
-      setPersonFilter('all');
-    } else {
-      setPersonFilter(user.id);
-      setScope('all');
-    }
+  const toggleCreatedByMe = () => {
+    setScope((current) => (current === 'created_by_me' ? 'all' : 'created_by_me'));
+  };
+
+  const toggleAssignedToMe = () => {
+    setScope((current) => (current === 'assigned_to_me' ? 'all' : 'assigned_to_me'));
   };
 
   const resetImportState = () => {
@@ -686,10 +683,25 @@ export const QuickTasksPage: React.FC = () => {
           {['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '') && (
             <button
               type="button"
-              onClick={toggleMyTasks}
-              className={cn('btn-secondary btn-sm w-full sm:w-auto', isMyTasks && 'border-brand-500 text-brand-600')}
+              onClick={toggleCreatedByMe}
+              className={cn(
+                'btn-secondary btn-sm w-full sm:w-auto',
+                isCreatedByMeActive && 'border-brand-500 text-brand-600'
+              )}
             >
-              My Quick Tasks
+              Created By Me
+            </button>
+          )}
+          {['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '') && (
+            <button
+              type="button"
+              onClick={toggleAssignedToMe}
+              className={cn(
+                'btn-secondary btn-sm w-full sm:w-auto',
+                isAssignedToMeActive && 'border-brand-500 text-brand-600'
+              )}
+            >
+              Assigned to Me
             </button>
           )}
           {canImportQuickTasks && (

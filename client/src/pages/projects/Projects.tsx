@@ -376,7 +376,7 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
       onClick={() => navigate(`/projects/${project.id}`)}
     >
       <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-display font-bold text-base flex-shrink-0"
             style={{ backgroundColor: project.color }}

@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { Calendar, Flag, Search, User, X, Paperclip, Lock, Trash2 } from 'lucide-react';
 import { Modal } from '../Modal';
 import { cn, getTodayDateKey } from '../../utils/helpers';
+import { getReservedTaskTitleError } from '../../utils/taskTitleValidation';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
@@ -34,6 +35,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
   const defaultDueDate = getTodayDateKey();
 
   const [files, setFiles] = useState<File[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const {
     register,
@@ -90,6 +92,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
     setAssigneeOpen(false);
     setAssigneeQuery('');
     setFiles([]);
+    setSubmitting(false);
   }, [open, task]);
 
   useEffect(() => {
@@ -137,41 +140,45 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
     setValue('assigneeIds', [], { shouldDirty: true, shouldValidate: true });
   };
 
-  const onSubmit = (data: QuickTaskFormData) => {
-    (async () => {
-      const payload = {
-        title: data.title.trim(),
-        description: data.description?.trim() || undefined,
-        status: 'todo', // Always start as 'New task'
-        priority: data.priority,
-        assigneeIds: data.assigneeIds || [],
-        dueDate: data.dueDate || undefined,
-        ...(canCurrentUserUsePrivateTask ? { isPrivate: data.isPrivate } : {}),
-      };
-      try {
-        let qtId: string | undefined;
-        if (task) {
-          const res = await quickTasksService.update(task.id, payload);
-          qtId = res.data?.data?.id ?? task.id;
-        } else {
-          const res = await quickTasksService.create(payload);
-          qtId = res.data?.data?.id;
-        }
-        
-        if (qtId && files.length) {
-          try {
-            await quickTasksService.uploadAttachments(qtId, files);
-          } catch (uploadErr) {
-            console.error('Failed to upload attachments for quick task:', uploadErr);
-          }
-        }
-        
-        await bootstrap();
-        onClose();
-      } catch (err) {
-        console.error('Failed to save quick task:', err);
+  const onSubmit = async (data: QuickTaskFormData) => {
+    if (submitting) return;
+
+    const payload = {
+      title: data.title.trim(),
+      description: data.description?.trim() || undefined,
+      status: 'todo', // Always start as 'New task'
+      priority: data.priority,
+      assigneeIds: data.assigneeIds || [],
+      dueDate: data.dueDate || undefined,
+      ...(canCurrentUserUsePrivateTask ? { isPrivate: data.isPrivate } : {}),
+    };
+
+    try {
+      setSubmitting(true);
+      let qtId: string | undefined;
+      if (task) {
+        const res = await quickTasksService.update(task.id, payload);
+        qtId = res.data?.data?.id ?? task.id;
+      } else {
+        const res = await quickTasksService.create(payload);
+        qtId = res.data?.data?.id;
       }
-    })();
+
+      if (qtId && files.length) {
+        try {
+          await quickTasksService.uploadAttachments(qtId, files);
+        } catch (uploadErr) {
+          console.error('Failed to upload attachments for quick task:', uploadErr);
+        }
+      }
+
+      await bootstrap();
+      onClose();
+    } catch (err) {
+      console.error('Failed to save quick task:', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDelete = () => {
@@ -220,7 +227,10 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
           <div>
             <label className="label">Title</label>
             <input
-              {...register('title', { required: 'Title is required' })}
+              {...register('title', {
+                required: 'Title is required',
+                validate: (value) => getReservedTaskTitleError(value) || true,
+              })}
               className={cn('input border-white/70 bg-white/90 shadow-sm dark:border-surface-700/80 dark:bg-surface-900/85', errors.title && 'border-rose-300 focus:ring-rose-200')}
               placeholder="e.g. Follow up with design review"
               autoFocus
@@ -513,8 +523,8 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
             <button type="button" className="btn-secondary btn-sm hidden md:flex" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary btn-sm hidden md:flex">
-              {task ? 'Save' : 'Create'}
+            <button type="submit" disabled={submitting} className="btn-primary btn-sm hidden md:flex disabled:opacity-60 disabled:cursor-not-allowed">
+              {submitting ? (task ? 'Saving...' : 'Creating...') : task ? 'Save' : 'Create'}
             </button>
           </div>
         </form>

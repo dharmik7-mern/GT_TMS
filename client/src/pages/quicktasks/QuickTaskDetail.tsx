@@ -232,9 +232,14 @@ export const QuickTaskDetailPage: React.FC = () => {
   const onChangePriority = (p: Priority) => { void syncQuickTask({ priority: p }); };
   const onChangeDueDate = (dueDate: string) => { void syncQuickTask({ dueDate: dueDate || undefined }); };
 
-  const onDelete = () => {
-    deleteQuickTask(task.id);
-    navigate('/quick-tasks');
+  const onDelete = async () => {
+    try {
+      await quickTasksService.delete(task.id);
+      deleteQuickTask(task.id);
+      navigate('/quick-tasks');
+    } catch {
+      // keep the user on the page if delete fails
+    }
   };
 
   const handleAddComment = async () => {
