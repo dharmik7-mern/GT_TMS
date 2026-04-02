@@ -7,7 +7,6 @@ export type TaskStatus =
   | 'scheduled'
   | 'in_progress'
   | 'in_review'
-  | 'blocked'
   | 'done';
 export type TaskType = 'operational' | 'design' | 'important';
 

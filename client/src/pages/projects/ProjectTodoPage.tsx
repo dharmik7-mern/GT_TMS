@@ -90,7 +90,6 @@ function StatusCell({ status, onChange, disabled }: { status: TaskStatus; onChan
 const LABEL_STYLES: Record<string, string> = {
   ASAP: 'bg-brand-600 text-white',
   Feedback: 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300',
-  blocked: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 export const ProjectTodoPage: React.FC = () => {
@@ -216,8 +215,8 @@ export const ProjectTodoPage: React.FC = () => {
     const title = (subDraft[taskId] || '').trim();
     if (!title) return;
     try {
-      const assigneeIds = subDraftAssignees[taskId] || [];
-      await tasksService.addSubtask(taskId, { title, assigneeIds });
+      const assigneeId = (subDraftAssignees[taskId] || [])[0] || undefined;
+      await tasksService.addSubtask(taskId, { title, assigneeId });
       setSubDraft((d) => ({ ...d, [taskId]: '' }));
       setSubDraftAssignees((d) => ({ ...d, [taskId]: [] }));
       await loadTasks();
@@ -415,16 +414,16 @@ export const ProjectTodoPage: React.FC = () => {
                           disabled={!canModifySubtasks}
                         />
                         <span className={cn(s.isCompleted && 'line-through text-surface-400')}>{s.title}</span>
-                        {(s.assigneeIds ?? []).length > 0 && (
+                        {s.assigneeId && (
                           <div className="flex items-center gap-1 ml-auto">
-                            {(s.assigneeIds ?? []).map((uid) => {
-                              const assignee = users.find((u) => u.id === uid);
+                            {(() => {
+                              const assignee = users.find((u) => u.id === s.assigneeId);
                               return (
-                                <div key={uid} title={assignee?.name} className="text-[10px]">
+                                <div key={s.assigneeId} title={assignee?.name} className="text-[10px]">
                                   <UserAvatar name={assignee?.name || '?'} color={assignee?.color} size="xs" />
                                 </div>
                               );
-                            })}
+                            })()}
                           </div>
                         )}
                         {canModifySubtasks && (

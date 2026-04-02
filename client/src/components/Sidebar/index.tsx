@@ -27,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'Projects', icon: FolderKanban, path: '/projects' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
+  { label: 'Quick Tasks', icon: Zap, path: '/quick-tasks' },
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
@@ -49,6 +50,7 @@ const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'Projects', icon: FolderKanban, path: '/projects' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
+  { label: 'Quick Tasks', icon: Zap, path: '/quick-tasks' },
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams' },
@@ -70,6 +72,7 @@ const PLATFORM_ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { label: 'My Planner', icon: Sparkles, path: '/planner' },
   { label: 'All Tasks', icon: ListTodo, path: '/tasks' },
+  { label: 'Quick Tasks', icon: Zap, path: '/quick-tasks' },
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Companies', icon: Building2, path: '/companies' },
   { label: 'Users List', icon: UserCircle, path: '/users' },
@@ -111,7 +114,6 @@ export const Sidebar: React.FC = () => {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [openDepartments, setOpenDepartments] = useState<Record<string, boolean>>({});
-  const [quickTasksExpanded, setQuickTasksExpanded] = useState(true);
   const [openProjectTodos, setOpenProjectTodos] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -611,49 +613,6 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-
-        {/* Quick Tasks Section */}
-        {!isCollapsed && user?.role !== 'super_admin' && (
-          <div className="pt-3">
-            <div
-              onClick={() => setQuickTasksExpanded(!quickTasksExpanded)}
-              className="w-full flex items-center gap-1 px-3 py-1 mb-1 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800/50 rounded-lg transition-colors"
-            >
-
-              <p className="section-title flex-1 text-left">Quick tasks</p>
-
-
-              <ChevronDown size={12} className={cn('text-surface-400 transition-transform', quickTasksExpanded && 'rotate-180')} />
-            </div>
-
-            <AnimatePresence>
-              {quickTasksExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden space-y-0.5"
-                >
-                  <NavLink
-                    to="/quick-tasks"
-                    className={({ isActive }) => cn(isActive ? 'nav-item-active' : 'nav-item-inactive', 'text-xs')}
-                  >
-                    <Zap size={14} className="flex-shrink-0" />
-                    <span className="truncate">Quick Tasks</span>
-                  </NavLink>
-
-                  {/* <button
-                    onClick={() => navigate('/quick-tasks?new=1')}
-                    className="nav-item-inactive text-xs w-full"
-                  >
-                    <Plus size={14} />
-                    <span>New Quick Task</span>
-                  </button> */}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
 
 
       </nav>

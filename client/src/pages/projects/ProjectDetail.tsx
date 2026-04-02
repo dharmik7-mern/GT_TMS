@@ -347,8 +347,7 @@ export const ProjectDetailPage: React.FC = () => {
             <div key={key} className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wide border transition-colors', 
               key === 'todo' && 'bg-surface-50 dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-200 dark:border-surface-700',
               key === 'in_progress' && 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50',
-              key === 'done' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
-              key === 'blocked' && 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50'
+              key === 'done' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50'
             )}>
               <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
               {cfg.label}

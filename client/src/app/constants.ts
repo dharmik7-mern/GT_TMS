@@ -16,7 +16,6 @@ export const STATUS_CONFIG = {
   scheduled: { label: 'Scheduled', color: '#0ea5e9', bg: 'bg-sky-50 dark:bg-sky-950/30', text: 'text-sky-700 dark:text-sky-400' },
   in_progress: { label: 'In Progress', color: '#3366ff', bg: 'bg-brand-50 dark:bg-brand-950/30', text: 'text-brand-700 dark:text-brand-400' },
   in_review: { label: 'In Review', color: '#7c3aed', bg: 'bg-violet-50 dark:bg-violet-950/30', text: 'text-violet-700 dark:text-violet-400' },
-  blocked: { label: 'Blocked', color: '#64748b', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400' },
   done: { label: 'Completed', color: '#10b981', bg: 'bg-emerald-50 dark:bg-emerald-950/30', text: 'text-emerald-700 dark:text-emerald-400' },
 } as const;
 

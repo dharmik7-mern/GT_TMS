@@ -25,7 +25,6 @@ const BASE_COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
   { id: 'scheduled', title: 'Scheduled', color: '#0ea5e9' },
   { id: 'in_progress', title: 'In Progress', color: '#3366ff' },
   { id: 'in_review', title: 'In Review', color: '#7c3aed' },
-  { id: 'blocked', title: 'Blocked', color: '#64748b' },
   { id: 'done', title: 'Completed', color: '#10b981' },
 ];
 

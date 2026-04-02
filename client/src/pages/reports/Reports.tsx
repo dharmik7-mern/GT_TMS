@@ -78,7 +78,6 @@ const TASK_STATUS_COLORS: Record<string, string> = {
   backlog: '#cbd5e1',
   scheduled: '#8b5cf6',
   in_review: '#f59e0b',
-  blocked: '#ef4444',
 };
 
 const COMPANY_STATUS_COLORS: Record<string, string> = {

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Search, Filter, List, LayoutGrid, Plus, MoreHorizontal,
   Calendar, Clock, User, ChevronDown, Check, Mail, AlertCircle,
-  Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon, SlidersHorizontal
+  Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon, SlidersHorizontal,
+  Zap, Briefcase, Clock3, Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
@@ -152,6 +154,23 @@ export const TasksManagement: React.FC = () => {
   const [tasksPerPage] = useState(10);
   const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick', 'personal']);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'active' | 'project' | 'quick' | 'overdue' | null>(null);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const filter = params.get('filter');
+    if (filter === 'overdue') {
+      setSelectedCategory('overdue');
+    } else if (filter === 'active') {
+      setSelectedCategory('active');
+    } else if (filter === 'project') {
+      setSelectedCategory('project');
+    } else if (filter === 'quick') {
+      setSelectedCategory('quick');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (selectedTask) {
@@ -308,6 +327,24 @@ export const TasksManagement: React.FC = () => {
     }
   };
 
+  const summaryStats = useMemo(() => {
+    const all = [...projectTasks, ...quickTasks];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    return {
+      active: all.filter(t => t.status !== 'done').length,
+      projects: projectTasks.length,
+      quick: quickTasks.length,
+      overdue: all.filter(t => {
+        if (!t.dueDate || t.status === 'done') return false;
+        const d = new Date(t.dueDate);
+        d.setHours(0, 0, 0, 0);
+        return d < now;
+      }).length
+    };
+  }, [projectTasks, quickTasks]);
+
   const filteredTasks = (list: TaskRow[]) => {
     const query = searchTerm.trim().toLowerCase();
     let filtered = list.filter((task) => {
@@ -330,6 +367,24 @@ export const TasksManagement: React.FC = () => {
         .includes(query);
     });
 
+    if (selectedCategory === 'active') {
+      filtered = filtered.filter(t => t.status !== 'done');
+    } else if (selectedCategory === 'project') {
+      filtered = filtered.filter(t => t.type === 'project');
+    } else if (selectedCategory === 'quick') {
+      filtered = filtered.filter(t => t.type === 'quick');
+    } else if (selectedCategory === 'overdue') {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => {
+        if (!t.dueDate || t.status === 'done') return false;
+        const d = new Date(t.dueDate);
+        d.setHours(0, 0, 0, 0);
+        return d < now;
+      });
+    }
+
+    // Restore existing dropdown filters
     if (filterStatus !== 'all') {
       filtered = filtered.filter(t => t.status === filterStatus);
     }
@@ -359,8 +414,8 @@ export const TasksManagement: React.FC = () => {
     );
   };
 
-  const filteredProjectTasks = useMemo(() => filteredTasks(projectTasks), [projectTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap]);
-  const filteredQuickTasks = useMemo(() => filteredTasks(quickTasks), [quickTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap]);
+  const filteredProjectTasks = useMemo(() => filteredTasks(projectTasks), [projectTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory]);
+  const filteredQuickTasks = useMemo(() => filteredTasks(quickTasks), [quickTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory]);
   const allFilteredTasks = useMemo(() => [...filteredProjectTasks, ...filteredQuickTasks], [filteredProjectTasks, filteredQuickTasks]);
   const activeTasksPageCount = Math.max(1, Math.ceil(allFilteredTasks.length / tasksPerPage));
   const projectTasksPageCount = Math.max(1, Math.ceil(filteredProjectTasks.length / tasksPerPage));
@@ -402,7 +457,43 @@ export const TasksManagement: React.FC = () => {
   };
 
   return (
-    <div className="min-h-full flex flex-col bg-[#f8f9fc] dark:bg-surface-950 p-3 sm:p-4 lg:p-6 overflow-x-hidden">
+    <div className="min-h-full flex flex-col bg-[#fcfdfe] dark:bg-surface-950 p-4 sm:p-5 lg:p-6 overflow-x-hidden">
+      {/* 1. Minimal Summary Cards Section */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 lg:mb-6">
+        <SummaryCard 
+          title="Active Tasks"
+          count={summaryStats.active}
+          icon={Activity}
+          color="blue"
+          isActive={selectedCategory === 'active'}
+          onClick={() => setSelectedCategory(selectedCategory === 'active' ? null : 'active')}
+        />
+        <SummaryCard 
+          title="Project Tasks"
+          count={summaryStats.projects}
+          icon={Briefcase}
+          color="purple"
+          isActive={selectedCategory === 'project'}
+          onClick={() => setSelectedCategory(selectedCategory === 'project' ? null : 'project')}
+        />
+        <SummaryCard 
+          title="Quick Tasks"
+          count={summaryStats.quick}
+          icon={Zap}
+          color="emerald"
+          isActive={selectedCategory === 'quick'}
+          onClick={() => setSelectedCategory(selectedCategory === 'quick' ? null : 'quick')}
+        />
+        <SummaryCard 
+          title="Overdue Tasks"
+          count={summaryStats.overdue}
+          icon={Clock3}
+          color="rose"
+          isActive={selectedCategory === 'overdue'}
+          onClick={() => setSelectedCategory(selectedCategory === 'overdue' ? null : 'overdue')}
+        />
+      </div>
+
       {/* Bordio Style Top Header */}
       <div className="mb-4 flex flex-col gap-3 lg:mb-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -510,7 +601,7 @@ export const TasksManagement: React.FC = () => {
                   <div>
                     <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-surface-500 ml-1">Status</label>
                     <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {['all', 'todo', 'in_progress', 'done', 'blocked'].map(f => (
+                      {['all', 'todo', 'in_progress', 'done', 'in_review'].map(f => (
                         <button
                           key={f}
                           type="button"
@@ -583,7 +674,22 @@ export const TasksManagement: React.FC = () => {
 
       <div className="relative flex-1">
         <AnimatePresence mode="wait">
-          {view === 'table' ? (
+          {!selectedCategory ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex flex-col items-center justify-center p-12 sm:p-20 text-center bg-white dark:bg-surface-900 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-surface-800 shadow-sm"
+            >
+              <div className="w-20 h-20 bg-[#f8f9fc] dark:bg-surface-800 rounded-full flex items-center justify-center mb-6 text-gray-300 dark:text-surface-600 ring-8 ring-white dark:ring-surface-900 shadow-inner">
+                <List size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-surface-100 mb-2">Ready to work?</h3>
+              <p className="text-sm text-gray-500 dark:text-surface-400 max-w-xs mx-auto leading-relaxed font-medium">
+                Select a summary card above to view and manage specific tasks.
+              </p>
+            </motion.div>
+          ) : view === 'table' ? (
             <motion.div
               key="table"
               initial={{ opacity: 0, y: 10 }}
@@ -593,6 +699,7 @@ export const TasksManagement: React.FC = () => {
             >
               <div className="flex flex-col gap-6 overflow-visible lg:overflow-auto custom-scrollbar">
                 {/* 1. Active Tasks Section */}
+                {selectedCategory === 'active' && (
                 <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                   <div
                     onClick={() => toggleSection('active')}
@@ -654,8 +761,10 @@ export const TasksManagement: React.FC = () => {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* 2. Projects Section */}
+                {selectedCategory === 'project' && (
                 <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                   <div
                     onClick={() => toggleSection('projects')}
@@ -738,21 +847,79 @@ export const TasksManagement: React.FC = () => {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* 3. Quick Tasks Section */}
+                {selectedCategory === 'quick' && (
+                  <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
+                    <div
+                      onClick={() => toggleSection('quick')}
+                      className="px-5 py-3 border-b border-gray-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-950/20 sticky top-0 z-10 backdrop-blur-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('quick') && "-rotate-90")} />
+                        <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Quick Tasks</span>
+                        <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{filteredQuickTasks.length}</span>
+                      </div>
+                    </div>
+
+                    {activeSections.includes('quick') && (
+                      <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
+                        <table className="min-w-[760px] w-full text-xs text-left border-collapse">
+                          <colgroup>
+                            <col style={{ width: '32%' }} />
+                            <col style={{ width: '12%' }} />
+                            <col style={{ width: '10%' }} />
+                            <col style={{ width: '12%' }} />
+                            <col style={{ width: '10%' }} />
+                            <col style={{ width: '18%' }} />
+                            <col style={{ width: '6%' }} />
+                          </colgroup>
+                          <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
+                            {filteredQuickTasks.length === 0 ? (
+                              <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No quick tasks found.</td></tr>
+                            ) : (
+                              <>
+                                {paginatedQuickTasks.map((task, idx) => (
+                                  <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
+                                ))}
+                                {filteredQuickTasks.length > tasksPerPage && (
+                                  <tr>
+                                    <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
+                                      <PaginationControls
+                                        currentPage={quickPage}
+                                        totalPages={quickTasksPageCount}
+                                        totalItems={filteredQuickTasks.length}
+                                        itemsPerPage={tasksPerPage}
+                                        onPageChange={setQuickPage}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 4. Overdue Tasks Section */}
+                {selectedCategory === 'overdue' && (
                 <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                   <div
-                    onClick={() => toggleSection('quick')}
+                    onClick={() => toggleSection('overdue')}
                     className="px-5 py-3 border-b border-gray-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-950/20 sticky top-0 z-10 backdrop-blur-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800/40 transition-colors"
                   >
                     <div className="flex items-center gap-2">
-                      <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('quick') && "-rotate-90")} />
-                      <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Quick Tasks</span>
-                      <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.type === 'quick').length}</span>
+                      <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('overdue') && "-rotate-90")} />
+                      <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Overdue Tasks</span>
+                      <span className="bg-rose-100 dark:bg-rose-950/30 text-rose-500 dark:text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.length}</span>
                     </div>
                   </div>
 
-                  {activeSections.includes('quick') && (
+                  {activeSections.includes('overdue') && (
                     <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
                       <table className="min-w-[760px] w-full text-xs text-left border-collapse">
                         <colgroup>
@@ -764,54 +931,31 @@ export const TasksManagement: React.FC = () => {
                           <col style={{ width: '18%' }} />
                           <col style={{ width: '6%' }} />
                         </colgroup>
+                        <thead className="bg-white dark:bg-surface-900 text-gray-400 dark:text-surface-500 font-semibold border-b border-gray-50 dark:border-surface-800">
+                          <tr>
+                            <th className="px-5 py-3 font-semibold min-w-[300px]">Task Name</th>
+                            <th className="px-3 py-3 font-semibold">Status</th>
+                            <th className="px-3 py-3 font-semibold">Type</th>
+                            <th className="px-3 py-3 font-semibold">Due date</th>
+                            <th className="px-3 py-3 font-semibold">Est. time</th>
+                            <th className="px-3 py-3 font-semibold">Responsible</th>
+                            <th className="px-5 py-3 w-10 text-right"><MoreHorizontal size={14} className="text-gray-300 dark:text-surface-700" /></th>
+                          </tr>
+                        </thead>
                         <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                          {allFilteredTasks.filter(t => t.type === 'quick').length === 0 ? (
-                            <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No quick tasks found.</td></tr>
+                          {allFilteredTasks.length === 0 ? (
+                            <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No overdue tasks found. Great job!</td></tr>
                           ) : (
-                            (() => {
-                              const qTasks = allFilteredTasks.filter(t => t.type === 'quick');
-                              const paginatedQTasks = qTasks.slice((quickPage - 1) * tasksPerPage, quickPage * tasksPerPage);
-                              return (
-                                <>
-                                  {paginatedQuickTasks.map((task, idx) => (
-                                    <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
-                                  ))}
-                                  {filteredQuickTasks.length > tasksPerPage && (
-                                    <tr>
-                                      <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                                            Showing {Math.min(qTasks.length, (quickPage - 1) * tasksPerPage + 1)}-{Math.min(qTasks.length, quickPage * tasksPerPage)} of {qTasks.length}
-                                          </span>
-                                          <div className="flex items-center gap-2">
-                                            {Array.from({ length: Math.ceil(qTasks.length / tasksPerPage) }, (_, i) => i + 1).map(page => (
-                                              <button
-                                                key={page}
-                                                onClick={() => setQuickPage(page)}
-                                                className={cn(
-                                                  "w-8 h-8 rounded-lg text-xs font-bold transition-all",
-                                                  quickPage === page
-                                                    ? "bg-[#00a3ff] text-white shadow-lg shadow-blue-500/20"
-                                                    : "bg-white dark:bg-surface-900 text-gray-500 dark:text-surface-400 hover:bg-gray-100 dark:hover:bg-surface-800 border border-gray-100 dark:border-surface-800"
-                                                )}
-                                              >
-                                                {page}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  )}
-                                </>
-                              );
-                            })()
+                            allFilteredTasks.map((task, idx) => (
+                              <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
+                            ))
                           )}
                         </tbody>
                       </table>
                     </div>
                   )}
                 </div>
+                )}
               </div>
             </motion.div>
           ) : (
@@ -1111,7 +1255,6 @@ const TaskDetailOverlay: React.FC<{
                       <option value="in_progress" className="dark:bg-surface-900">In Progress</option>
                       <option value="in_review" className="dark:bg-surface-900">In Review</option>
                       <option value="done" className="dark:bg-surface-900">Completed</option>
-                      <option value="blocked" className="dark:bg-surface-900">Blocked</option>
                     </select>
                   </div>
 
@@ -1521,23 +1664,23 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
       onClick={onClick}
       className="hover:bg-blue-50/30 dark:hover:bg-surface-800/50 transition-colors cursor-pointer group animate-in fade-in duration-300"
     >
-      <td className="px-5 py-3 align-middle">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="truncate text-[13px] font-bold text-gray-900 dark:text-surface-100 drop-shadow-sm">{task.title}</span>
+      <td className="px-5 py-4 align-middle">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="truncate text-sm font-bold text-gray-900 dark:text-surface-100">{task.title}</span>
           {task.projectName !== '-' && (
-            <span className="whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-blue-600 dark:bg-brand-950/30 dark:text-brand-300">{task.projectName}</span>
+            <span className="whitespace-nowrap rounded-full bg-blue-50/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:bg-brand-950/30 dark:text-brand-300 border border-blue-100/50 dark:border-brand-500/20">{task.projectName}</span>
           )}
         </div>
       </td>
-      <td className="px-3 py-3 align-middle whitespace-nowrap">
-        <div className="flex items-center gap-2.5 whitespace-nowrap">
-          <div className={cn("w-1.5 h-1.5 rounded-full", task.status === 'done' ? 'bg-emerald-500' : 'bg-blue-500')} style={{ backgroundColor: STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.color }} />
-          <span className="text-gray-600 font-bold text-[11px] uppercase tracking-tight">{STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.label || task.status.replace('_', ' ')}</span>
+      <td className="px-3 py-4 align-middle whitespace-nowrap">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.color }} />
+          <span className="text-gray-600 dark:text-surface-300 font-bold text-[11px] uppercase tracking-wide">{STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.label || task.status.replace('_', ' ')}</span>
         </div>
       </td>
-      <td className="px-3 py-3 align-middle whitespace-nowrap">
+      <td className="px-3 py-4 align-middle whitespace-nowrap">
         <div className={cn(
-          "inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.05em]",
+          "inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
           task.priority === 'urgent' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
             task.priority === 'high' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
               'bg-blue-50 text-blue-600 border border-blue-100'
@@ -1545,29 +1688,80 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
           {task.priority}
         </div>
       </td>
-      <td className="px-3 py-3 align-middle text-gray-500 dark:text-surface-400 whitespace-nowrap">
+      <td className="px-3 py-4 align-middle text-gray-500 dark:text-surface-400 whitespace-nowrap">
         {task.dueDate ? (
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 dark:text-surface-500">
-            <Calendar size={12} />
+          <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 dark:text-surface-500">
+            <Calendar size={13} className="opacity-70" />
             {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
           </div>
         ) : (
           <span className="text-gray-300 dark:text-surface-700">-</span>
         )}
       </td>
-      <td className="px-3 py-3 align-middle text-[11px] font-bold text-gray-400/80 dark:text-surface-500/80 text-center whitespace-nowrap">
+      <td className="px-3 py-4 align-middle text-[11px] font-bold text-gray-400 dark:text-surface-500 text-center whitespace-nowrap">
         {task.estimatedHours ? `${task.estimatedHours}h` : '-'}
       </td>
-      <td className="px-3 py-3 align-middle whitespace-nowrap">
-        <div className="flex items-center gap-2">
+      <td className="px-3 py-4 align-middle whitespace-nowrap">
+        <div className="flex items-center gap-2.5">
           <UserAvatar name={task.assignedTo || 'U'} avatar={task.assigneeAvatar} size="xs" />
-          <span className="text-gray-700 dark:text-surface-300 font-bold text-[11px]">{task.assignedTo || 'Unassigned'}</span>
+          <span className="text-gray-700 dark:text-surface-200 font-bold text-[11px]">{task.assignedTo || 'Unassigned'}</span>
         </div>
       </td>
-      <td className="px-5 py-3 align-middle text-right">
-        <MoreHorizontal size={14} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <td className="px-5 py-4 align-middle text-right">
+        <MoreHorizontal size={14} className="text-gray-300 dark:text-surface-700 opacity-0 group-hover:opacity-100 transition-opacity" />
       </td>
     </tr>
+  );
+};
+
+const SummaryCard: React.FC<{
+  title: string;
+  count: number;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
+  color: 'blue' | 'purple' | 'emerald' | 'rose';
+  isActive: boolean;
+  onClick: () => void;
+}> = ({ title, count, icon: Icon, color, isActive, onClick }) => {
+  const colors = {
+    blue: { bg: 'bg-blue-500', light: 'bg-blue-50 dark:bg-blue-950/30', text: 'text-blue-500', group: 'group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40' },
+    purple: { bg: 'bg-purple-500', light: 'bg-purple-50 dark:bg-purple-950/30', text: 'text-purple-500', group: 'group-hover:bg-purple-100 dark:group-hover:bg-purple-900/40' },
+    emerald: { bg: 'bg-emerald-500', light: 'bg-emerald-50 dark:bg-emerald-950/30', text: 'text-emerald-500', group: 'group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40' },
+    rose: { bg: 'bg-rose-500', light: 'bg-rose-50 dark:bg-rose-950/30', text: 'text-rose-500', group: 'group-hover:bg-rose-100 dark:group-hover:bg-rose-900/40' },
+  };
+  
+  const c = colors[color];
+
+  return (
+    <motion.button
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.99 }}
+      onClick={onClick}
+      className={cn(
+        "flex-1 min-w-[120px] p-3.5 sm:p-4 rounded-2xl border transition-all duration-300 text-left relative overflow-hidden group",
+        isActive 
+          ? "bg-white dark:bg-surface-900 border-blue-500 shadow-md ring-1 ring-blue-500/10" 
+          : "bg-white dark:bg-surface-900 border-gray-100 dark:border-surface-800 hover:border-gray-200 dark:hover:border-surface-700 shadow-sm"
+      )}
+    >
+      <div className={cn(
+        "w-8 h-8 rounded-xl flex items-center justify-center mb-2 transition-colors",
+        isActive ? `${c.bg} text-white` : `${c.light} ${c.text} ${c.group}`
+      )}>
+        <Icon size={16} />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-wider mb-0.5">{title}</p>
+        <p className="text-2xl font-black text-gray-900 dark:text-surface-50 leading-tight">{count}</p>
+      </div>
+      {isActive && (
+        <motion.div 
+          layoutId="active-indicator"
+          className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        />
+      )}
+    </motion.button>
   );
 };
 

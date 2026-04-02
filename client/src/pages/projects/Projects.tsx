@@ -87,7 +87,7 @@ const PROJECT_IMPORT_HEADER_ALIASES: Record<string, string[]> = {
 };
 
 const VALID_PROJECT_IMPORT_STATUSES: ProjectStatus[] = ['active', 'on_hold', 'completed', 'archived'];
-const VALID_PROJECT_IMPORT_TASK_STATUSES: TaskStatus[] = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'];
+const VALID_PROJECT_IMPORT_TASK_STATUSES: TaskStatus[] = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'done'];
 const VALID_PROJECT_IMPORT_PRIORITIES: Priority[] = ['low', 'medium', 'high', 'urgent'];
 const STATUS_FILTERS: { value: ProjectStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },

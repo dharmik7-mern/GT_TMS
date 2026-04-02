@@ -11,7 +11,7 @@ const subtaskSchema = new mongoose.Schema(
   { _id: true, timestamps: true }
 );
 
-const taskStatuses = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'];
+const taskStatuses = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'done'];
 const taskTypes = ['operational', 'design', 'important'];
 const reviewStatuses = ['pending', 'approved', 'changes_requested'];
 const timelineItemTypes = ['task', 'milestone'];

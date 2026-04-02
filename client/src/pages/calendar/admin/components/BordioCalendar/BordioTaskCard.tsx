@@ -29,7 +29,6 @@ function cleanTags(tags?: string[]): string[] {
 
 const TAG_STYLES: Record<string, { bg: string; text: string }> = {
     feedback: { bg: '#D1FAE5', text: '#065F46' },
-    blocked:  { bg: '#FEE2E2', text: '#991B1B' },
     bug:      { bg: '#FEE2E2', text: '#991B1B' },
     review:   { bg: '#EDE9FE', text: '#5B21B6' },
     urgent:   { bg: '#FEF3C7', text: '#92400E' },
@@ -155,7 +154,6 @@ export const BordioTaskCard: React.FC<BordioTaskCardProps> = ({
                             if (!dark) return TAG_STYLES[key] ?? TAG_STYLES.default;
                             const darkStyles: Record<string, { bg: string; text: string }> = {
                                 feedback: { bg: 'rgba(52, 211, 153, 0.2)', text: '#34D399' },
-                                blocked:  { bg: 'rgba(239, 68, 68, 0.2)',  text: '#F87171' },
                                 bug:      { bg: 'rgba(239, 68, 68, 0.2)',  text: '#F87171' },
                                 review:   { bg: 'rgba(167, 139, 250, 0.2)', text: '#A78BFA' },
                                 urgent:   { bg: 'rgba(251, 191, 36, 0.2)',  text: '#FBBF24' },
