@@ -29,8 +29,9 @@ export const ReassignRequestModal: React.FC<ReassignRequestModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+    (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    ['team_leader', 'team_member'].includes(u.role)
   );
 
   const handleSubmit = async () => {

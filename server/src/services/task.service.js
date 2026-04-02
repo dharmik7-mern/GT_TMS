@@ -1075,6 +1075,7 @@ export async function addSubtask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
+  await syncProjectStats(companyId, workspaceId, task.projectId);
   return task;
 }
 
@@ -1125,6 +1126,7 @@ export async function updateSubtask({ companyId, workspaceId, userId, role, task
     });
   }
 
+  await syncProjectStats(companyId, workspaceId, task.projectId);
   return task;
 }
 
@@ -1156,6 +1158,7 @@ export async function removeSubtask({ companyId, workspaceId, userId, role, task
   if (!sub) return null;
   sub.deleteOne();
   await task.save();
+  await syncProjectStats(companyId, workspaceId, task.projectId);
   return task;
 }
 

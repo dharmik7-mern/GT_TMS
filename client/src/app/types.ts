@@ -15,7 +15,7 @@ export interface TaskSubtask {
   id: string;
   title: string;
   isCompleted: boolean;
-  assigneeIds?: string[];
+  assigneeId?: string | null;
   order: number;
   createdAt?: string;
   updatedAt?: string;

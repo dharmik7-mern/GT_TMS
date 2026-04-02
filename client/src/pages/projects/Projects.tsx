@@ -353,8 +353,9 @@ function parseProjectsCsv(content: string) {
 const ProjectCard = React.forwardRef<HTMLDivElement, {
   project: Project;
   onDelete: (id: string) => void;
+  onArchive: (id: string) => void;
   onEdit: (project: Project) => void;
-}>(({ project, onDelete, onEdit }, ref) => {
+}>(({ project, onDelete, onArchive, onEdit }, ref) => {
   const navigate = useNavigate();
   const { users, workspaces } = useAppStore();
   const members = users.filter(u => project.members.includes(u.id));
@@ -362,7 +363,8 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
   const workspacePermissions = workspaces[0]?.settings?.permissions || {};
   const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
   const canManageProjects = user?.role !== 'team_member' || canEditOtherProjects;
-  const badge = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.todo;
+  const badge = PROJECT_STATUS_BADGES[project.status];
+  const isArchived = project.status === 'archived';
 
   return (
     <motion.div
@@ -372,9 +374,20 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.97 }}
       whileHover={{ y: -2 }}
-      className="card p-5 cursor-pointer hover:shadow-card-hover transition-all"
+      className={cn(
+        "card p-5 cursor-pointer hover:shadow-card-hover transition-all relative overflow-hidden",
+        isArchived && "opacity-75 grayscale-[0.3]"
+      )}
       onClick={() => navigate(`/projects/${project.id}`)}
     >
+      {isArchived && (
+        <div className="absolute top-0 right-0">
+          <div className="bg-surface-800 text-white text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-bl-xl shadow-sm border-l border-b border-surface-700/50">
+            Archived
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div
@@ -385,7 +398,7 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
           </div>
           <div className="min-w-0">
             <h3 className="font-display font-semibold text-surface-900 dark:text-white truncate">{project.name}</h3>
-            <span className={cn('badge text-[10px] mt-0.5', badge.bg, badge.text)}>{badge.label}</span>
+            <span className={cn('badge text-[10px] mt-0.5', badge.className)}>{badge.label}</span>
           </div>
         </div>
 
@@ -411,7 +424,10 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
                 >
                   <Edit3 size={14} /> Edit
                 </DropdownMenu.Item>
-                <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none">
+                <DropdownMenu.Item 
+                  onClick={() => onArchive(project.id)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none"
+                >
                   <Archive size={14} /> Archive
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator className="h-px bg-surface-100 dark:bg-surface-800 my-1" />
@@ -454,7 +470,7 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
   );
 });
 
-const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; onEdit: (project: Project) => void }> = ({ project, onDelete, onEdit }) => {
+const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; onArchive: (id: string) => void; onEdit: (project: Project) => void }> = ({ project, onDelete, onArchive, onEdit }) => {
   const navigate = useNavigate();
   const { users, workspaces } = useAppStore();
   const members = users.filter(u => project.members.includes(u.id));
@@ -465,14 +481,19 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; o
   const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
   const canManageProjects = user?.role !== 'team_member' || canEditOtherProjects;
 
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="flex items-center gap-4 px-5 py-3.5 border-b border-surface-50 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors group"
-      onClick={() => navigate(`/projects/${project.id}`)}
-    >
+    const isArchived = project.status === 'archived';
+  
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        className={cn(
+          "flex items-center gap-4 px-5 py-3.5 border-b border-surface-50 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors group",
+          isArchived && "opacity-60 grayscale-[0.2]"
+        )}
+        onClick={() => navigate(`/projects/${project.id}`)}
+      >
       <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
         style={{ backgroundColor: project.color }}>
         {project.name[0]}
@@ -497,6 +518,13 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; o
       </div>
       {canManageProjects && (
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+          <button
+            title="Archive"
+            onClick={e => { e.stopPropagation(); onArchive(project.id); }}
+            className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-amber-500 flex items-center justify-center"
+          >
+            <Archive size={13} />
+          </button>
           <button
             onClick={e => { e.stopPropagation(); onEdit(project); }}
             className="btn-ghost w-8 h-8 rounded-lg text-surface-300 hover:text-brand-600 flex items-center justify-center"
@@ -788,6 +816,22 @@ export const ProjectsPage: React.FC = () => {
     }
   };
 
+  const handleArchiveProject = async (projectId: string) => {
+    try {
+      const res = await projectsService.update(projectId, { status: 'archived' });
+      const updated = res.data.data ?? res.data;
+      updateProject(projectId, updated);
+      await bootstrap();
+      emitSuccessToast('Project archived successfully.', 'Project Archived');
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'Project could not be archived.';
+      emitErrorToast(message, 'Project archive failed');
+    }
+  };
+
   const handleDeleteProject = async (projectId: string) => {
     try {
       await projectsService.delete(projectId);
@@ -909,7 +953,7 @@ export const ProjectsPage: React.FC = () => {
                       <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         <AnimatePresence mode="popLayout">
                           {deptProjects.map(project => (
-                            <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} onEdit={openEditModal} />
+                            <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} onArchive={handleArchiveProject} onEdit={openEditModal} />
                           ))}
                         </AnimatePresence>
                       </motion.div>
@@ -926,7 +970,7 @@ export const ProjectsPage: React.FC = () => {
                         </div>
                         <AnimatePresence mode="popLayout">
                           {deptProjects.map(project => (
-                            <ProjectRow key={project.id} project={project} onDelete={handleDeleteProject} onEdit={openEditModal} />
+                            <ProjectRow key={project.id} project={project} onDelete={handleDeleteProject} onArchive={handleArchiveProject} onEdit={openEditModal} />
                           ))}
                         </AnimatePresence>
                       </div>

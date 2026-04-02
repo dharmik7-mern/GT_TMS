@@ -316,7 +316,7 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
         <div>
           <label className="label">Assignees</label>
           <div className="border border-surface-100 dark:border-surface-800 rounded-xl p-3 max-h-44 overflow-y-auto space-y-2">
-            {members.length ? members.map((member) => (
+            {members.filter(m => ['team_leader', 'team_member'].includes(m.role)).length ? members.filter(m => ['team_leader', 'team_member'].includes(m.role)).map((member) => (
               <label key={member.id} className="flex items-center justify-between gap-3 text-sm">
                 <div className="flex items-center gap-2 min-w-0">
                   <input type="checkbox" checked={form.assigneeIds.includes(member.id)} onChange={() => toggleAssignee(member.id)} />

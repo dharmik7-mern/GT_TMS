@@ -191,12 +191,25 @@ export async function syncProjectStats(companyId, workspaceId, projectId) {
     $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
   };
 
-  const [tasksCount, completedTasksCount] = await Promise.all([
-    Task.countDocuments(taskFilter),
-    Task.countDocuments({ ...taskFilter, status: 'done' }),
-  ]);
+  const tasks = await Task.find(taskFilter).lean();
+  const tasksCount = tasks.length;
+  const completedTasksCount = tasks.filter(t => t.status === 'done').length;
 
-  const progress = tasksCount > 0 ? Math.round((completedTasksCount / tasksCount) * 100) : 0;
+  let totalPercentage = 0;
+  for (const t of tasks) {
+    if (t.status === 'done') {
+      totalPercentage += 100;
+    } else if (Array.isArray(t.subtasks) && t.subtasks.length > 0) {
+      const subDone = t.subtasks.filter(s => s.isCompleted).length;
+      // Cap at 90% if not done, to distinguish from fully done
+      const subPerc = Math.min(90, Math.round((subDone / t.subtasks.length) * 100));
+      totalPercentage += subPerc;
+    } else if (['in_progress', 'in_review'].includes(t.status)) {
+      totalPercentage += 25; // Small fixed progress for started tasks
+    }
+  }
+
+  const progress = tasksCount > 0 ? Math.round(totalPercentage / tasksCount) : 0;
 
   project.tasksCount = tasksCount;
   project.completedTasksCount = completedTasksCount;

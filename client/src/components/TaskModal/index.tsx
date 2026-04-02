@@ -169,6 +169,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
   const project = projects.find(p => p.id === currentTask.projectId);
   const category = project?.subcategories?.find((item) => item.id === currentTask.subcategoryId);
   const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+  const isAssigned = currentTask.assigneeIds.includes(user?.id || '');
+  const isReporter = currentTask.reporterId === user?.id;
+  const canAddSubtask = canManageTask || isAssigned || isReporter;
   const assignees = users.filter(u => currentTask.assigneeIds.includes(u.id));
   const reporter = users.find(u => u.id === currentTask.reporterId);
   const priority = PRIORITY_CONFIG[currentTask.priority] || PRIORITY_CONFIG.medium;
@@ -427,9 +430,21 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <label className="label mb-0">Subtasks</label>
-                    <span className="text-xs text-surface-400">{(currentTask.subtasks || []).filter((item) => item.isCompleted).length}/{(currentTask.subtasks || []).length} done</span>
+                    <div className="flex items-center gap-3">
+                      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-100 dark:bg-surface-800">
+                        <div 
+                          className="h-full bg-brand-500 transition-all duration-500" 
+                          style={{ 
+                            width: `${(currentTask.subtasks || []).length > 0 
+                              ? Math.round(((currentTask.subtasks || []).filter((item) => item.isCompleted).length / (currentTask.subtasks || []).length) * 100) 
+                              : 0}%` 
+                          }} 
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-surface-500">{(currentTask.subtasks || []).filter((item) => item.isCompleted).length}/{(currentTask.subtasks || []).length} done</span>
+                    </div>
                   </div>
-                  {canManageTask && (
+                  {canAddSubtask && (
                     <div className="mb-3 flex items-center gap-2">
                       <div className="relative">
                         <button
@@ -470,7 +485,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                                 </div>
                                 <span>Unassigned</span>
                               </button>
-                              {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                              {(project ? users.filter(u => project.members.includes(u.id) && ['team_leader', 'team_member'].includes(u.role)) : users.filter(u => ['team_leader', 'team_member'].includes(u.role))).map(u => (
                                 <button
                                   key={u.id}
                                   type="button"
@@ -496,7 +511,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
 
                       <input 
                         value={subtaskTitle} 
-                        onChange={(event) => setSubtaskTitle(event.target.value)} 
+                        onChange={(event) => {
+                          setSubtaskTitle(event.target.value);
+                          if (!selectedSubtaskAssigneeId && user?.role === 'team_member') {
+                            setSelectedSubtaskAssigneeId(user.id);
+                          }
+                        }} 
                         onKeyDown={(event) => { 
                           if (event.key === 'Enter') { 
                             event.preventDefault(); 
@@ -506,7 +526,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                                 console.log(`[addSubtask] Task: ${currentTask.id}, Title: ${subtaskTitle.trim()}, Assignee: ${selectedSubtaskAssigneeId}`);
                                 return tasksService.addSubtask(currentTask.id, { 
                                   title: subtaskTitle.trim(), 
-                                  assigneeIds: selectedSubtaskAssigneeId ? [selectedSubtaskAssigneeId] : undefined 
+                                  assigneeId: selectedSubtaskAssigneeId ? selectedSubtaskAssigneeId : undefined 
                                 });
                               }, 
                               'Subtask failed', 
@@ -526,7 +546,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                           void syncTask(
                             () => tasksService.addSubtask(currentTask.id, { 
                               title: subtaskTitle.trim(), 
-                              assigneeIds: selectedSubtaskAssigneeId ? [selectedSubtaskAssigneeId] : undefined 
+                              assigneeId: selectedSubtaskAssigneeId ? selectedSubtaskAssigneeId : undefined 
                             }), 
                             'Subtask failed', 
                             'Subtask added successfully.'
@@ -543,7 +563,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   )}
                   <div className="space-y-1.5">
                     {(currentTask.subtasks || []).map((subtask) => {
-                      const rawAssignee = subtask.assigneeIds?.[0];
+                      const rawAssignee = subtask.assigneeId;
                       const subAssignee = rawAssignee 
                         ? (typeof rawAssignee === 'object' && (rawAssignee as any).name 
                             ? (rawAssignee as any) 
@@ -555,7 +575,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                             type="checkbox" 
                             checked={subtask.isCompleted} 
                             onChange={() => { void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { isCompleted: !subtask.isCompleted }), 'Subtask update failed'); }} 
-                            className="h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500" 
+                            disabled={user?.role === 'team_member' && String(user.id) !== String(subtask.assigneeId)}
+                            className="h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50" 
                           />
                           <span className={cn('flex-1 text-sm font-medium', subtask.isCompleted ? 'line-through text-surface-400' : 'text-surface-700 dark:text-surface-200')}>
                             {subtask.title}
@@ -567,9 +588,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (user?.role === 'team_member' && String(user.id) !== String(subtask.assigneeId)) return;
                                   setEditingSubtaskId(editingSubtaskId === subtask.id ? null : subtask.id);
                                 }}
-                                className="flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-sm dark:bg-surface-900 border border-surface-100 dark:border-surface-700 hover:border-brand-300 transition-colors"
+                                className={cn(
+                                  "flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-sm dark:bg-surface-900 border border-surface-100 dark:border-surface-700 hover:border-brand-300 transition-colors",
+                                  (user?.role === 'team_member' && String(user.id) !== String(subtask.assigneeId)) && "cursor-default hover:border-surface-100 dark:hover:border-surface-700"
+                                )}
                               >
                                 <UserAvatar name={subAssignee.name} color={subAssignee.color} size="xs" />
                                 <span className="text-[10px] font-bold text-surface-500 whitespace-nowrap">{subAssignee.name.split(' ')[0]}</span>
@@ -581,7 +606,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeIds: [] }), 'Update failed');
+                                          void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeId: null }), 'Update failed');
                                           setEditingSubtaskId(null);
                                         }}
                                         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-surface-500 hover:bg-surface-50 dark:hover:bg-surface-800"
@@ -589,17 +614,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                                         <X size={10} />
                                         <span>Remove Assignee</span>
                                       </button>
-                                      {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                                      {(project ? users.filter(u => project.members.includes(u.id) && ['team_leader', 'team_member'].includes(u.role)) : users.filter(u => ['team_leader', 'team_member'].includes(u.role))).map(u => (
                                         <button
                                           key={u.id}
                                           type="button"
                                           onClick={() => {
-                                            void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeIds: [u.id] }), 'Update failed');
+                                            void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeId: u.id }), 'Update failed');
                                             setEditingSubtaskId(null);
                                           }}
                                           className={cn(
                                             "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
-                                            (String(u.id) === String(subtask.assigneeIds?.[0]) || String((u as any)._id) === String(subtask.assigneeIds?.[0]))
+                                            (String(u.id) === String(subtask.assigneeId) || String((u as any)._id) === String(subtask.assigneeId))
                                               ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
                                               : "text-surface-600 hover:bg-surface-50 dark:text-surface-400 dark:hover:bg-surface-800"
                                           )}
@@ -612,7 +637,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                                 </div>
                               )}
                             </div>
-                          ) : subtask.assigneeIds?.length ? (
+                          ) : subtask.assigneeId ? (
                             <div className="flex items-center gap-1 text-[10px] text-surface-400 opacity-60">
                                <Clock size={10} />
                                <span>Syncing...</span>
@@ -621,7 +646,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                             <div className="relative">
                                <button 
                                  title="Assign subtask"
-                                 onClick={() => setEditingSubtaskId(editingSubtaskId === subtask.id ? null : subtask.id)}
+                                 onClick={() => {
+                                   if (user?.role === 'team_member') return; // Only managers/reporters can assign unassigned subtasks (unless it's during creation)
+                                   setEditingSubtaskId(editingSubtaskId === subtask.id ? null : subtask.id);
+                                 }}
                                  className="opacity-0 group-hover:opacity-100 flex items-center gap-1 rounded-full border border-dashed border-surface-300 px-2 py-1 text-[10px] text-surface-400 hover:border-brand-400 hover:text-brand-500 transition-all"
                                >
                                  <Plus size={10} />
@@ -631,12 +659,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                                {editingSubtaskId === subtask.id && (
                                 <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-surface-200 bg-white p-1 shadow-xl dark:border-surface-700 dark:bg-surface-950">
                                    <div className="max-h-40 overflow-y-auto">
-                                      {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                                      {(project ? users.filter(u => project.members.includes(u.id) && ['team_leader', 'team_member'].includes(u.role)) : users.filter(u => ['team_leader', 'team_member'].includes(u.role))).map(u => (
                                         <button
                                           key={u.id}
                                           type="button"
                                           onClick={() => {
-                                            void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeIds: [u.id] }), 'Update failed');
+                                            void syncTask(() => tasksService.patchSubtask(currentTask.id, subtask.id, { assigneeId: u.id }), 'Update failed');
                                             setEditingSubtaskId(null);
                                           }}
                                           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-surface-600 hover:bg-surface-50 dark:text-surface-400 dark:hover:bg-surface-800 transition-colors"
@@ -654,7 +682,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                           <button
                             type="button"
                             onClick={() => { void syncTask(() => tasksService.deleteSubtask(currentTask.id, subtask.id), 'Delete failed', 'Subtask removed.'); }}
-                            className="ml-1 opacity-0 group-hover:opacity-100 p-1 text-surface-400 hover:text-rose-500 transition-all"
+                            disabled={user?.role === 'team_member' && String(user.id) !== String(subtask.assigneeId)}
+                            className="ml-1 opacity-0 group-hover:opacity-100 p-1 text-surface-400 hover:text-rose-500 transition-all disabled:hidden"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -804,7 +833,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                 {isEditingAssignee && (
                   <div className="absolute left-0 top-full mt-2 z-30 w-56 p-1 bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
                     <div className="max-h-48 overflow-y-auto">
-                      {(project ? users.filter(u => project.members.includes(u.id)) : users).map(u => (
+                      {(project ? users.filter(u => project.members.includes(u.id) && ['team_leader', 'team_member'].includes(u.role)) : users.filter(u => ['team_leader', 'team_member'].includes(u.role))).map(u => (
                         <button
                           key={u.id}
                           onClick={async () => {

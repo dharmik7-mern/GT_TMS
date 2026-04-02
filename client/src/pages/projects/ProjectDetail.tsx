@@ -42,7 +42,7 @@ export const ProjectDetailPage: React.FC = () => {
   const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
   const projectTasks = tasks.filter(t => t.projectId === id);
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
-  const members = users.filter(u => project?.members.includes(u.id));
+  const members = users.filter(u => project?.members.includes(u.id) && !['super_admin', 'admin'].includes(u.role));
   const canCreateTask = user?.role !== 'team_member' || (project?.reportingPersonIds || []).includes(user?.id);
   const canEditProject = user?.role !== 'team_member' || canEditOtherProjects;
   const canRequestTask = Boolean(user?.id && project?.members.includes(user.id) && !canCreateTask);

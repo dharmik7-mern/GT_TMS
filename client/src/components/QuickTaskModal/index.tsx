@@ -20,7 +20,7 @@ type QuickTaskFormData = {
   isPrivate: boolean;
 };
 
-const ASSIGNABLE_ROLES: Role[] = ['manager', 'team_leader', 'team_member', 'admin'];
+const ASSIGNABLE_ROLES: Role[] = ['team_leader', 'team_member'];
 
 interface QuickTaskModalProps {
   open: boolean;
