@@ -32,7 +32,11 @@ export const MyTasksPage: React.FC = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
-  const myTasks = tasks.filter(t => t.assigneeIds.includes(user?.id || ''));
+  const myTasks = tasks.filter(t => {
+    if (!t.assigneeIds.includes(user?.id || '')) return false;
+    const p = projects.find(proj => proj.id === t.projectId);
+    return p ? p.status !== 'archived' : true;
+  });
   const myQuickTasks = quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || ''));
 
   const filtered = myTasks.filter(t => {

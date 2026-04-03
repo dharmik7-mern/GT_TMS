@@ -4,7 +4,7 @@ import {
   Search, Filter, List, LayoutGrid, Plus, MoreHorizontal,
   Calendar, Clock, User, ChevronDown, Check, Mail, AlertCircle,
   Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon, SlidersHorizontal,
-  Zap, Briefcase, Clock3, Activity
+  Zap, Briefcase, Clock3, Activity, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
@@ -152,9 +152,9 @@ export const TasksManagement: React.FC = () => {
   const [quickPage, setQuickPage] = useState(1);
   const [personalPage, setPersonalPage] = useState(1);
   const [tasksPerPage] = useState(10);
-  const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick', 'personal', 'overdue']);
+  const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick', 'personal', 'overdue', 'completed']);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'active' | 'project' | 'quick' | 'overdue' | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'active' | 'project' | 'quick' | 'overdue' | 'done' | null>(null);
 
   const location = useLocation();
 
@@ -171,6 +171,8 @@ export const TasksManagement: React.FC = () => {
       setSelectedCategory('project');
     } else if (filter === 'quick') {
       setSelectedCategory('quick');
+    } else if (filter === 'done') {
+      setSelectedCategory('done');
     }
 
     if (mine === 'true' && user?.id) {
@@ -333,11 +335,18 @@ export const TasksManagement: React.FC = () => {
     }
   };
 
+  const activeProjectTasks = useMemo(() => {
+    return projectTasks.filter(t => {
+      const p = projects.find(proj => proj.id === t.projectId);
+      return p ? p.status !== 'archived' : true;
+    });
+  }, [projectTasks, projects]);
+
   const summaryStats = useMemo(() => {
     // Respect person filter for counts if one is selected (e.g., when coming from 'My Open Tasks' dashboard)
     const baseProjectTasks = personFilter !== 'all' 
-      ? projectTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter))
-      : projectTasks;
+      ? activeProjectTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter))
+      : activeProjectTasks;
     const baseQuickTasks = personFilter !== 'all' 
       ? quickTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter))
       : quickTasks;
@@ -355,7 +364,8 @@ export const TasksManagement: React.FC = () => {
         const d = new Date(t.dueDate);
         d.setHours(0, 0, 0, 0);
         return d < now;
-      }).length
+      }).length,
+      done: all.filter(t => t.status === 'done').length
     };
   }, [projectTasks, quickTasks, personFilter]);
 
@@ -396,6 +406,8 @@ export const TasksManagement: React.FC = () => {
         d.setHours(0, 0, 0, 0);
         return d < now;
       });
+    } else if (selectedCategory === 'done') {
+      filtered = filtered.filter(t => t.status === 'done');
     }
 
     // Restore existing dropdown filters
@@ -428,7 +440,7 @@ export const TasksManagement: React.FC = () => {
     );
   };
 
-  const filteredProjectTasks = useMemo(() => filteredTasks(projectTasks), [projectTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory]);
+  const filteredProjectTasks = useMemo(() => filteredTasks(activeProjectTasks), [activeProjectTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory]);
   const filteredQuickTasks = useMemo(() => filteredTasks(quickTasks), [quickTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory]);
   const allFilteredTasks = useMemo(() => [...filteredProjectTasks, ...filteredQuickTasks], [filteredProjectTasks, filteredQuickTasks]);
   const activeTasksPageCount = Math.max(1, Math.ceil(allFilteredTasks.length / tasksPerPage));
@@ -473,7 +485,7 @@ export const TasksManagement: React.FC = () => {
   return (
     <div className="min-h-full flex flex-col bg-[#fcfdfe] dark:bg-surface-950 p-4 sm:p-5 lg:p-6 overflow-x-hidden">
       {/* 1. Minimal Summary Cards Section */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 lg:mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4 lg:mb-6">
         <SummaryCard 
           title="Active Tasks"
           count={summaryStats.active}
@@ -505,6 +517,14 @@ export const TasksManagement: React.FC = () => {
           color="rose"
           isActive={selectedCategory === 'overdue'}
           onClick={() => setSelectedCategory(selectedCategory === 'overdue' ? null : 'overdue')}
+        />
+        <SummaryCard 
+          title="Completed Tasks"
+          count={summaryStats.done}
+          icon={CheckCircle2}
+          color="emerald"
+          isActive={selectedCategory === 'done'}
+          onClick={() => setSelectedCategory(selectedCategory === 'done' ? null : 'done')}
         />
       </div>
 
@@ -946,6 +966,57 @@ export const TasksManagement: React.FC = () => {
                             <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No overdue tasks found. Great job!</td></tr>
                           ) : (
                             allFilteredTasks.map((task, idx) => (
+                              <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                )}
+                {/* 5. Completed Tasks Section */}
+                {(selectedCategory === 'done' || !selectedCategory) && (
+                <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
+                  <div
+                    onClick={() => toggleSection('completed')}
+                    className="px-5 py-3 border-b border-gray-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-950/20 sticky top-0 z-10 backdrop-blur-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('completed') && "-rotate-90")} />
+                      <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Completed Tasks</span>
+                      <span className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-500 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.status === 'done').length}</span>
+                    </div>
+                  </div>
+
+                  {activeSections.includes('completed') && (
+                    <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
+                      <table className="min-w-[760px] w-full text-xs text-left border-collapse">
+                        <colgroup>
+                          <col style={{ width: '32%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '6%' }} />
+                        </colgroup>
+                        <thead className="bg-white dark:bg-surface-900 text-gray-400 dark:text-surface-500 font-semibold border-b border-gray-50 dark:border-surface-800">
+                          <tr>
+                            <th className="px-5 py-3 font-semibold min-w-[300px]">Task Name</th>
+                            <th className="px-3 py-3 font-semibold">Status</th>
+                            <th className="px-3 py-3 font-semibold">Type</th>
+                            <th className="px-3 py-3 font-semibold">Due date</th>
+                            <th className="px-3 py-3 font-semibold">Est. time</th>
+                            <th className="px-3 py-3 font-semibold">Responsible</th>
+                            <th className="px-5 py-3 w-10 text-right"><MoreHorizontal size={14} className="text-gray-300 dark:text-surface-700" /></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
+                          {allFilteredTasks.filter(t => t.status === 'done').length === 0 ? (
+                            <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No completed tasks yet. Keep up the good work!</td></tr>
+                          ) : (
+                            allFilteredTasks.filter(t => t.status === 'done').map((task, idx) => (
                               <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
                             ))
                           )}

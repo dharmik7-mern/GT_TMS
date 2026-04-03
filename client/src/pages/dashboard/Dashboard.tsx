@@ -129,37 +129,44 @@ export const DashboardPage: React.FC = () => {
     }
   }, []);
 
-  const chartData = useMemo(() => buildChartDataFromTasks([...tasks, ...quickTasks]), [tasks, quickTasks]);
+  const activeProjectTasks = useMemo(() => {
+    return tasks.filter(t => {
+      const p = projects.find(proj => proj.id === t.projectId);
+      return p ? p.status !== 'archived' : true;
+    });
+  }, [tasks, projects]);
+
+  const chartData = useMemo(() => buildChartDataFromTasks([...activeProjectTasks, ...quickTasks]), [activeProjectTasks, quickTasks]);
 
   const isManagerOrAdmin = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
 
   const myTasks = useMemo(() => {
     const uid = user?.id || '';
-    const filteredTasks = tasks.filter(t => (t.assigneeIds || []).includes(uid) || t.reporterId === uid);
+    const filteredTasks = activeProjectTasks.filter(t => (t.assigneeIds || []).includes(uid) || t.reporterId === uid);
     const filteredQuickTasks = quickTasks.filter(t => (t.assigneeIds || []).includes(uid) || t.reporterId === uid || t.createdBy === uid);
     return [
       ...filteredTasks.filter(t => t.status !== 'done'),
       ...filteredQuickTasks.filter(t => t.status !== 'done')
     ];
-  }, [tasks, quickTasks, user?.id]);
+  }, [activeProjectTasks, quickTasks, user?.id]);
 
   const overdueTasks = isManagerOrAdmin
     ? [
-      ...tasks.filter(t => isDueDateOverdue(t.dueDate, t.status)),
+      ...activeProjectTasks.filter(t => isDueDateOverdue(t.dueDate, t.status)),
       ...quickTasks.filter(t => isDueDateOverdue(t.dueDate, t.status))
     ]
     : [
-      ...tasks.filter(t => t.assigneeIds?.includes(user?.id || '') && isDueDateOverdue(t.dueDate, t.status)),
+      ...activeProjectTasks.filter(t => t.assigneeIds?.includes(user?.id || '') && isDueDateOverdue(t.dueDate, t.status)),
       ...quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || '') && isDueDateOverdue(t.dueDate, t.status))
     ];
 
   const completedThisWeek = isManagerOrAdmin
     ? [
-      ...tasks.filter(t => t.status === 'done'),
+      ...activeProjectTasks.filter(t => t.status === 'done'),
       ...quickTasks.filter(t => t.status === 'done')
     ]
     : [
-      ...tasks.filter(t => t.assigneeIds?.includes(user?.id || '') && t.status === 'done'),
+      ...activeProjectTasks.filter(t => t.assigneeIds?.includes(user?.id || '') && t.status === 'done'),
       ...quickTasks.filter(t => (t.assigneeIds || []).includes(user?.id || '') && t.status === 'done')
     ];
 
@@ -367,7 +374,7 @@ export const DashboardPage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<FolderKanban size={20} />} label="Active Projects" value={activeProjects.length} sub="across workspace" color="#3366ff" trend={12} delay={0} onClick={() => navigate('/projects?status=active')} />
           <StatCard icon={<CheckCircle2 size={20} />} label={isManagerOrAdmin ? "Total Tasks Done" : "Tasks Completed"} value={completedThisWeek.length} sub={isManagerOrAdmin ? "all projects" : "this week"} color="#10b981" trend={8} delay={0.05} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=done' : '/my-tasks?filter=done')} />
-          <StatCard icon={<Clock size={20} />} label={isManagerOrAdmin ? "Workspace Open Tasks" : "My Open Tasks"} value={isManagerOrAdmin ? (tasks.length + quickTasks.length) - completedThisWeek.length : myTasks.length} sub={isManagerOrAdmin ? "active now" : "assigned to me"} color="#f59e0b" trend={-3} delay={0.1} onClick={() => navigate('/tasks?filter=active&mine=true')} />
+          <StatCard icon={<Clock size={20} />} label={isManagerOrAdmin ? "Workspace Open Tasks" : "My Open Tasks"} value={isManagerOrAdmin ? (activeProjectTasks.length + quickTasks.length) - completedThisWeek.length : myTasks.length} sub={isManagerOrAdmin ? "active now" : "assigned to me"} color="#f59e0b" trend={-3} delay={0.1} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=active' : '/tasks?filter=active&mine=true')} />
           <StatCard icon={<AlertTriangle size={20} />} label="Overdue Tasks" value={overdueTasks.length} sub="need attention" color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=overdue' : '/my-tasks?filter=overdue')} />
         </div>
       )}
