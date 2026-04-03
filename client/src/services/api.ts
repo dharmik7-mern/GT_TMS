@@ -61,7 +61,16 @@ api.interceptors.response.use(
         error?.response?.data?.message ||
         error?.message ||
         'Request failed';
-      emitErrorToast(message, `Error ${error?.response?.status || ''}`.trim());
+      
+      if (status === 403) {
+        window.alert(message);
+        // Mark as already handled to prevent duplicate toasts in components
+        if (error.config) {
+          error.config.suppressErrorToast = true;
+        }
+      } else {
+        emitErrorToast(message, `Error ${error?.response?.status || ''}`.trim());
+      }
     }
 
     return Promise.reject(error);

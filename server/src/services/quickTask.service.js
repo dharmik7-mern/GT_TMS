@@ -484,11 +484,24 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
   const existing = await QuickTask.findOne({ _id: id, tenantId, workspaceId });
   if (!existing) return null;
 
-  if (!canModifyQuickTask({ role, userId, task: existing })) {
+  if (!canModifyQuickTask({ role, userId, id: id, task: existing })) {
     const err = new Error('Forbidden');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
     throw err;
+  }
+
+  // Status change restriction
+  if (updates.status && updates.status !== existing.status) {
+    const uid = strId(userId);
+    const isAssignee = (existing.assigneeIds || []).some(aid => strId(aid) === uid);
+    const isReporterOrCreator = strId(existing.reporterId) === uid || strId(existing.createdBy) === uid;
+    if (!isAdminRole(role) && !isAssignee && !isReporterOrCreator) {
+      const err = new Error('Forbidden: Only the assignee or reporter can change quick task status');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN_STATUS_CHANGE';
+      throw err;
+    }
   }
 
   const beforeAssignees = (existing.assigneeIds || []).map(String);

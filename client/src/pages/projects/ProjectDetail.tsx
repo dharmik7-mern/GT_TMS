@@ -246,6 +246,7 @@ export const ProjectDetailPage: React.FC = () => {
       await tasksService.update(taskId, { status });
       await bootstrap(); 
     } catch (error: any) {
+      if (error?.config?.suppressErrorToast) return;
       const message = error?.response?.data?.error?.message || error?.response?.data?.message || 'Movement failed';
       emitErrorToast(message, 'Board sync error');
     }

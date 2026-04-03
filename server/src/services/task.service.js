@@ -728,21 +728,13 @@ export async function getTaskById({ companyId, workspaceId, userId, role, taskId
   const tenantId = companyId;
   const { Task } = await getTenantModels(companyId);
   
-  // Try strict lookup first
-  let task = await Task.findOne({ _id: taskId, tenantId, workspaceId })
+  // Search by ID and tenantId only to allow finding tasks across workspaces in unified views.
+  // Security is maintained via assertProjectAccess and taskModifyRoles checks below.
+  let task = await Task.findOne({ _id: taskId, tenantId })
     .populate('assigneeIds', 'name avatar color fontColor')
     .populate('reporterId', 'name avatar color fontColor')
     .populate('projectId', 'name')
     .populate('subtasks.assigneeId', 'name avatar color fontColor');
-  
-  // Admin fallback: handle metadata/workspace mismatches
-  if (!task && (role === 'admin' || role === 'super_admin')) {
-    task = await Task.findOne({ _id: taskId, tenantId })
-      .populate('assigneeIds', 'name avatar color fontColor')
-      .populate('reporterId', 'name avatar color fontColor')
-      .populate('projectId', 'name')
-      .populate('subtasks.assigneeId', 'name avatar color fontColor');
-  }
    
    if (!task) return null;
    
@@ -753,32 +745,31 @@ export async function getTaskById({ companyId, workspaceId, userId, role, taskId
  }
 
 export async function getAnyTaskById({ companyId, workspaceId, userId, role, taskId }) {
-   if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
-   
-   // Try project task
-   const projectTask = await getTaskById({ companyId, workspaceId, userId, role, taskId });
-   if (projectTask) {
-     const t = typeof projectTask.toJSON === 'function' ? projectTask.toJSON() : projectTask;
-     const reporterObj = projectTask?.reporterId;
-     t.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
-     t.reporterName = reporterObj?.name || t.reporterName;
-     // FIX: map to ID string if populated
-     t.assigneeIds = Array.isArray(t.assigneeIds) ? t.assigneeIds.map((a) => String(a?._id || a)) : [];
-     t.type = 'project';
-     return t;
-   }
-   
-   // Try quick task
-   const { QuickTask } = await getTenantModels(companyId);
-   // Fallback: search by ID and tenant only to avoid workspace metadata mismatches
-   const quickTask = await QuickTask.findOne({ _id: taskId, tenantId: companyId })
-     .populate('assigneeIds', 'name avatar color fontColor')
-     .populate('reporterId', 'name avatar color fontColor');
-   
-   if (quickTask) {
-     if (!canViewQuickTask({ role, userId, task: quickTask })) {
-       return null;
-     }
+  if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
+  const uid = new mongoose.Types.ObjectId(userId);
+  
+  // 1. Try project task
+  const projectTask = await getTaskById({ companyId, workspaceId, userId, role, taskId });
+  if (projectTask) {
+    const t = typeof projectTask.toJSON === 'function' ? projectTask.toJSON() : projectTask;
+    const reporterObj = projectTask?.reporterId;
+    t.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
+    t.reporterName = reporterObj?.name || t.reporterName;
+    t.assigneeIds = Array.isArray(t.assigneeIds) ? t.assigneeIds.map((a) => String(a?._id || a)) : [];
+    t.type = 'project';
+    return t;
+  }
+  
+  // 2. Try quick task
+  const { QuickTask, PersonalTask } = await getTenantModels(companyId);
+  const quickTask = await QuickTask.findOne({ _id: taskId, tenantId: companyId })
+    .populate('assigneeIds', 'name avatar color fontColor')
+    .populate('reporterId', 'name avatar color fontColor');
+  
+  if (quickTask) {
+    if (!canViewQuickTask({ role, userId, task: quickTask })) {
+      return null;
+    }
     const qtDoc = typeof quickTask.toJSON === 'function' ? quickTask.toJSON() : quickTask;
     qtDoc.type = 'quick';
     const reporterObj = quickTask.reporterId;
@@ -790,9 +781,17 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
     }
     return qtDoc;
   }
-   
-   return null;
- }
+
+  // 3. Try personal task
+  const personalTask = await PersonalTask.findOne({ _id: taskId, userId: uid }).lean();
+  if (personalTask) {
+    personalTask.type = 'personal';
+    personalTask.id = String(personalTask._id);
+    return personalTask;
+  }
+  
+  return null;
+}
 
 export async function updateTask({ companyId, workspaceId, userId, role, taskId, updates }) {
   const tenantId = companyId;
@@ -814,11 +813,27 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     }
 
     if (!taskModifyRoles(role, existing, userId)) {
-    const err = new Error('Forbidden');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN';
-    throw err;
-  }
+      const err = new Error('Forbidden');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+
+    // Status change restriction
+    if (updates.status && updates.status !== existing.status) {
+      const uid = strId(userId);
+      const isAssignee = (existing.assigneeIds || []).some(id => strId(id) === uid);
+      if (!isAdminRole(role) && !isAssignee) {
+        const project = await Project.findOne({ _id: existing.projectId, tenantId }).lean();
+        const isReportingPerson = (project?.reportingPersonIds || []).some(id => strId(id) === uid);
+        if (!isReportingPerson) {
+          const err = new Error('Forbidden: Only the assignee or a reporting person can change task status');
+          err.statusCode = 403;
+          err.code = 'FORBIDDEN_STATUS_CHANGE';
+          throw err;
+        }
+      }
+    }
 
   const { subtasks, dueDate, startDate, endDate, completionRemark, ...rest } = updates;
   const beforeAssigneeIds = mapIdList(existing.assigneeIds);
@@ -846,7 +861,7 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
-  const task = await Task.findOneAndUpdate({ _id: taskId, tenantId, workspaceId }, { $set }, { new: true });
+  const task = await Task.findOneAndUpdate({ _id: taskId, tenantId }, { $set }, { new: true });
   if (!task) return null;
 
   const changedFields = Object.keys(updates || {});

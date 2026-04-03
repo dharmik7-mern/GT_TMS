@@ -152,7 +152,7 @@ export const TasksManagement: React.FC = () => {
   const [quickPage, setQuickPage] = useState(1);
   const [personalPage, setPersonalPage] = useState(1);
   const [tasksPerPage] = useState(10);
-  const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick', 'personal']);
+  const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick', 'personal', 'overdue']);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'active' | 'project' | 'quick' | 'overdue' | null>(null);
 
@@ -161,6 +161,8 @@ export const TasksManagement: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const filter = params.get('filter');
+    const mine = params.get('mine');
+
     if (filter === 'overdue') {
       setSelectedCategory('overdue');
     } else if (filter === 'active') {
@@ -170,7 +172,11 @@ export const TasksManagement: React.FC = () => {
     } else if (filter === 'quick') {
       setSelectedCategory('quick');
     }
-  }, [location.search]);
+
+    if (mine === 'true' && user?.id) {
+      setPersonFilter(user.id);
+    }
+  }, [location.search, user?.id]);
 
   useEffect(() => {
     if (selectedTask) {
@@ -328,14 +334,22 @@ export const TasksManagement: React.FC = () => {
   };
 
   const summaryStats = useMemo(() => {
-    const all = [...projectTasks, ...quickTasks];
+    // Respect person filter for counts if one is selected (e.g., when coming from 'My Open Tasks' dashboard)
+    const baseProjectTasks = personFilter !== 'all' 
+      ? projectTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter))
+      : projectTasks;
+    const baseQuickTasks = personFilter !== 'all' 
+      ? quickTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter))
+      : quickTasks;
+    
+    const all = [...baseProjectTasks, ...baseQuickTasks];
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
     return {
       active: all.filter(t => t.status !== 'done').length,
-      projects: projectTasks.length,
-      quick: quickTasks.length,
+      projects: baseProjectTasks.length,
+      quick: baseQuickTasks.length,
       overdue: all.filter(t => {
         if (!t.dueDate || t.status === 'done') return false;
         const d = new Date(t.dueDate);
@@ -343,7 +357,7 @@ export const TasksManagement: React.FC = () => {
         return d < now;
       }).length
     };
-  }, [projectTasks, quickTasks]);
+  }, [projectTasks, quickTasks, personFilter]);
 
   const filteredTasks = (list: TaskRow[]) => {
     const query = searchTerm.trim().toLowerCase();

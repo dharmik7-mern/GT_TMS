@@ -4,22 +4,62 @@ import { getTenantModels } from '../config/tenantDb.js';
 export async function getOverview(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const { Task, QuickTask } = await getTenantModels(companyId);
-
-    const isManagerOrAdmin = ['owner', 'admin', 'manager', 'team_leader', 'workspace_admin', 'system_admin', 'super_admin'].includes(role);
+    const { Task, QuickTask, Team, Project } = await getTenantModels(companyId);
 
     if (!companyId || !workspaceId) {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    const filter = {
+    const baseFilter = {
       tenantId: new mongoose.Types.ObjectId(companyId),
       workspaceId: new mongoose.Types.ObjectId(workspaceId),
       status: 'in_progress'
     };
 
-    if (!isManagerOrAdmin) {
-      filter.$or = [{ assigneeIds: userId }, { reporterId: userId }];
+    const isAdminOrManager = ['super_admin', 'admin', 'owner', 'workspace_admin', 'system_admin'].includes(role);
+    const uid = new mongoose.Types.ObjectId(userId);
+    let visibilityIds = [uid];
+
+    if (role === 'team_leader') {
+      const ledTeams = await Team.find({
+        workspaceId: new mongoose.Types.ObjectId(workspaceId),
+        $or: [
+          { leaderId: uid },
+          { leaderIds: uid }
+        ]
+      }).select('members').lean();
+
+      ledTeams.forEach(team => {
+        if (team.members && Array.isArray(team.members)) {
+          team.members.forEach(m => {
+            if (m && !visibilityIds.some(vid => String(vid) === String(m))) {
+              visibilityIds.push(new mongoose.Types.ObjectId(m));
+            }
+          });
+        }
+      });
+    }
+
+    // Projects where user is a reporting person
+    const reportingProjects = await Project.find({
+      workspaceId: new mongoose.Types.ObjectId(workspaceId),
+      reportingPersonIds: uid
+    }).select('_id').lean();
+    const reportingProjectIds = reportingProjects.map(p => p._id);
+
+    const filter = { ...baseFilter };
+    if (!isAdminOrManager) {
+      const orConditions = [
+        { assigneeIds: { $in: visibilityIds } },
+        { reporterId: { $in: visibilityIds } },
+        { createdBy: { $in: visibilityIds } }
+      ];
+
+      if (reportingProjectIds.length > 0) {
+        orConditions.push({ projectId: { $in: reportingProjectIds } });
+      }
+      
+      filter.$or = orConditions;
     }
 
     const tasks = await Task.find(filter)
@@ -29,10 +69,8 @@ export async function getOverview(req, res, next) {
       .sort({ dueDate: 1 })
       .lean();
 
-    const isAdmin = ['super_admin', 'admin'].includes(role);
     const qtFilter = { ...filter };
-    if (!isAdmin && role === 'manager') {
-      const uid = new mongoose.Types.ObjectId(userId);
+    if (isAdminOrManager && role === 'manager') {
       const privacyOr = [
         { isPrivate: false },
         { isPrivate: { $exists: false } },
@@ -47,12 +85,6 @@ export async function getOverview(req, res, next) {
       } else {
         qtFilter.$or = privacyOr;
       }
-    } else if (!isAdmin) {
-      qtFilter.$or = [
-        { assigneeIds: userId },
-        { reporterId: userId },
-        { createdBy: userId },
-      ];
     }
 
     const quickTasks = await QuickTask.find(qtFilter)
@@ -103,7 +135,7 @@ export async function getOverview(req, res, next) {
 export async function getAllTasks(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const { Task, QuickTask, PersonalTask } = await getTenantModels(companyId);
+    const { Task, QuickTask, PersonalTask, Team, Project } = await getTenantModels(companyId);
 
     if (!companyId || !workspaceId) {
       return res.status(200).json({ success: true, data: { projectTasks: [], quickTasks: [], personalTasks: [] } });
@@ -114,18 +146,61 @@ export async function getAllTasks(req, res, next) {
       workspaceId: new mongoose.Types.ObjectId(workspaceId)
     };
 
-    // Project tasks are fetched without role restriction to ensure visibility for all tasks associated to the project
-    const tasks = await Task.find(baseFilter)
+    const isAdminOrManager = ['super_admin', 'admin', 'owner', 'workspace_admin', 'system_admin'].includes(role);
+    const uid = new mongoose.Types.ObjectId(userId);
+    let visibilityIds = [uid];
+
+    if (role === 'team_leader') {
+      const ledTeams = await Team.find({
+        workspaceId: new mongoose.Types.ObjectId(workspaceId),
+        $or: [
+          { leaderId: uid },
+          { leaderIds: uid }
+        ]
+      }).select('members').lean();
+
+      ledTeams.forEach(team => {
+        if (team.members && Array.isArray(team.members)) {
+          team.members.forEach(m => {
+            if (m && !visibilityIds.some(vid => String(vid) === String(m))) {
+              visibilityIds.push(new mongoose.Types.ObjectId(m));
+            }
+          });
+        }
+      });
+    }
+
+    // Projects where user is a reporting person
+    const reportingProjects = await Project.find({
+      workspaceId: new mongoose.Types.ObjectId(workspaceId),
+      reportingPersonIds: uid
+    }).select('_id').lean();
+    const reportingProjectIds = reportingProjects.map(p => p._id);
+
+    const taskFilter = { ...baseFilter };
+    if (!isAdminOrManager) {
+      const orConditions = [
+        { assigneeIds: { $in: visibilityIds } },
+        { reporterId: { $in: visibilityIds } },
+        { createdBy: { $in: visibilityIds } }
+      ];
+
+      if (reportingProjectIds.length > 0) {
+        orConditions.push({ projectId: { $in: reportingProjectIds } });
+      }
+
+      taskFilter.$or = orConditions;
+    }
+
+    const tasks = await Task.find(taskFilter)
       .populate('assigneeIds', 'name avatar')
       .populate('reporterId', 'name avatar')
       .populate('projectId', 'name')
       .sort({ createdAt: -1 })
       .lean();
 
-    const isAdmin = ['super_admin', 'admin'].includes(role);
     const qtBaseFilter = { ...baseFilter };
-    if (!isAdmin && role === 'manager') {
-      const uid = new mongoose.Types.ObjectId(userId);
+    if (isAdminOrManager && role === 'manager') {
       const privacyOr = [
         { isPrivate: false },
         { isPrivate: { $exists: false } },
@@ -140,12 +215,13 @@ export async function getAllTasks(req, res, next) {
       } else {
         qtBaseFilter.$or = privacyOr;
       }
-    } else if (!isAdmin) {
-      qtBaseFilter.$or = [
-        { assigneeIds: userId },
-        { reporterId: userId },
-        { createdBy: userId },
+    } else if (!isAdminOrManager) {
+      const orConditionsForQt = [
+        { assigneeIds: { $in: visibilityIds } },
+        { reporterId: { $in: visibilityIds } },
+        { createdBy: { $in: visibilityIds } }
       ];
+      qtBaseFilter.$or = orConditionsForQt;
     }
 
     const quickTasks = await QuickTask.find(qtBaseFilter)
@@ -154,7 +230,7 @@ export async function getAllTasks(req, res, next) {
       .sort({ createdAt: -1 })
       .lean();
 
-    const personalTasks = await PersonalTask.find({ userId: new mongoose.Types.ObjectId(userId) })
+    const personalTasks = await PersonalTask.find({ userId: uid })
       .sort({ createdAt: -1 })
       .lean();
 
