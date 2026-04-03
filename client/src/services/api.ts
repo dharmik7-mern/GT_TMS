@@ -61,7 +61,7 @@ api.interceptors.response.use(
         error?.response?.data?.message ||
         error?.message ||
         'Request failed';
-      
+
       if (status === 403) {
         window.alert(message);
         // Mark as already handled to prevent duplicate toasts in components

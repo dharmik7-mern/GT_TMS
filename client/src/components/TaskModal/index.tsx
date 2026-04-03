@@ -287,10 +287,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   </h2>
                 )}
               </div>
-              <div className="flex items-center gap-1">
-                {canManageTask && <button onClick={() => { void (async () => { try { await tasksService.delete(currentTask.id); deleteTask(currentTask.id); await bootstrap(); emitSuccessToast('Task deleted successfully.', 'Task Deleted'); onClose(); } catch (error: any) { emitErrorToast(error?.response?.data?.message || 'Task could not be deleted.', 'Delete failed'); } })(); }} className="btn-ghost h-8 w-8 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"><Trash2 size={15} /></button>}
-                <button onClick={onClose} className="btn-ghost h-8 w-8"><X size={15} /></button>
-              </div>
             </div>
           </div>
 
@@ -719,6 +715,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
         </div>
 
         <div className="w-full lg:w-64 border-t lg:border-t-0 lg:border-l border-surface-100 dark:border-surface-800 p-4 sm:p-5 flex flex-col gap-4 flex-shrink-0 bg-surface-50/50 dark:bg-surface-950/30 overflow-y-auto">
+          <div className="flex justify-end gap-1 -mt-1 -mr-1">
+            {canManageTask && (
+              <button 
+                onClick={() => { void (async () => { try { await tasksService.delete(currentTask.id); deleteTask(currentTask.id); await bootstrap(); emitSuccessToast('Task deleted successfully.', 'Task Deleted'); onClose(); } catch (error: any) { emitErrorToast(error?.response?.data?.message || 'Task could not be deleted.', 'Delete failed'); } })(); }} 
+                className="btn-ghost h-8 w-8 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+            <button onClick={onClose} className="btn-ghost h-8 w-8 text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800">
+              <X size={15} />
+            </button>
+          </div>
+
           <div>
             <label className="label">Status</label>
             <div className="relative">
@@ -727,7 +737,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => 
                   value={currentTask.status}
                   onChange={(e) => persistTaskUpdate({ status: e.target.value as TaskStatus }, 'Status update failed')}
                   className={cn(
-                    'bg-white dark:bg-surface-800 border rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 outline-none transition-all w-full flex items-center justify-between',
+                    'bg-white dark:bg-surface-800 border rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 outline-none transition-all w-full flex items-center justify-between appearance-none',
                     statusCfg.bg,
                     statusCfg.text,
                     isReadOnly && 'opacity-50 cursor-not-allowed'

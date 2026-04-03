@@ -47,7 +47,7 @@ export async function getAccessibleProjectIds({ tenantId, workspaceId, userId, r
   for (const p of projects) {
     const pid = p._id;
     if (
-      strId(p.ownerId) === uid || 
+      strId(p.ownerId) === uid ||
       (p.members || []).some((m) => strId(m) === uid) ||
       (p.reportingPersonIds || []).some((m) => strId(m) === uid)
     ) {
@@ -327,12 +327,12 @@ async function attachTaskActivity({ companyId, workspaceId, tasks }) {
   return taskList.map((task) => mapTaskWithActivity(task, logsByTaskId.get(String(task._id)) || []));
 }
 
- export async function assertProjectAccess({ tenantId, workspaceId, userId, role, projectId }) {
-   if (!projectId) return true; // Allow access to workspace-level tasks that don't belong to a project
-   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
-   if (allowed === null) return true;
-   return allowed.some((id) => strId(id) === strId(projectId));
- }
+export async function assertProjectAccess({ tenantId, workspaceId, userId, role, projectId }) {
+  if (!projectId) return true; // Allow access to workspace-level tasks that don't belong to a project
+  const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
+  if (allowed === null) return true;
+  return allowed.some((id) => strId(id) === strId(projectId));
+}
 
 export async function listTasks({
   companyId,
@@ -456,10 +456,10 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     labels: data.labels || [],
     subtasks: Array.isArray(data.subtasks)
       ? data.subtasks.map((s, i) => ({
-          title: s.title,
-          isCompleted: Boolean(s.isCompleted),
-          order: s.order ?? i,
-        }))
+        title: s.title,
+        isCompleted: Boolean(s.isCompleted),
+        order: s.order ?? i,
+      }))
       : [],
   });
 
@@ -493,7 +493,7 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
       assigneeIds: task.assigneeIds,
       actorId: userId,
       task,
-    projectName: project?.name || 'Untitled Project',
+      projectName: project?.name || 'Untitled Project',
     });
   }
 
@@ -584,10 +584,10 @@ export async function createTaskCreationRequest({ companyId, workspaceId, userId
     labels: data.labels || [],
     subtasks: Array.isArray(data.subtasks)
       ? data.subtasks.map((subtask, index) => ({
-          title: subtask.title,
-          isCompleted: Boolean(subtask.isCompleted),
-          order: subtask.order ?? index,
-        }))
+        title: subtask.title,
+        isCompleted: Boolean(subtask.isCompleted),
+        order: subtask.order ?? index,
+      }))
       : [],
   });
 
@@ -680,10 +680,10 @@ export async function reviewTaskCreationRequest({
         labels: request.labels || [],
         subtasks: Array.isArray(request.subtasks)
           ? request.subtasks.map((subtask) => ({
-              title: subtask.title,
-              isCompleted: Boolean(subtask.isCompleted),
-              order: subtask.order ?? 0,
-            }))
+            title: subtask.title,
+            isCompleted: Boolean(subtask.isCompleted),
+            order: subtask.order ?? 0,
+          }))
           : [],
       },
     });
@@ -727,7 +727,7 @@ export async function reviewTaskCreationRequest({
 export async function getTaskById({ companyId, workspaceId, userId, role, taskId }) {
   const tenantId = companyId;
   const { Task } = await getTenantModels(companyId);
-  
+
   // Search by ID and tenantId only to allow finding tasks across workspaces in unified views.
   // Security is maintained via assertProjectAccess and taskModifyRoles checks below.
   let task = await Task.findOne({ _id: taskId, tenantId })
@@ -735,19 +735,19 @@ export async function getTaskById({ companyId, workspaceId, userId, role, taskId
     .populate('reporterId', 'name avatar color fontColor')
     .populate('projectId', 'name')
     .populate('subtasks.assigneeId', 'name avatar color fontColor');
-   
-   if (!task) return null;
-   
-   // Use the task's actual workspaceId for project access check
-   const ok = await assertProjectAccess({ tenantId, workspaceId: task.workspaceId, userId, role, projectId: task.projectId });
-   if (!ok && !taskModifyRoles(role, task, userId)) return null;
-   return (await attachTaskActivity({ companyId, workspaceId: task.workspaceId, tasks: [task] }))[0];
- }
+
+  if (!task) return null;
+
+  // Use the task's actual workspaceId for project access check
+  const ok = await assertProjectAccess({ tenantId, workspaceId: task.workspaceId, userId, role, projectId: task.projectId });
+  if (!ok && !taskModifyRoles(role, task, userId)) return null;
+  return (await attachTaskActivity({ companyId, workspaceId: task.workspaceId, tasks: [task] }))[0];
+}
 
 export async function getAnyTaskById({ companyId, workspaceId, userId, role, taskId }) {
   if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
   const uid = new mongoose.Types.ObjectId(userId);
-  
+
   // 1. Try project task
   const projectTask = await getTaskById({ companyId, workspaceId, userId, role, taskId });
   if (projectTask) {
@@ -759,13 +759,13 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
     t.type = 'project';
     return t;
   }
-  
+
   // 2. Try quick task
   const { QuickTask, PersonalTask } = await getTenantModels(companyId);
   const quickTask = await QuickTask.findOne({ _id: taskId, tenantId: companyId })
     .populate('assigneeIds', 'name avatar color fontColor')
     .populate('reporterId', 'name avatar color fontColor');
-  
+
   if (quickTask) {
     if (!canViewQuickTask({ role, userId, task: quickTask })) {
       return null;
@@ -789,51 +789,51 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
     personalTask.id = String(personalTask._id);
     return personalTask;
   }
-  
+
   return null;
 }
 
 export async function updateTask({ companyId, workspaceId, userId, role, taskId, updates }) {
   const tenantId = companyId;
-   const { Task, ActivityLog, Notification, Project } = await getTenantModels(companyId);
-   let existing = await Task.findOne({ _id: taskId, tenantId, workspaceId });
-   
-   if (!existing && (role === 'admin' || role === 'super_admin')) {
-     existing = await Task.findOne({ _id: taskId, tenantId });
-   }
-   
-   if (!existing) return null;
-    
-    // Prevent non-managers from editing tasks with pending reassignment
-    if (existing.isReassignPending && !['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
-      const err = new Error('Task is locked (reassignment pending)');
-      err.statusCode = 403;
-      err.code = 'REASSIGN_PENDING_LOCKED';
-      throw err;
-    }
+  const { Task, ActivityLog, Notification, Project } = await getTenantModels(companyId);
+  let existing = await Task.findOne({ _id: taskId, tenantId, workspaceId });
 
-    if (!taskModifyRoles(role, existing, userId)) {
-      const err = new Error('Forbidden');
-      err.statusCode = 403;
-      err.code = 'FORBIDDEN';
-      throw err;
-    }
+  if (!existing && (role === 'admin' || role === 'super_admin')) {
+    existing = await Task.findOne({ _id: taskId, tenantId });
+  }
 
-    // Status change restriction
-    if (updates.status && updates.status !== existing.status) {
-      const uid = strId(userId);
-      const isAssignee = (existing.assigneeIds || []).some(id => strId(id) === uid);
-      if (!isAdminRole(role) && !isAssignee) {
-        const project = await Project.findOne({ _id: existing.projectId, tenantId }).lean();
-        const isReportingPerson = (project?.reportingPersonIds || []).some(id => strId(id) === uid);
-        if (!isReportingPerson) {
-          const err = new Error('Forbidden: Only the assignee or a reporting person can change task status');
-          err.statusCode = 403;
-          err.code = 'FORBIDDEN_STATUS_CHANGE';
-          throw err;
-        }
+  if (!existing) return null;
+
+  // Prevent non-managers from editing tasks with pending reassignment
+  if (existing.isReassignPending && !['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
+    const err = new Error('Task is locked (reassignment pending)');
+    err.statusCode = 403;
+    err.code = 'REASSIGN_PENDING_LOCKED';
+    throw err;
+  }
+
+  if (!taskModifyRoles(role, existing, userId)) {
+    const err = new Error('Forbidden');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  // Status change restriction
+  if (updates.status && updates.status !== existing.status) {
+    const uid = strId(userId);
+    const isAssignee = (existing.assigneeIds || []).some(id => strId(id) === uid);
+    if (!isAdminRole(role) && !isAssignee) {
+      const project = await Project.findOne({ _id: existing.projectId, tenantId }).lean();
+      const isReportingPerson = (project?.reportingPersonIds || []).some(id => strId(id) === uid);
+      if (!isReportingPerson) {
+        const err = new Error('Forbidden: Only the assignee or a reporting person can change task status');
+        err.statusCode = 403;
+        err.code = 'FORBIDDEN_STATUS_CHANGE';
+        throw err;
       }
     }
+  }
 
   const { subtasks, dueDate, startDate, endDate, completionRemark, ...rest } = updates;
   const beforeAssigneeIds = mapIdList(existing.assigneeIds);
@@ -971,9 +971,9 @@ export async function reviewTaskCompletion({ companyId, workspaceId, userId, rol
   const tenantId = companyId;
   const { Task, ActivityLog } = await getTenantModels(companyId);
   const task = await Task.findOne({
-      _id: taskId,
-      tenantId,
-    });
+    _id: taskId,
+    tenantId,
+  });
   if (!task) return null;
 
   const reviewerIds = await getTaskReviewUsers({
@@ -1063,9 +1063,9 @@ export async function deleteTask({ companyId, workspaceId, userId, role, taskId 
   const tenantId = companyId;
   const { Task, Project, ActivityLog } = await getTenantModels(companyId);
   const existing = await Task.findOne({
-      _id: taskId,
-      tenantId,
-    });
+    _id: taskId,
+    tenantId,
+  });
   if (!existing) return null;
   if (!['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
     const err = new Error('Forbidden');
@@ -1099,11 +1099,11 @@ export async function addSubtask({ companyId, workspaceId, userId, role, taskId,
   const mongoose = (await import('mongoose')).default;
   const { Task } = await getTenantModels(companyId);
   const task = await Task.findOne({
-      _id: taskId,
-      tenantId,
-    });
+    _id: taskId,
+    tenantId,
+  });
   if (!task) return null;
-  
+
   // Reassignment pending lock
   if (task.isReassignPending && !['super_admin', 'admin', 'manager', 'team_leader'].includes(role)) {
     const err = new Error('Subtask update locked (reassignment pending)');
@@ -1143,9 +1143,9 @@ export async function updateSubtask({ companyId, workspaceId, userId, role, task
   const tenantId = companyId;
   const { Task } = await getTenantModels(companyId);
   const task = await Task.findOne({
-      _id: taskId,
-      tenantId,
-    });
+    _id: taskId,
+    tenantId,
+  });
   if (!task) return null;
 
   // Reassignment pending lock
@@ -1194,9 +1194,9 @@ export async function removeSubtask({ companyId, workspaceId, userId, role, task
   const tenantId = companyId;
   const { Task } = await getTenantModels(companyId);
   const task = await Task.findOne({
-      _id: taskId,
-      tenantId,
-    });
+    _id: taskId,
+    tenantId,
+  });
   if (!task) return null;
 
   // Reassignment pending lock
@@ -1222,61 +1222,95 @@ export async function removeSubtask({ companyId, workspaceId, userId, role, task
   return task;
 }
 
- export async function addTaskAttachments({ companyId, workspaceId, userId, role, taskId, files, requestBaseUrl }) {
-   const tenantId = companyId;
-   const { Task } = await getTenantModels(companyId);
- 
-   const task = await Task.findOne({
-      _id: taskId,
-      tenantId,
-    });
-   if (!task) return null;
- 
-   if (!taskModifyRoles(role, task, userId)) {
-     const err = new Error('Forbidden');
-     err.statusCode = 403;
-     err.code = 'FORBIDDEN';
-     throw err;
-   }
- 
-   const attachments = (files || []).map((f) => ({
-     name: f.originalname,
-     url: `${requestBaseUrl}/uploads/${f.filename}`,
-     size: f.size,
-     type: f.mimetype,
-     uploadedBy: userId,
-   }));
- 
-   if (!attachments.length) return task;
- 
-   await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { attachments } });
-   return Task.findOne({ _id: taskId, tenantId, workspaceId });
- }
- 
- export async function addTaskComment({ companyId, workspaceId, userId, role, taskId, content }) {
-   const tenantId = companyId;
-   const { Task } = await getTenantModels(companyId);
- 
-   const task = await Task.findOne({
-      _id: taskId,
-      tenantId,
-    });
-   if (!task) return null;
- 
-   if (!taskModifyRoles(role, task, userId)) {
-     const err = new Error('Forbidden');
-     err.statusCode = 403;
-     err.code = 'FORBIDDEN';
-     throw err;
-   }
- 
-   const comment = {
-     content,
-     authorId: userId,
-     createdAt: new Date(),
-     updatedAt: new Date(),
-   };
- 
-   await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { comments: comment } });
-   return Task.findOne({ _id: taskId, tenantId, workspaceId });
- }
+export async function addTaskAttachments({ companyId, workspaceId, userId, role, taskId, files, requestBaseUrl }) {
+  const tenantId = companyId;
+  const { Task } = await getTenantModels(companyId);
+
+  const task = await Task.findOne({
+    _id: taskId,
+    tenantId,
+  });
+  if (!task) return null;
+
+  if (!taskModifyRoles(role, task, userId)) {
+    const err = new Error('Forbidden');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  const attachments = (files || []).map((f) => ({
+    name: f.originalname,
+    url: `${requestBaseUrl}/uploads/${f.filename}`,
+    size: f.size,
+    type: f.mimetype,
+    uploadedBy: userId,
+  }));
+
+  if (!attachments.length) return task;
+
+  await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { attachments } });
+  return Task.findOne({ _id: taskId, tenantId, workspaceId });
+}
+
+export async function addTaskComment({ companyId, workspaceId, userId, role, taskId, content }) {
+  const tenantId = companyId;
+  const { Task } = await getTenantModels(companyId);
+
+  const task = await Task.findOne({
+    _id: taskId,
+    tenantId,
+  });
+  if (!task) return null;
+
+  if (!taskModifyRoles(role, task, userId)) {
+    const err = new Error('Forbidden');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  const comment = {
+    content,
+    authorId: userId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { comments: comment } });
+  return Task.findOne({ _id: taskId, tenantId, workspaceId });
+}
+
+export async function getOverdueTasks({ tenantId, userId, role }) {
+  const { Task, User } = await getTenantModels(tenantId);
+  const now = new Date();
+
+  const query = {
+    tenantId,
+    dueDate: { $lt: now },
+    status: { $ne: 'done' }
+  };
+
+  if (!isAdminRole(role) && role !== 'manager') {
+    query.assigneeIds = userId;
+  }
+
+  const tasks = await Task.find(query)
+    .populate('assigneeIds', 'name')
+    .sort({ dueDate: 1 })
+    .lean();
+
+  const formattedTasks = tasks.map(t => ({
+    id: String(t._id),
+    title: t.title,
+    dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split('T')[0] : null,
+    assignedToName: t.assigneeIds && t.assigneeIds.length > 0
+      ? t.assigneeIds.map(u => u.name).join(', ')
+      : 'Unassigned'
+  }));
+
+  return {
+    count: formattedTasks.length,
+    tasks: formattedTasks
+  };
+}

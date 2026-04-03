@@ -82,7 +82,7 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => {
         const rt = get().refreshToken;
         // Fire-and-forget: server clears refresh token record AND SSO cookie
-        authService.logout(rt).catch(() => {});
+        authService.logout(rt).catch(() => { });
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
       },
 

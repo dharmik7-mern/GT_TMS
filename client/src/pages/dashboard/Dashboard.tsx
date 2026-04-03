@@ -373,9 +373,9 @@ export const DashboardPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={<FolderKanban size={20} />} label="Active Projects" value={activeProjects.length} sub="across workspace" color="#3366ff" trend={12} delay={0} onClick={() => navigate('/projects?status=active')} />
-          <StatCard icon={<CheckCircle2 size={20} />} label={isManagerOrAdmin ? "Total Tasks Done" : "Tasks Completed"} value={completedThisWeek.length} sub={isManagerOrAdmin ? "all projects" : "this week"} color="#10b981" trend={8} delay={0.05} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=done' : '/my-tasks?filter=done')} />
+          <StatCard icon={<CheckCircle2 size={20} />} label={isManagerOrAdmin ? "Total Tasks Done" : "Tasks Completed"} value={completedThisWeek.length} sub={isManagerOrAdmin ? "all projects" : "this week"} color="#10b981" trend={8} delay={0.05} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=done' : '/tasks?filter=done&mine=true')} />
           <StatCard icon={<Clock size={20} />} label={isManagerOrAdmin ? "Workspace Open Tasks" : "My Open Tasks"} value={isManagerOrAdmin ? (activeProjectTasks.length + quickTasks.length) - completedThisWeek.length : myTasks.length} sub={isManagerOrAdmin ? "active now" : "assigned to me"} color="#f59e0b" trend={-3} delay={0.1} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=active' : '/tasks?filter=active&mine=true')} />
-          <StatCard icon={<AlertTriangle size={20} />} label="Overdue Tasks" value={overdueTasks.length} sub="need attention" color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=overdue' : '/my-tasks?filter=overdue')} />
+          <StatCard icon={<AlertTriangle size={20} />} label="Overdue Tasks" value={overdueTasks.length} sub="need attention" color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=overdue' : '/tasks?filter=overdue&mine=true')} />
         </div>
       )}
 

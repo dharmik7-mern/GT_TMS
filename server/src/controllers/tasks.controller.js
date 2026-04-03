@@ -328,3 +328,17 @@ export async function addComment(req, res, next) {
     return next(e);
   }
 }
+
+export async function getOverdue(req, res, next) {
+  try {
+    const { companyId, sub: userId, role } = req.auth;
+    const result = await TaskService.getOverdueTasks({ 
+      tenantId: companyId, 
+      userId, 
+      role 
+    });
+    return res.status(200).json({ success: true, ...result });
+  } catch (e) {
+    return next(e);
+  }
+}
