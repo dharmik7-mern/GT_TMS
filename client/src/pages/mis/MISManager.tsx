@@ -228,33 +228,51 @@ export default function MISManager() {
           </div>
         </div>
 
-         {/* Action Panel */}
-        <div className="bg-gray-50/50 dark:bg-surface-900/50 rounded-lg p-4 border border-gray-200 dark:border-surface-800">
-           <label className="block text-[11px] font-bold text-gray-500 dark:text-surface-400 uppercase tracking-widest mb-1.5">Manager Feedback / Comments</label>
-           <textarea 
-             value={comment}
-             onChange={(e) => setComment(e.target.value)}
-             className="w-full px-3 py-2 border border-gray-200 dark:border-surface-700 bg-white dark:bg-surface-800 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none disabled:bg-gray-100 dark:disabled:bg-surface-900 text-gray-800 dark:text-surface-100 shadow-sm transition-all"
-             rows={2}
-             placeholder="Optional for Approval, Mandatory for Rejection..."
-           />
-           <div className="flex justify-end gap-3 mt-3">
-              <button 
-                onClick={() => handleAction('reject')}
-                disabled={actionLoading}
-                className="px-5 py-1.5 rounded border border-red-200 dark:border-rose-900 bg-red-50 dark:bg-rose-950/20 hover:bg-red-100 dark:hover:bg-rose-900/40 text-red-700 dark:text-rose-400 text-xs font-bold transition-colors disabled:opacity-50"
-              >
-                Reject MIS
-              </button>
-              <button 
-                onClick={() => handleAction('approve')}
-                disabled={actionLoading}
-                className="px-6 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-shadow shadow-sm disabled:opacity-50"
-              >
-                Approve MIS
-              </button>
-           </div>
-        </div>
+         {/* Action Panel or Processed Info */}
+        {selectedMIS.status === 'submitted' ? (
+          <div className="bg-gray-50/50 dark:bg-surface-900/50 rounded-lg p-4 border border-gray-200 dark:border-surface-800">
+             <label className="block text-[11px] font-bold text-gray-500 dark:text-surface-400 uppercase tracking-widest mb-1.5">Manager Feedback / Comments</label>
+             <textarea 
+               value={comment}
+               onChange={(e) => setComment(e.target.value)}
+               className="w-full px-3 py-2 border border-gray-200 dark:border-surface-700 bg-white dark:bg-surface-800 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none disabled:bg-gray-100 dark:disabled:bg-surface-900 text-gray-800 dark:text-surface-100 shadow-sm transition-all"
+               rows={2}
+               placeholder="Optional for Approval, Mandatory for Rejection..."
+             />
+             <div className="flex justify-end gap-3 mt-3">
+                <button 
+                  onClick={() => handleAction('reject')}
+                  disabled={actionLoading}
+                  className="px-5 py-1.5 rounded border border-red-200 dark:border-rose-900 bg-red-50 dark:bg-rose-950/20 hover:bg-red-100 dark:hover:bg-rose-900/40 text-red-700 dark:text-rose-400 text-xs font-bold transition-colors disabled:opacity-50"
+                >
+                  Reject MIS
+                </button>
+                <button 
+                  onClick={() => handleAction('approve')}
+                  disabled={actionLoading}
+                  className="px-6 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-shadow shadow-sm disabled:opacity-50"
+                >
+                  Approve MIS
+                </button>
+             </div>
+          </div>
+        ) : (
+          <div className={`p-4 rounded-lg border flex flex-col gap-2 ${
+            selectedMIS.status === 'approved' 
+              ? 'bg-emerald-50/50 border-emerald-100 text-emerald-800' 
+              : 'bg-rose-50/50 border-rose-100 text-rose-800'
+          }`}>
+             <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                  selectedMIS.status === 'approved' ? 'bg-emerald-100 border-emerald-200' : 'bg-rose-100 border-rose-200'
+                }`}>
+                   {selectedMIS.status}
+                </span>
+                <span className="text-xs font-bold uppercase tracking-widest">Feedback Previously Provided:</span>
+             </div>
+             <p className="text-xs italic bg-white/50 p-2 rounded">{selectedMIS.managerComment || '(No comment provided)'}</p>
+          </div>
+        )}
 
       </div>
     );
@@ -315,9 +333,13 @@ export default function MISManager() {
                    <td className="px-4 py-2.5 text-center">
                       <button 
                         onClick={() => setSelectedMIS(item)}
-                        className="text-blue-600 hover:text-blue-800 font-bold underline"
+                        className={`font-bold underline transition-colors ${
+                          item.status === 'submitted' || !item.status 
+                            ? 'text-blue-600 hover:text-blue-800' 
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
                       >
-                        Review
+                        {item.status === 'submitted' || !item.status ? 'Review' : 'View Detail'}
                       </button>
                    </td>
                 </tr>

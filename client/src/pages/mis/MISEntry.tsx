@@ -41,6 +41,7 @@ export default function MISEntry() {
   const [activeTab, setActiveTab] = useState<'form' | 'history'>('form');
   const [history, setHistory] = useState<MISData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [projects, setProjects] = useState<{id: string, name: string}[]>([]);
   
   // Form State
   const [currentMISId, setCurrentMISId] = useState<string | null>(null);
@@ -57,6 +58,22 @@ export default function MISEntry() {
   const [keyTasks, setKeyTasks] = useState<KeyTask[]>([
     { task: '', status: 'Pending', comment: '' }
   ]);
+  const [projectId, setProjectId] = useState<string>('');
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await api.get('/projects');
+      if (res.data?.success) {
+        setProjects(res.data.data.map((p: any) => ({ id: p.id || p._id, name: p.name })));
+      }
+    } catch (err) {
+      console.error('Failed to fetch projects:', err);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'history') {
@@ -92,6 +109,7 @@ export default function MISEntry() {
     setGoals(mis.goals.length ? mis.goals : [{ target: '', actual: '', status: 'Pending', comment: '' }]);
     setLearnings(mis.learnings.length ? mis.learnings : [{ challenge: '', lesson: '' }]);
     setKeyTasks(mis.keyTasks.length ? mis.keyTasks : [{ task: '', status: 'Pending', comment: '' }]);
+    setProjectId(typeof mis.projectId === 'object' ? (mis.projectId as any).id || (mis.projectId as any)._id : mis.projectId || '');
     setStatus(mis.status);
     setManagerComment(mis.managerComment || '');
     setActiveTab('form');
@@ -104,6 +122,7 @@ export default function MISEntry() {
       setLearnings(last.learnings);
       setKeyTasks(last.keyTasks);
       setCurrentMISId(null);
+      setProjectId(typeof last.projectId === 'object' ? (last.projectId as any).id || (last.projectId as any)._id : last.projectId || '');
       setWeek(generateCurrentWeekLabel());
       setStatus('draft');
       setManagerComment('');
@@ -122,6 +141,7 @@ export default function MISEntry() {
       const payload = {
         id: currentMISId,
         week,
+        projectId: projectId || undefined,
         goals,
         learnings,
         keyTasks,
@@ -242,6 +262,20 @@ export default function MISEntry() {
                 disabled={!isEditable}
                 className="bg-transparent border-b border-gray-200 dark:border-surface-700 focus:border-blue-400 dark:focus:border-brand-500 focus:outline-none py-0.5 w-full text-gray-800 dark:text-surface-100 font-semibold text-sm disabled:text-gray-500 disabled:border-transparent transition-colors"
               />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-0.5">Project</label>
+              <select
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+                disabled={!isEditable}
+                className="bg-transparent border-b border-gray-200 dark:border-surface-700 focus:border-blue-400 dark:focus:border-brand-500 focus:outline-none py-0.5 w-full text-gray-800 dark:text-surface-100 font-semibold text-sm disabled:text-gray-500 disabled:border-transparent transition-colors cursor-pointer"
+              >
+                <option value="">No Project / General</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
             </div>
             <div className="flex-1 min-w-[150px]">
               <label className="block text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest mb-0.5">Status</label>

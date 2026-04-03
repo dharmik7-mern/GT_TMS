@@ -1,20 +1,12 @@
-import { getMISModel } from '../models/MIS.js';
-import { getUserModel } from '../models/User.js';
-import { getProjectModel } from '../models/Project.js';
+import { getTenantModels } from '../config/tenantDb.js';
 import mongoose from 'mongoose';
-
-const getModels = (conn) => ({
-  MIS: getMISModel(conn),
-  User: getUserModel(conn),
-  Project: getProjectModel(conn)
-});
 
 // CREATE MIS
 export async function createMIS(req, res, next) {
   try {
     const { companyId, workspaceId } = req.auth;
     const userId = req.auth.sub || req.auth.id;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
     const { week, projectId, goals, learnings, keyTasks, status } = req.body;
     
@@ -42,9 +34,11 @@ export async function createMIS(req, res, next) {
 export async function getMISById(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
-    const mis = await MIS.findOne({ _id: req.params.id, tenantId: companyId }).populate('employeeId', 'name email avatar').populate('projectId', 'name');
+    const mis = await MIS.findOne({ _id: req.params.id, tenantId: companyId })
+      .populate({ path: 'employeeId', model: 'User', select: 'name email avatar' })
+      .populate({ path: 'projectId', model: 'Project', select: 'name' });
     if (!mis) return res.status(404).json({ success: false, message: 'MIS not found' });
     
     return res.status(200).json({ success: true, data: mis });
@@ -58,12 +52,12 @@ export async function getMISByEmployee(req, res, next) {
   try {
     const { companyId } = req.auth;
     const userId = req.auth.sub || req.auth.id;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
     const misList = await MIS.find({ 
       employeeId: req.params.employeeId === 'me' ? userId : req.params.employeeId, 
       tenantId: companyId 
-    }).sort({ createdAt: -1 }).populate('projectId', 'name');
+    }).sort({ createdAt: -1 }).populate({ path: 'projectId', model: 'Project', select: 'name' });
     
     return res.status(200).json({ success: true, data: misList });
   } catch (e) {
@@ -76,7 +70,7 @@ export async function updateMIS(req, res, next) {
   try {
     const { companyId } = req.auth;
     const userId = req.auth.sub || req.auth.id;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
     const misId = req.body.id || req.body._id; // client may pass ID in body
     if (!misId) return res.status(400).json({ success: false, message: 'MIS ID is required' });
@@ -114,7 +108,7 @@ export async function submitMIS(req, res, next) {
   try {
     const { companyId } = req.auth;
     const userId = req.auth.sub || req.auth.id;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
     const misId = req.body.id || req.body._id;
     const mis = await MIS.findOne({ _id: misId, tenantId: companyId });
@@ -141,11 +135,14 @@ export async function submitMIS(req, res, next) {
 export async function getPendingMIS(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
-    const misList = await MIS.find({ tenantId: companyId, status: 'submitted' })
-                             .populate('employeeId', 'name avatar')
-                             .populate('projectId', 'name')
+    const misList = await MIS.find({ 
+                               tenantId: companyId, 
+                               status: { $in: ['submitted', 'approved', 'rejected'] } 
+                             })
+                             .populate({ path: 'employeeId', model: 'User', select: 'name avatar' })
+                             .populate({ path: 'projectId', model: 'Project', select: 'name' })
                              .sort({ updatedAt: -1 });
                              
     return res.status(200).json({ success: true, data: misList });
@@ -158,7 +155,7 @@ export async function getPendingMIS(req, res, next) {
 export async function approveMIS(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
     const misId = req.body.id || req.body._id;
     const managerComment = req.body.managerComment || '';
@@ -180,7 +177,7 @@ export async function approveMIS(req, res, next) {
 export async function rejectMIS(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
     const misId = req.body.id || req.body._id;
     const managerComment = req.body.managerComment;
@@ -207,7 +204,7 @@ export async function getReportWeekly(req, res, next) {
   try {
     const { companyId } = req.auth;
     const { week } = req.query; // optional filter
-    const { MIS } = getModels(mongoose.connection);
+    const { MIS } = await getTenantModels(companyId);
     
     const query = { tenantId: companyId };
     if (week) query.week = week;
@@ -237,7 +234,7 @@ export async function getReportWeekly(req, res, next) {
 export async function getReportEmployee(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { MIS, User } = getModels(mongoose.connection);
+    const { MIS, User } = await getTenantModels(companyId);
     
     const pipelines = [
       { $match: { tenantId: new mongoose.Types.ObjectId(companyId) } },
@@ -252,7 +249,7 @@ export async function getReportEmployee(req, res, next) {
     ];
     
     const stats = await MIS.aggregate(pipelines);
-    const users = await User.find({ tenantId: companyId }, 'name avatar').lean();
+    const users = await User.find({ tenantId: companyId, role: { $nin: ['admin', 'super_admin'] } }, 'name avatar').lean();
     
     const data = users.map(u => {
       const s = stats.find(stat => stat._id.toString() === u._id.toString());
@@ -281,7 +278,7 @@ export async function getReportEmployee(req, res, next) {
 export async function getReportProject(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { MIS, Project } = getModels(mongoose.connection);
+    const { MIS, Project } = await getTenantModels(companyId);
     
     const pipelines = [
       { $match: { tenantId: new mongoose.Types.ObjectId(companyId), projectId: { $exists: true, $ne: null } } },
