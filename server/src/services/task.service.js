@@ -1282,8 +1282,16 @@ export async function addTaskComment({ companyId, workspaceId, userId, role, tas
 }
 
 export async function getOverdueTasks({ tenantId, userId, role }) {
-  const { Task, User } = await getTenantModels(tenantId);
+  const { Task, QuickTask, Project } = await getTenantModels(tenantId);
   const now = new Date();
+  now.setHours(0, 0, 0, 0); // Align with frontend (only tasks due BEFORE today)
+
+  // 1. Get active project IDs (exclude archived)
+  const activeProjects = await Project.find({
+    tenantId,
+    status: { $ne: 'archived' }
+  }).select('_id').lean();
+  const activeProjectIds = activeProjects.map(p => p._id);
 
   const query = {
     tenantId,
@@ -1295,19 +1303,29 @@ export async function getOverdueTasks({ tenantId, userId, role }) {
     query.assigneeIds = userId;
   }
 
-  const tasks = await Task.find(query)
-    .populate('assigneeIds', 'name')
-    .sort({ dueDate: 1 })
-    .lean();
+  // Fetch both regular tasks (active projects or no project) and quick tasks
+  const [tasks, quickTasks] = await Promise.all([
+    Task.find({
+      ...query,
+      $or: [
+        { projectId: { $in: activeProjectIds } },
+        { projectId: { $exists: false } },
+        { projectId: null }
+      ]
+    }).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean(),
+    QuickTask.find(query).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean()
+  ]);
 
-  const formattedTasks = tasks.map(t => ({
+  const allTasks = [...tasks, ...quickTasks];
+
+  const formattedTasks = allTasks.map(t => ({
     id: String(t._id),
     title: t.title,
     dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split('T')[0] : null,
     assignedToName: t.assigneeIds && t.assigneeIds.length > 0
       ? t.assigneeIds.map(u => u.name).join(', ')
       : 'Unassigned'
-  }));
+  })).sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
 
   return {
     count: formattedTasks.length,
