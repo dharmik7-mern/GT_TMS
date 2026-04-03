@@ -133,6 +133,7 @@ router.put('/reassign-request/:id/approve', ReassignController.approveRequest);
 router.put('/reassign-request/:id/reject', ReassignController.rejectRequest);
 router.get('/reassign-request/status/:taskId', ReassignController.getStatusForTask);
 
+router.get('/overdue', TasksController.getOverdue);
 router.get('/', TasksController.list);
 router.get('/detail/:id', TasksController.getDetail);
 router.get('/:id', TasksController.getOne);

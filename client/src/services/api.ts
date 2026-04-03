@@ -107,6 +107,7 @@ export const tasksService = {
     api.post(`/tasks/requests/${id}/review`, body),
   update: (id: string, data: unknown) => api.put(`/tasks/${id}`, data),
   delete: (id: string) => api.delete(`/tasks/${id}`),
+  getOverdue: () => api.get('/tasks/overdue'),
   move: (id: string, status: string) => api.patch(`/tasks/${id}/status`, { status }),
   review: (id: string, body: { action: 'approve' | 'changes_requested'; rating?: number; reviewRemark?: string }) =>
     api.post(`/tasks/${id}/review`, body),

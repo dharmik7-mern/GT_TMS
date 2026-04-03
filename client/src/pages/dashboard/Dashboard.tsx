@@ -16,6 +16,7 @@ import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar } from '../../components/ui';
 import { TaskCard } from '../../components/TaskCard';
 import { ReassignRequestsPanel } from '../../components/ReassignRequestsPanel';
+import { OverdueTasksPopup } from '../../components/dashboard/OverdueTasksPopup';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -634,6 +635,7 @@ export const DashboardPage: React.FC = () => {
           </motion.div>
         </div>
       </div>
+      <OverdueTasksPopup />
     </div>
   );
 };

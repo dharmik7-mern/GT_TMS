@@ -83,6 +83,7 @@ export const useAuthStore = create<AuthStore>()(
         const rt = get().refreshToken;
         // Fire-and-forget: server clears refresh token record AND SSO cookie
         authService.logout(rt).catch(() => { });
+        sessionStorage.removeItem('overdue_popup_shown');
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
       },
 
