@@ -408,7 +408,7 @@ export const QuickTaskDetailPage: React.FC = () => {
                 <div>
                   <label className="label">Due date</label>
                   <div className="relative">
-                    <input type="date" value={task.dueDate ?? ''} onChange={(e) => onChangeDueDate(e.target.value)} className="input pr-10" disabled={!canEdit} />
+                    <input type="date" value={task.dueDate ?? ''} min={new Date().toISOString().split('T')[0]} onChange={(e) => onChangeDueDate(e.target.value)} className="input pr-10" disabled={!canEdit} />
                     <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
                   </div>
                 </div>

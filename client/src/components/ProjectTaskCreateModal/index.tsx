@@ -234,7 +234,6 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
             <input 
               className="input" 
               type="date" 
-              min={new Date().toISOString().split('T')[0]}
               value={form.startDate} 
               onChange={(event) => handleStartDateChange(event.target.value)} 
               required 

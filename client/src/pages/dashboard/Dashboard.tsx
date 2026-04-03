@@ -363,7 +363,7 @@ export const DashboardPage: React.FC = () => {
           <StatCard icon={<FolderKanban size={20} />} label="Active Projects" value={activeProjects.length} sub="across workspace" color="#3366ff" trend={12} delay={0} onClick={() => navigate('/projects?status=active')} />
           <StatCard icon={<CheckCircle2 size={20} />} label={isManagerOrAdmin ? "Total Tasks Done" : "Tasks Completed"} value={completedThisWeek.length} sub={isManagerOrAdmin ? "all projects" : "this week"} color="#10b981" trend={8} delay={0.05} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=done' : '/my-tasks?filter=done')} />
           <StatCard icon={<Clock size={20} />} label={isManagerOrAdmin ? "Workspace Open Tasks" : "My Open Tasks"} value={isManagerOrAdmin ? (tasks.length + quickTasks.length) - completedThisWeek.length : myTasks.length} sub={isManagerOrAdmin ? "active now" : "assigned to me"} color="#f59e0b" trend={-3} delay={0.1} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=active' : '/my-tasks?filter=in_progress')} />
-          <StatCard icon={<AlertTriangle size={20} />} label={isManagerOrAdmin ? "Project Overdue" : "Overdue Tasks"} value={overdueTasks.length} sub={isManagerOrAdmin ? "need attention" : "need attention"} color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=overdue' : '/my-tasks?filter=overdue')} />
+          <StatCard icon={<AlertTriangle size={20} />} label="Overdue Tasks" value={overdueTasks.length} sub="need attention" color="#f43f5e" trend={-15} delay={0.15} onClick={() => navigate(isManagerOrAdmin ? '/tasks?filter=overdue' : '/my-tasks?filter=overdue')} />
         </div>
       )}
 

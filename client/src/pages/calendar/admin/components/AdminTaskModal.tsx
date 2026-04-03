@@ -260,7 +260,6 @@ export const AdminTaskModal = () => {
                                 <input
                                     type="date"
                                     value={format(startTime, 'yyyy-MM-dd')}
-                                    min={format(new Date(), 'yyyy-MM-dd')}
                                     onChange={(e) => {
                                         const [y, m, d] = e.target.value.split('-').map(Number);
                                         const nextS = new Date(startTime); nextS.setFullYear(y, m - 1, d);

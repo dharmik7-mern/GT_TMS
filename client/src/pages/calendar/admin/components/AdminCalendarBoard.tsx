@@ -292,7 +292,6 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                                         type="date"
                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                                         value={inlineDate}
-                                        min={new Date().toISOString().split('T')[0]}
                                         onChange={e => setInlineDate(e.target.value)}
                                     />
                                 </label>
