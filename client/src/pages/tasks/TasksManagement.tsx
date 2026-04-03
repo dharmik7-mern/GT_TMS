@@ -688,22 +688,7 @@ export const TasksManagement: React.FC = () => {
 
       <div className="relative flex-1">
         <AnimatePresence mode="wait">
-          {!selectedCategory ? (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="flex flex-col items-center justify-center p-12 sm:p-20 text-center bg-white dark:bg-surface-900 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-surface-800 shadow-sm"
-            >
-              <div className="w-20 h-20 bg-[#f8f9fc] dark:bg-surface-800 rounded-full flex items-center justify-center mb-6 text-gray-300 dark:text-surface-600 ring-8 ring-white dark:ring-surface-900 shadow-inner">
-                <List size={32} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-surface-100 mb-2">Ready to work?</h3>
-              <p className="text-sm text-gray-500 dark:text-surface-400 max-w-xs mx-auto leading-relaxed font-medium">
-                Select a summary card above to view and manage specific tasks.
-              </p>
-            </motion.div>
-          ) : view === 'table' ? (
+          {view === 'table' ? (
             <motion.div
               key="table"
               initial={{ opacity: 0, y: 10 }}
@@ -713,7 +698,7 @@ export const TasksManagement: React.FC = () => {
             >
               <div className="flex flex-col gap-6 overflow-visible lg:overflow-auto custom-scrollbar">
                 {/* 1. Active Tasks Section */}
-                {selectedCategory === 'active' && (
+                {(selectedCategory === 'active' || !selectedCategory) && (
                 <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                   <div
                     onClick={() => toggleSection('active')}
@@ -778,7 +763,7 @@ export const TasksManagement: React.FC = () => {
                 )}
 
                 {/* 2. Projects Section */}
-                {selectedCategory === 'project' && (
+                {(selectedCategory === 'project' || !selectedCategory) && (
                 <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                   <div
                     onClick={() => toggleSection('projects')}
@@ -864,7 +849,7 @@ export const TasksManagement: React.FC = () => {
                 )}
 
                 {/* 3. Quick Tasks Section */}
-                {selectedCategory === 'quick' && (
+                {(selectedCategory === 'quick' || !selectedCategory) && (
                   <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                     <div
                       onClick={() => toggleSection('quick')}
@@ -920,7 +905,7 @@ export const TasksManagement: React.FC = () => {
                 )}
 
                 {/* 4. Overdue Tasks Section */}
-                {selectedCategory === 'overdue' && (
+                {(selectedCategory === 'overdue' || !selectedCategory) && (
                 <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                   <div
                     onClick={() => toggleSection('overdue')}
@@ -1679,6 +1664,19 @@ const PaginationControls = ({
 };
 
 const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => void }) => {
+  const isOverdue = useMemo(() => {
+    if (!task.dueDate || task.status === 'done') return false;
+    const d = new Date(task.dueDate);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return d < now;
+  }, [task.dueDate, task.status]);
+
+  const statusConfig = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG];
+  const statusLabel = isOverdue ? 'OVER DUE' : (statusConfig?.label || task.status.replace('_', ' '));
+  const statusColor = isOverdue ? '#f43f5e' : (statusConfig?.color);
+
   return (
     <tr
       onClick={onClick}
@@ -1694,8 +1692,15 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
       </td>
       <td className="px-3 py-4 align-middle whitespace-nowrap">
         <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.color }} />
-          <span className="text-gray-600 dark:text-surface-300 font-bold text-[11px] uppercase tracking-wide">{STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG]?.label || task.status.replace('_', ' ')}</span>
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
+          <span 
+            className={cn(
+              "font-bold text-[11px] uppercase tracking-wide",
+              isOverdue ? "text-rose-500" : "text-gray-600 dark:text-surface-300"
+            )}
+          >
+            {statusLabel}
+          </span>
         </div>
       </td>
       <td className="px-3 py-4 align-middle whitespace-nowrap">
