@@ -48,6 +48,8 @@ const createSchema = z.object({
   dueDate: z.string().trim().min(1),
   completionRemark: z.string().trim().max(5000).optional(),
   isPrivate: z.boolean().optional(),
+  labels: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
   const assigneeCount = Array.isArray(data.assigneeIds)
     ? data.assigneeIds.filter(Boolean).length
@@ -76,6 +78,8 @@ const updateSchema = z.object({
   dueDate: z.string().trim().min(1, 'Due date is required').optional(),
   completionRemark: z.string().trim().max(5000).optional(),
   isPrivate: z.boolean().optional(),
+  labels: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
   const touchedAssignees = data.assigneeIds !== undefined || data.assigneeId !== undefined;
   const assigneeCount = Array.isArray(data.assigneeIds)

@@ -4,7 +4,13 @@ export async function list(req, res, next) {
   try {
     const { companyId, workspaceId } = req.auth;
     const { Label } = await getTenantModels(companyId);
-    const labels = await Label.find({ tenantId: companyId, workspaceId }).sort({ name: 1 });
+    
+    const query = { tenantId: companyId };
+    if (workspaceId) {
+      query.workspaceId = workspaceId;
+    }
+
+    const labels = await Label.find(query).sort({ name: 1 });
     return res.status(200).json({ success: true, data: labels });
   } catch (e) {
     return next(e);
@@ -15,6 +21,14 @@ export async function create(req, res, next) {
   try {
     const { companyId, workspaceId } = req.auth;
     const { name, color } = req.body;
+    
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: { message: 'Label name is required' } });
+    }
+    if (!workspaceId) {
+      return res.status(400).json({ success: false, error: { message: 'Workspace context is required to create labels' } });
+    }
+
     const { Label } = await getTenantModels(companyId);
     
     // Safety: check if label with same name exists in workspace
@@ -29,8 +43,9 @@ export async function create(req, res, next) {
       name: name.trim(),
       color: color || '#71717a',
     });
-    return res.status(201).json({ success: true, data: label });
+    res.status(201).json({ success: true, data: label });
   } catch (e) {
+    console.error(`[LabelsController] Error creating label:`, e);
     return next(e);
   }
 }

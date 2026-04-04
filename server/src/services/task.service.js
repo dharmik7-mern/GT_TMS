@@ -357,11 +357,17 @@ export async function listTasks({
     $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
   };
 
-  if (labels && Array.isArray(labels) && labels.length > 0) {
-    filter.labels = { $in: labels };
+  if (labels && Array.isArray(labels)) {
+    const validLabels = labels.filter(l => l && typeof l === 'string' && l.trim().length > 0);
+    if (validLabels.length > 0) {
+      filter.labels = { $in: validLabels };
+    }
   }
-  if (tags && Array.isArray(tags) && tags.length > 0) {
-    filter.tags = { $in: tags };
+  if (tags && Array.isArray(tags)) {
+    const validTags = tags.filter(t => t && typeof t === 'string' && t.trim().length > 0);
+    if (validTags.length > 0) {
+      filter.tags = { $in: validTags };
+    }
   }
 
   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });

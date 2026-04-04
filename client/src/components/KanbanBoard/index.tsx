@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent,
   PointerSensor, useDroppable, useSensor, useSensors, closestCorners,
@@ -18,6 +18,7 @@ import { STATUS_CONFIG } from '../../app/constants';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { TaskCard } from '../TaskCard';
+import { LabelManagementModal } from '../LabelManagementModal';
 import type { Task, TaskStatus } from '../../app/types';
 
 const BASE_COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
@@ -287,6 +288,10 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
   );
 };
 
+export interface KanbanBoardHandle {
+  addProcessStep: (insertAfterId?: string) => void;
+}
+
 interface KanbanBoardProps {
   projectId: string;
   onOpenTask: (task: Task) => void;
@@ -294,16 +299,18 @@ interface KanbanBoardProps {
   tasksOverride?: Task[];
   onMoveTaskRemote?: (taskId: string, status: TaskStatus) => Promise<void>;
   onDeleteTask?: (taskId: string) => void;
+  hideHeader?: boolean;
 }
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({
+export const KanbanBoard = forwardRef<KanbanBoardHandle, KanbanBoardProps>(({
   projectId,
   onOpenTask,
   onAddTask,
   tasksOverride,
   onMoveTaskRemote,
   onDeleteTask,
-}) => {
+  hideHeader = false,
+}, ref) => {
   const { tasks: storeTasks, moveTask } = useAppStore();
   const { user } = useAuthStore();
   const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
@@ -312,39 +319,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [columnOrder, setColumnOrder] = useState<string[]>(BASE_COLUMNS.map((column) => column.id));
   const [taskStepOverrides, setTaskStepOverrides] = useState<Record<string, string>>({});
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
-  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-
+  const [isManageLabelsOpen, setIsManageLabelsOpen] = useState(false);
   const { allLabels } = useAppStore();
 
-  const allTags = useMemo(() => {
-    const tags = new Set<string>();
-    storeTasks.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
-    return Array.from(tags).sort();
-  }, [storeTasks]);
+  useImperativeHandle(ref, () => ({
+    addProcessStep: (insertAfterId?: string) => {
+      addProcessStepAfter(insertAfterId || orderedColumns[orderedColumns.length - 1]?.id);
+    }
+  }));
 
-  const tasks = tasksOverride ?? storeTasks;
-  const projectTasks = useMemo(() => {
-    let filtered = projectId ? tasks.filter((task) => task.projectId === projectId) : tasks;
-    
-    if (selectedLabels.length > 0) {
-      filtered = filtered.filter(t => 
-        t.labels?.some(l => {
-          const lId = typeof l === 'object' ? l.id : l;
-          return selectedLabels.includes(lId);
-        })
-      );
-    }
-    
-    if (selectedTags.length > 0) {
-      filtered = filtered.filter(t => 
-        t.tags?.some(tag => selectedTags.includes(tag))
-      );
-    }
-    
-    return filtered;
-  }, [tasks, projectId, selectedLabels, selectedTags]);
+  const projectTasks = tasksOverride ?? (projectId ? storeTasks.filter((task) => task.projectId === projectId) : storeTasks);
 
   const allColumns = useMemo<BoardColumn[]>(
     () => [
@@ -524,115 +508,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="mb-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between bg-surface-50/50 dark:bg-surface-800/30 p-2 rounded-2xl border border-surface-100 dark:border-surface-800/50">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={cn(
-                "btn-secondary btn-sm gap-2 transition-all h-9 px-4 shadow-sm",
-                (selectedLabels.length > 0 || selectedTags.length > 0 || isFilterOpen) && "border-brand-500 text-brand-700 bg-brand-50 dark:bg-brand-950/20"
-              )}
-            >
-              <Filter size={15} className={cn(isFilterOpen && "text-brand-600")} />
-              <span className="font-semibold">Filters</span>
-              {(selectedLabels.length > 0 || selectedTags.length > 0) && (
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-[10px] text-white font-bold">
-                  {selectedLabels.length + selectedTags.length}
-                </span>
-              )}
+      {!hideHeader && (
+        <div className="mb-4 flex flex-col gap-3">
+          <div className="flex items-center justify-end bg-surface-50/50 dark:bg-surface-800/30 p-2 rounded-2xl border border-surface-100 dark:border-surface-800/50">
+            <button type="button" onClick={() => addProcessStepAfter(orderedColumns[orderedColumns.length - 1]?.id)} className="btn-secondary btn-sm h-9 px-4">
+              <Plus size={14} className="text-brand-600" />
+              <span className="font-medium">Add Process Step</span>
             </button>
-
-            {canManageTask && (
-              <button 
-                onClick={() => setIsFilterOpen(true)}
-                className="btn-secondary btn-sm gap-2 h-9 px-4 shadow-sm"
-                title="Manage Labels"
-              >
-                <Tag size={15} className="text-brand-600" />
-                <span className="font-semibold text-surface-900 border-none outline-none dark:text-white">Labels</span>
-              </button>
-            )}
-            
-            {(selectedLabels.length > 0 || selectedTags.length > 0) && (
-              <button 
-                onClick={() => { setSelectedLabels([]); setSelectedTags([]); }}
-                className="text-[11px] font-bold text-surface-400 hover:text-rose-500 transition-colors uppercase tracking-wider ml-1"
-              >
-                Clear Filters
-              </button>
-            )}
           </div>
-
-          <button type="button" onClick={() => addProcessStepAfter(orderedColumns[orderedColumns.length - 1]?.id)} className="btn-secondary btn-sm h-9 px-4">
-            <Plus size={14} className="text-brand-600" />
-            <span className="font-medium">Add Process Step</span>
-          </button>
         </div>
-
-        {isFilterOpen && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }} 
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900 p-4 shadow-sm space-y-4"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Labels Filter */}
-              <div>
-                <label className="text-[11px] font-bold text-surface-400 uppercase tracking-widest mb-2.5 block">Filter by Label</label>
-                <div className="flex flex-wrap gap-2">
-                  {allLabels.map(l => {
-                    const isSelected = selectedLabels.includes(l.id);
-                    return (
-                      <button
-                        key={l.id}
-                        onClick={() => setSelectedLabels(prev => isSelected ? prev.filter(id => id !== l.id) : [...prev, l.id])}
-                        className={cn(
-                          "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5",
-                          isSelected 
-                            ? "border-current shadow-sm" 
-                            : "border-surface-100 dark:border-surface-800 text-surface-500 hover:border-surface-200 dark:hover:border-surface-700"
-                        )}
-                        style={isSelected ? { color: l.color, backgroundColor: `${l.color}15` } : {}}
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: l.color }} />
-                        {l.name}
-                      </button>
-                    );
-                  })}
-                  {allLabels.length === 0 && <span className="text-xs text-surface-400 italic">No labels available</span>}
-                </div>
-              </div>
-
-              {/* Tags Filter */}
-              <div>
-                <label className="text-[11px] font-bold text-surface-400 uppercase tracking-widest mb-2.5 block">Filter by Tag</label>
-                <div className="flex flex-wrap gap-2">
-                  {allTags.map(tag => {
-                    const isSelected = selectedTags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        onClick={() => setSelectedTags(prev => isSelected ? prev.filter(t => t !== tag) : [...prev, tag])}
-                        className={cn(
-                          "px-2.5 py-1 rounded-lg text-xs font-medium border transition-all flex items-center gap-1",
-                          isSelected 
-                            ? "bg-surface-800 text-white border-surface-800 dark:bg-white dark:text-surface-900 dark:border-white shadow-md shadow-black/10" 
-                            : "border-surface-100 dark:border-surface-800 text-surface-500 hover:border-surface-200 dark:hover:border-surface-700 bg-surface-50 dark:bg-surface-950/30"
-                        )}
-                      >
-                        <Tag size={10} className={cn(isSelected ? "opacity-100" : "opacity-30")} />
-                        #{tag}
-                      </button>
-                    );
-                  })}
-                  {allTags.length === 0 && <span className="text-xs text-surface-400 italic">No tags available</span>}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </div>
+      )}
 
       <SortableContext items={orderedColumns.map((column) => `column:${column.id}`)} strategy={horizontalListSortingStrategy}>
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -668,8 +553,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           </div>
         )}
       </DragOverlay>
+      <LabelManagementModal 
+        open={isManageLabelsOpen} 
+        onClose={() => setIsManageLabelsOpen(false)} 
+      />
     </DndContext>
   );
-};
+});
 
 export default KanbanBoard;

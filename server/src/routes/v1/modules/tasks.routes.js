@@ -49,6 +49,7 @@ const taskCreateSchema = z.object({
   estimatedHours: z.number().optional(),
   order: z.number().optional(),
   labels: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
   subtasks: z.array(subtaskInputSchema).optional(),
 });
 
@@ -70,6 +71,7 @@ const taskUpdateSchema = z
     estimatedHours: z.number().nullable().optional(),
     order: z.number().optional(),
     labels: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
     subtasks: z.array(subtaskInputSchema).optional(),
     completionRemark: z.string().trim().max(5000).optional(),
   })

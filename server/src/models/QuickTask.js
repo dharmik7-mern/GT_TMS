@@ -49,6 +49,8 @@ const quickTaskSchema = new mongoose.Schema(
       reviewedAt: { type: Date, default: null },
       reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     },
+    labels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Label' }],
+    tags: [{ type: String, trim: true }],
   },
   { timestamps: true }
 );
@@ -106,6 +108,15 @@ quickTaskSchema.set('toJSON', {
           completionRemark: '',
           reviewRemark: '',
         };
+
+    ret.labels = Array.isArray(ret.labels)
+      ? ret.labels.map((v) => {
+          if (!v) return undefined;
+          const id = typeof v === 'object' ? (v._id || v.id || v) : v;
+          return String(id);
+        }).filter(Boolean)
+      : [];
+    ret.tags = Array.isArray(ret.tags) ? ret.tags.filter(t => typeof t === 'string' && t.trim()) : [];
 
     delete ret._id;
     delete ret.__v;

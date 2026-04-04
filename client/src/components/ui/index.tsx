@@ -20,47 +20,58 @@ interface TabsProps {
   children: React.ReactNode;
   variant?: 'underline' | 'pill';
   className?: string;
+  actions?: React.ReactNode;
 }
 
 export const Tabs: React.FC<TabsProps> = ({
-  value, onValueChange, items, children, variant = 'underline', className
+  value, onValueChange, items, children, variant = 'underline', className, actions
 }) => (
   <RadixTabs.Root value={value} onValueChange={onValueChange} className={className}>
-    <RadixTabs.List className={cn(
-      'flex w-full overflow-x-auto pb-1 scrollbar-hide',
-      variant === 'underline' && 'border-b border-surface-100 dark:border-surface-800 gap-1',
-      variant === 'pill' && 'bg-surface-100 dark:bg-surface-800 p-1 rounded-xl gap-1'
+    <div className={cn(
+      'flex items-center justify-between gap-4',
+      variant === 'underline' && 'border-b border-surface-100 dark:border-surface-800'
     )}>
-      {items.map(item => (
-        <RadixTabs.Trigger
-          key={item.value}
-          value={item.value}
-          className={cn(
-            'flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium transition-all outline-none',
-            variant === 'underline' && cn(
-              'rounded-t-lg border-b-2 px-3 py-2.5 text-xs sm:px-4 sm:text-sm -mb-px',
-              value === item.value
-                ? 'text-brand-700 dark:text-brand-300 border-brand-600'
-                : 'text-surface-500 border-transparent hover:text-surface-700 dark:hover:text-surface-300'
-            ),
-            variant === 'pill' && cn(
-              'rounded-lg px-3 py-1.5 text-xs sm:text-sm',
-              value === item.value
-                ? 'bg-white dark:bg-surface-900 text-surface-900 dark:text-white shadow-sm'
-                : 'text-surface-500 hover:text-surface-700 dark:hover:text-surface-300'
-            )
-          )}
-        >
-          {item.icon}
-          {item.label}
-          {item.badge !== undefined && item.badge > 0 && (
-            <span className="w-4 h-4 bg-brand-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-              {item.badge}
-            </span>
-          )}
-        </RadixTabs.Trigger>
-      ))}
-    </RadixTabs.List>
+      <RadixTabs.List className={cn(
+        'flex overflow-x-auto pb-1 scrollbar-hide',
+        variant === 'underline' && 'gap-1',
+        variant === 'pill' && 'bg-surface-100 dark:bg-surface-800 p-1 rounded-xl gap-1'
+      )}>
+        {items.map(item => (
+          <RadixTabs.Trigger
+            key={item.value}
+            value={item.value}
+            className={cn(
+              'flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium transition-all outline-none',
+              variant === 'underline' && cn(
+                'rounded-t-lg border-b-2 px-3 py-2.5 text-xs sm:px-4 sm:text-sm -mb-[5px]',
+                value === item.value
+                  ? 'text-brand-700 dark:text-brand-300 border-brand-600'
+                  : 'text-surface-500 border-transparent hover:text-surface-700 dark:hover:text-surface-300'
+              ),
+              variant === 'pill' && cn(
+                'rounded-lg px-3 py-1.5 text-xs sm:text-sm',
+                value === item.value
+                  ? 'bg-white dark:bg-surface-900 text-surface-900 dark:text-white shadow-sm'
+                  : 'text-surface-500 hover:text-surface-700 dark:hover:text-surface-300'
+              )
+            )}
+          >
+            {item.icon}
+            {item.label}
+            {item.badge !== undefined && item.badge > 0 && (
+              <span className="w-4 h-4 bg-brand-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {item.badge}
+              </span>
+            )}
+          </RadixTabs.Trigger>
+        ))}
+      </RadixTabs.List>
+      {actions && (
+        <div className="flex items-center gap-2 pb-1">
+          {actions}
+        </div>
+      )}
+    </div>
     {children}
   </RadixTabs.Root>
 );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -10,7 +10,7 @@ import { cn, formatDate, getProgressColor } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
-import { KanbanBoard } from '../../components/KanbanBoard';
+import { KanbanBoard, type KanbanBoardHandle } from '../../components/KanbanBoard';
 import { TaskModal } from '../../components/TaskModal';
 import { TaskCard } from '../../components/TaskCard';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
@@ -29,6 +29,7 @@ export const ProjectDetailPage: React.FC = () => {
   const { user } = useAuthStore();
   const [activeView, setActiveView] = useState('kanban');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const kanbanRef = useRef<KanbanBoardHandle>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [defaultStatus, setDefaultStatus] = useState<TaskStatus>('todo');
@@ -405,15 +406,32 @@ export const ProjectDetailPage: React.FC = () => {
       </motion.div>
 
       {/* Views */}
-      <Tabs value={activeView} onValueChange={setActiveView} items={TAB_ITEMS} variant="underline">
+      <Tabs 
+        value={activeView} 
+        onValueChange={setActiveView} 
+        items={TAB_ITEMS} 
+        variant="underline"
+        actions={activeView === 'kanban' && canCreateTask ? (
+          <button 
+            type="button" 
+            onClick={() => kanbanRef.current?.addProcessStep()}
+            className="btn-secondary btn-sm h-8 px-3 gap-1.5"
+          >
+            <Plus size={14} className="text-brand-600" />
+            <span className="font-semibold text-[11px]">Add Step</span>
+          </button>
+        ) : null}
+      >
         <TabsContent value="kanban" className="pt-4">
           <KanbanBoard 
+            ref={kanbanRef}
             projectId={project.id} 
             tasksOverride={filteredProjectTasks}
             onOpenTask={openTask} 
             onAddTask={canCreateTask || canRequestTask ? handleAddTask : undefined} 
             onDeleteTask={canCreateTask ? handleDeleteTask : undefined} 
             onMoveTaskRemote={handleMoveTaskRemote}
+            hideHeader
           />
         </TabsContent>
 

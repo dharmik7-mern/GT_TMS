@@ -5,7 +5,8 @@ import { PRIORITY_CONFIG, STATUS_CONFIG, TASK_TYPE_CONFIG } from '../../app/cons
 import { Modal } from '../Modal';
 import { UserAvatar } from '../UserAvatar';
 import { useAppStore } from '../../context/appStore';
-import { Tag, X, Plus } from 'lucide-react';
+import { Tag, X, Plus, Check } from 'lucide-react';
+import { labelsService } from '../../services/api';
 import { cn } from '../../utils/helpers';
 import type { Priority, Project, ProjectCategory, TaskStatus, TaskType, TimelinePhase, User } from '../../app/types';
 
@@ -165,8 +166,25 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
     }));
   };
 
-  const { allLabels } = useAppStore();
+  const { allLabels, bootstrap } = useAppStore();
   const [tagInput, setTagInput] = useState('');
+  const [isCreatingLabel, setIsCreatingLabel] = useState(false);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('#6366f1');
+
+  const handleCreateLabel = async () => {
+    if (!newLabelName.trim()) return;
+    try {
+      const res = await labelsService.create({ name: newLabelName.trim(), color: newLabelColor });
+      const newL = res.data.data;
+      await bootstrap(); 
+      setField('labels', [...form.labels, newL.id]);
+      setNewLabelName('');
+      setIsCreatingLabel(false);
+    } catch (e: any) {
+      // Error handled by interceptor
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -362,31 +380,92 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="label">Labels</label>
-            <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 border border-surface-100 dark:border-surface-800 rounded-xl">
-              {allLabels.map(l => {
-                const isSelected = form.labels.includes(l.id);
-                return (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onClick={() => setField('labels', isSelected ? form.labels.filter(id => id !== l.id) : [...form.labels, l.id])}
-                    className={cn(
-                      "px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border",
-                      isSelected ? "shadow-sm" : "opacity-40 hover:opacity-100 border-transparent"
-                    )}
-                    style={{ 
-                      backgroundColor: isSelected ? `${l.color}20` : 'transparent', 
-                      color: isSelected ? l.color : 'inherit',
-                      borderColor: isSelected ? l.color : 'transparent'
-                    }}
-                  >
-                    {l.name}
-                  </button>
-                );
-              })}
-              {allLabels.length === 0 && <p className="text-[10px] text-surface-400 italic">No labels created yet</p>}
+            <div className="flex items-center justify-between mb-2">
+              <label className="label mb-0">Labels</label>
+              {!isCreatingLabel && (
+                <button 
+                  type="button" 
+                  onClick={() => setIsCreatingLabel(true)}
+                  className="text-[10px] font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1"
+                >
+                  <Plus size={10} />
+                  New Label
+                </button>
+              )}
             </div>
+            
+            {isCreatingLabel ? (
+              <div className="p-3 border border-brand-100 dark:border-brand-900/30 bg-brand-50/30 dark:bg-brand-950/20 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="flex gap-2">
+                  <input 
+                    autoFocus
+                    className="input h-8 text-xs py-1 flex-1"
+                    placeholder="Label name..."
+                    value={newLabelName}
+                    onChange={e => setNewLabelName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCreateLabel())}
+                  />
+                  <div className="flex gap-1 overflow-x-auto pb-1 max-w-[120px]">
+                    {['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#71717a'].map(c => (
+                      <button 
+                        key={c}
+                        type="button"
+                        onClick={() => setNewLabelColor(c)}
+                        className={cn(
+                          "w-5 h-5 rounded-full border-2 flex-shrink-0 transition-all",
+                          newLabelColor === c ? "border-white dark:border-surface-800 scale-110 shadow-sm ring-1 ring-brand-500" : "border-transparent"
+                        )}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => void handleCreateLabel()}
+                    disabled={!newLabelName.trim()}
+                    className="btn-primary btn-xs flex-1 h-7 text-[10px]"
+                  >
+                    Create
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsCreatingLabel(false); setNewLabelName(''); }}
+                    className="btn-secondary btn-xs flex-1 h-7 text-[10px]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 border border-surface-100 dark:border-surface-800 rounded-xl relative group">
+                {allLabels.map(l => {
+                  const isSelected = form.labels.includes(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => setField('labels', isSelected ? form.labels.filter(id => id !== l.id) : [...form.labels, l.id])}
+                      className={cn(
+                        "px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border",
+                        isSelected ? "shadow-sm" : "opacity-40 hover:opacity-100 border-transparent text-surface-500 dark:text-surface-400"
+                      )}
+                      style={{ 
+                        backgroundColor: isSelected ? `${l.color}20` : 'transparent', 
+                        color: isSelected ? l.color : undefined,
+                        borderColor: isSelected ? l.color : 'transparent'
+                      }}
+                    >
+                      {l.name}
+                    </button>
+                  );
+                })}
+                {allLabels.length === 0 && (
+                  <p className="text-[10px] text-surface-400 italic py-1">No labels created yet</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div>

@@ -37,8 +37,8 @@ const taskSchema = new mongoose.Schema(
     dependencies: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task', index: true }],
     timelineType: { type: String, enum: timelineItemTypes, default: 'task', index: true },
     subtasks: [subtaskSchema],
-    tags: { type: [String], default: [] },
-    labels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Label', default: [], index: true }],
+    tags: [{ type: String, trim: true, index: true }],
+    labels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Label', index: true }],
     startDate: { type: Date, default: null },
     dueDate: { type: Date, default: null, index: true },
     startTime: { type: Date, default: null },
@@ -141,7 +141,13 @@ taskSchema.set('toJSON', {
     ret.phaseId = ret.phaseId ? String(ret.phaseId) : undefined;
     ret.subcategoryId = ret.subcategoryId || undefined;
     ret.dependencies = Array.isArray(ret.dependencies) ? ret.dependencies.map((value) => String(value)) : [];
-    ret.labels = Array.isArray(ret.labels) ? ret.labels.map((v) => (v && typeof v === 'object' && v._id ? String(v._id) : String(v))) : [];
+    ret.labels = Array.isArray(ret.labels)
+      ? ret.labels.map((v) => {
+          if (!v) return undefined;
+          const id = typeof v === 'object' ? (v._id || v.id || v) : v;
+          return String(id);
+        }).filter(Boolean)
+      : [];
     const rawSubs = Array.isArray(_doc.subtasks) ? _doc.subtasks : [];
     ret.subtasks = mapSubtasks(rawSubs);
     const sp = subtaskProgress(rawSubs);

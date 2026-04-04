@@ -1043,6 +1043,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
                                     await persistTaskUpdate({ labels: [...currentIds, newL.id] }, 'Update failed');
                                     setNewLabelName('');
                                     setIsCreatingNewLabel(false);
+                                    setIsAddingLabel(false);
                                   } catch (e: any) {
                                     emitErrorToast(e?.response?.data?.error?.message || 'Failed to create label');
                                   }

@@ -17,7 +17,7 @@ interface TaskCardProps {
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, compact }) => {
   const priority = PRIORITY_CONFIG[task.priority];
-  const { users, projects } = useAppStore();
+  const { users, projects, allLabels } = useAppStore();
   const assignees = users.filter(u => task.assigneeIds.includes(u.id));
   const isOverdue = isDueDateOverdue(task.dueDate, task.status);
   const project = projects.find((item) => item.id === task.projectId);
@@ -77,7 +77,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
         
         {/* Structured Labels */}
         {task.labels?.map((label) => {
-          const l = typeof label === 'object' ? label : useAppStore.getState().allLabels.find(al => al.id === label);
+          const l = typeof label === 'object' ? label : allLabels.find(al => al.id === label);
           if (!l) return null;
           return (
             <span 

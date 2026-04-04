@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -17,6 +17,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  Tag as TagIcon,
 } from 'lucide-react';
 import { cn, formatDate } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
@@ -24,11 +25,12 @@ import { useAuthStore } from '../../context/authStore';
 import { tasksService, timelineService } from '../../services/api';
 import { STATUS_CONFIG, TASK_TYPE_CONFIG } from '../../app/constants';
 import { SubtaskBar } from '../../components/SubtaskBar';
-import { KanbanBoard } from '../../components/KanbanBoard';
+import { KanbanBoard, type KanbanBoardHandle } from '../../components/KanbanBoard';
 import { UserAvatar } from '../../components/UserAvatar';
 import { EmptyState } from '../../components/ui';
 import type { Task, TaskStatus, TaskType, TaskSubtask, TimelinePhase } from '../../app/types';
 import { ProjectTaskCreateModal, type ProjectTaskCreateValues } from '../../components/ProjectTaskCreateModal';
+import { LabelManagementModal } from '../../components/LabelManagementModal';
 
 function mapApiTask(x: Record<string, unknown>): Task {
   const subs = (Array.isArray(x.subtasks) ? x.subtasks : []) as TaskSubtask[];
@@ -95,7 +97,7 @@ const LABEL_STYLES: Record<string, string> = {
 export const ProjectTodoPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { projects, users, bootstrap } = useAppStore();
+  const { projects, users, bootstrap, allLabels } = useAppStore();
   const { user } = useAuthStore();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -111,6 +113,11 @@ export const ProjectTodoPage: React.FC = () => {
   const [timelinePhases, setTimelinePhases] = useState<TimelinePhase[]>([]);
   const [subDraft, setSubDraft] = useState<Record<string, string>>({});
   const [subDraftAssignees, setSubDraftAssignees] = useState<Record<string, string[]>>({});
+  const [isManageLabelsOpen, setIsManageLabelsOpen] = useState(false);
+  const kanbanRef = useRef<KanbanBoardHandle>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const project = projects.find((p) => p.id === projectId);
   const memberUsers = useMemo(
@@ -120,6 +127,7 @@ export const ProjectTodoPage: React.FC = () => {
 
   const canDelete = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
   const canEdit = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
+  const canManageTask = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
   const canModifySubtasks = Boolean(user);
 
   const loadTasks = useCallback(async () => {
@@ -176,10 +184,33 @@ export const ProjectTodoPage: React.FC = () => {
     return phases.find((phase: TimelinePhase) => phase.name === newPhase.name)?.id;
   };
 
-  const filteredTasks = useMemo(
-    () => selectedCategoryId === 'all' ? tasks : tasks.filter((task) => task.subcategoryId === selectedCategoryId),
-    [selectedCategoryId, tasks]
-  );
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    tasks.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
+    return Array.from(tags).sort();
+  }, [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    let result = selectedCategoryId === 'all' ? tasks : tasks.filter((task) => task.subcategoryId === selectedCategoryId);
+    
+    if (selectedLabels.length > 0) {
+      result = result.filter(t => 
+        t.labels?.some(l => {
+          const lId = typeof l === 'object' ? (l as any).id || (l as any)._id : l;
+          return selectedLabels.includes(String(lId));
+        })
+      );
+    }
+    
+    if (selectedTags.length > 0) {
+      result = result.filter(t => 
+        t.tags?.some(tag => selectedTags.includes(tag))
+      );
+    }
+    
+    return result;
+  }, [selectedCategoryId, tasks, selectedLabels, selectedTags]);
+
   const activeTasks = useMemo(() => filteredTasks.filter((t) => t.status !== 'done'), [filteredTasks]);
   const completedTasks = useMemo(() => filteredTasks.filter((t) => t.status === 'done'), [filteredTasks]);
 
@@ -339,17 +370,15 @@ export const ProjectTodoPage: React.FC = () => {
                     </span>
                   )}
                   {(task.labels || []).map((lb) => {
-                    const labelId = typeof lb === 'object' ? lb.id : lb;
-                    const labelName = typeof lb === 'object' ? lb.name : lb;
+                    const l = typeof lb === 'object' ? lb : allLabels.find(al => al.id === lb);
+                    if (!l) return null;
                     return (
                       <span
-                        key={labelId}
-                        className={cn(
-                          'text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase tracking-wide',
-                          LABEL_STYLES[labelName] || 'bg-surface-200 text-surface-700 dark:bg-surface-700 dark:text-surface-200'
-                        )}
+                        key={l.id}
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase tracking-wide"
+                        style={{ backgroundColor: `${l.color}20`, color: l.color }}
                       >
-                        {labelName}
+                        {l.name}
                       </span>
                     );
                   })}
@@ -588,11 +617,126 @@ export const ProjectTodoPage: React.FC = () => {
           <button type="button" className="btn-ghost btn-md text-surface-500" title="Search">
             <Search size={18} />
           </button>
-          <button type="button" className="btn-ghost btn-md text-surface-500" title="Filter">
+          <button 
+            type="button" 
+            className={cn(
+              "btn-ghost btn-md gap-2 transition-all",
+              (selectedLabels.length > 0 || selectedTags.length > 0 || isFilterOpen) && "bg-brand-50 text-brand-700 dark:bg-brand-950/20"
+            )}
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            title="Filter"
+          >
             <Filter size={18} />
+            {(selectedLabels.length > 0 || selectedTags.length > 0) && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-500 text-[9px] text-white font-bold">
+                {selectedLabels.length + selectedTags.length}
+              </span>
+            )}
           </button>
+          {canManageTask && (
+            <button 
+              type="button" 
+              className="btn-ghost btn-md text-surface-500" 
+              title="Manage Labels"
+              onClick={() => setIsManageLabelsOpen(true)}
+            >
+              <TagIcon size={18} />
+            </button>
+          )}
+          {view === 'kanban' && canEdit && (
+            <button 
+              type="button" 
+              onClick={() => kanbanRef.current?.addProcessStep()}
+              className="btn-secondary btn-sm h-9 px-4 gap-2 ml-2"
+            >
+              <Plus size={16} className="text-brand-600" />
+              <span className="font-semibold text-xs">Add Step</span>
+            </button>
+          )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {isFilterOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }} 
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden mb-6"
+          >
+            <div className="rounded-2xl border border-surface-100 dark:border-surface-800 bg-white dark:bg-surface-900 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs font-bold text-surface-400 uppercase tracking-widest">Task Filters</h3>
+                {(selectedLabels.length > 0 || selectedTags.length > 0) && (
+                  <button 
+                    onClick={() => { setSelectedLabels([]); setSelectedTags([]); }}
+                    className="text-[10px] font-bold text-rose-500 hover:text-rose-600 transition-colors uppercase tracking-wider"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Labels Filter */}
+                <div>
+                  <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest mb-2.5 block">Filter by Label</label>
+                  <div className="flex flex-wrap gap-2">
+                    {allLabels.length > 0 ? allLabels.map(l => {
+                      const isSelected = selectedLabels.includes(l.id);
+                      return (
+                        <button
+                          key={l.id}
+                          onClick={() => setSelectedLabels(prev => isSelected ? prev.filter(id => id !== l.id) : [...prev, l.id])}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5",
+                            isSelected 
+                              ? "border-current shadow-sm" 
+                              : "border-surface-100 dark:border-surface-800 text-surface-500 hover:border-surface-200 dark:hover:border-surface-700"
+                          )}
+                          style={isSelected ? { color: l.color, backgroundColor: `${l.color}15` } : {}}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: l.color }} />
+                          {l.name}
+                        </button>
+                      );
+                    }) : (
+                      <p className="text-[11px] text-surface-400 italic">No labels available to filter</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tags Filter */}
+                <div>
+                  <label className="text-[10px] font-bold text-surface-500 uppercase tracking-widest mb-2.5 block">Filter by Tag</label>
+                  <div className="flex flex-wrap gap-2">
+                    {allTags.length > 0 ? allTags.map(tag => {
+                      const isSelected = selectedTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => setSelectedTags(prev => isSelected ? prev.filter(t => t !== tag) : [...prev, tag])}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5",
+                            isSelected 
+                              ? "bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-950/20 dark:border-brand-800 dark:text-brand-300" 
+                              : "border-surface-100 dark:border-surface-800 text-surface-500 hover:border-surface-200 dark:hover:border-surface-700"
+                          )}
+                        >
+                          <TagIcon size={12} className="opacity-60" />
+                          {tag}
+                        </button>
+                      );
+                    }) : (
+                      <p className="text-[11px] text-surface-400 italic">No tags available to filter</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {project.subcategories?.length ? (
         <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -646,6 +790,7 @@ export const ProjectTodoPage: React.FC = () => {
       ) : (
         <div className="rounded-2xl border border-surface-100 dark:border-surface-800 p-4 bg-white dark:bg-surface-900">
           <KanbanBoard
+            ref={kanbanRef}
             projectId={project.id}
             tasksOverride={filteredTasks}
             onMoveTaskRemote={handleKanbanMove}
@@ -654,6 +799,7 @@ export const ProjectTodoPage: React.FC = () => {
               setDefaultStatus(status);
               setShowCreate(true);
             }}
+            hideHeader
           />
         </div>
       )}
@@ -669,6 +815,10 @@ export const ProjectTodoPage: React.FC = () => {
         submitLabel="Create Task"
         title="New Task"
         onCreatePhase={handleCreatePhase}
+      />
+      <LabelManagementModal 
+        open={isManageLabelsOpen} 
+        onClose={() => setIsManageLabelsOpen(false)} 
       />
     </div>
   );
