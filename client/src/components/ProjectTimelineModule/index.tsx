@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { ViewMode } from 'gantt-task-react';
 import {
   AlertTriangle,
   Calendar,
@@ -21,7 +22,12 @@ import {
   Sparkles,
   Target,
   Unlock,
+  ChevronDown,
+  MoreHorizontal,
+  Clock,
+  ArrowRight
 } from 'lucide-react';
+import { addDays as dateFnsAddDays, differenceInDays, format, parseISO } from 'date-fns';
 import { cn } from '../../utils/helpers';
 import { projectsService, tasksService, timelineService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
@@ -29,8 +35,7 @@ import { useAppStore } from '../../context/appStore';
 import { useAuthStore } from '../../context/authStore';
 import type { Project, ProjectTimeline } from '../../app/types';
 import { Modal } from '../Modal';
-import Sidebar from './Sidebar';
-import TimelineGrid from './TimelineGrid';
+import { PremiumGanttTimeline } from './PremiumGanttTimeline';
 import {
   SIDEBAR_WIDTH,
   addDays,
@@ -94,20 +99,21 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
   const [draftTaskPhaseId, setDraftTaskPhaseId] = useState('');
   const [draftTaskStartDate, setDraftTaskStartDate] = useState('');
   const [draftTaskDurationDays, setDraftTaskDurationDays] = useState(1);
+  const [draftTaskEndDate, setDraftTaskEndDate] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(640);
   const [scrollTop, setScrollTop] = useState(0);
+  const [isLocking, setIsLocking] = useState(false);
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const activeTimeline = draftTimeline || timeline;
   const deferredTimeline = useDeferredValue(activeTimeline);
   const canManageLockedTimeline = user?.role === 'admin' || user?.role === 'super_admin';
   const isReadOnly = activeTimeline?.status === 'Approved';
-  const zoom = activeTimeline?.settings.zoom || 'week';
-  const baseDayWidth = getDayWidth(zoom);
-  const dayWidth = isFullscreen ? Math.max(baseDayWidth + 14, Math.round(baseDayWidth * 2.1)) : baseDayWidth;
+  const isFullscreenView = isFullscreen;
   const selectablePhases = (activeTimeline?.phases || []).filter((phase) => phase.id !== 'ungrouped');
   const collapsiblePhases = (activeTimeline?.phases || []).map((phase) => phase.id);
 
@@ -190,6 +196,7 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
     setDraftTaskPhaseId('');
     setDraftTaskStartDate('');
     setDraftTaskDurationDays(1);
+    setDraftTaskEndDate('');
   }, []);
 
   const downloadBlob = useCallback((blob: Blob, filename: string) => {
@@ -341,26 +348,32 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
       `;
     }).join('');
 
-    const dependencyLines = activeTimeline.dependencies.map((dependency) => {
+    const dependencyLines = activeTimeline.dependencies.map((dependency, idx) => {
       const fromRow = dependencyRows.get(dependency.fromTaskId);
       const toRow = dependencyRows.get(dependency.toTaskId);
       if (!fromRow || !toRow || fromRow.kind !== 'task' || toRow.kind !== 'task') return '';
 
+      // Anchor points: End of source -> Start of target
       const fromX = sidebarWidth + (fromRow.task.endOffset + 1) * dayCellWidth;
       const fromY = headerHeight + fromRow.top + fromRow.height / 2;
       const toX = sidebarWidth + toRow.task.startOffset * dayCellWidth;
       const toY = headerHeight + toRow.top + toRow.height / 2;
-      const destinationX = Math.max(sidebarWidth, toX - 8);
-      const sameRow = Math.abs(fromY - toY) < 2;
-      const routeX = Math.min(width - 20, fromX + 24);
-      const d = sameRow
-        ? `M ${fromX} ${fromY} L ${routeX} ${fromY} L ${routeX} ${Math.max(14, fromY - 18)} L ${destinationX} ${Math.max(14, fromY - 18)} L ${destinationX} ${toY}`
-        : `M ${fromX} ${fromY} L ${routeX} ${fromY} L ${routeX} ${toY} L ${destinationX} ${toY}`;
-      return `<path d="${d}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6 4" />`;
+
+      // Routing: Go from (fromX, fromY) to (toX, toY)
+      // To ensure arrow points RIGHT, the last segment must be L (toX - epsilon) (toY) to (toX) (toY)
+      const approachX = toX - 6; 
+      const d = `M ${fromX} ${fromY} L ${approachX} ${fromY} L ${approachX} ${toY} L ${toX - 1} ${toY}`;
+
+      return `<path d="${d}" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)" />`;
     }).join('');
 
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <defs>
+          <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M 0 0 L 6 3 L 0 6 z" fill="#94a3b8" />
+          </marker>
+        </defs>
         <rect width="${width}" height="${height}" fill="#f8fafc" />
         <rect x="0" y="0" width="${width}" height="${headerHeight}" fill="#ffffff" />
         <rect x="0" y="0" width="${sidebarWidth}" height="${height}" fill="#ffffff" />
@@ -414,6 +427,11 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
       emitErrorToast(error?.response?.data?.message || 'Failed to sync task change', 'Timeline');
     }
   }, [activeTimeline?.tasks, fetchTimeline, isReadOnly, projectId]);
+
+  const handleGanttDateChange = async (taskId: string, nextStartDate: string, nextEndDate: string) => {
+    if (isReadOnly) return;
+    await handleTaskCommit(taskId, nextStartDate, nextEndDate);
+  };
 
   const handleSelectDependency = useCallback((taskId: string) => {
     if (!activeTimeline || isReadOnly) return;
@@ -494,11 +512,38 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
 
   const openCreateTaskModal = () => {
     if (!project || isReadOnly) return;
+    const start = project.startDate || activeTimeline?.projectWindow.startDate || new Date().toISOString().split('T')[0];
     setDraftName('');
     setDraftTaskPhaseId(selectablePhases[0]?.id || '');
-    setDraftTaskStartDate(project.startDate || activeTimeline?.projectWindow.startDate || new Date().toISOString().split('T')[0]);
+    setDraftTaskStartDate(start);
     setDraftTaskDurationDays(1);
+    setDraftTaskEndDate(start);
     setCreateMode('task');
+  };
+
+  const handleDraftStartDateChange = (val: string) => {
+    setDraftTaskStartDate(val);
+    if (val) {
+      const end = dateFnsAddDays(parseISO(val), draftTaskDurationDays - 1);
+      setDraftTaskEndDate(format(end, 'yyyy-MM-dd'));
+    }
+  };
+
+  const handleDraftDurationChange = (val: number) => {
+    const duration = Math.max(1, val);
+    setDraftTaskDurationDays(duration);
+    if (draftTaskStartDate) {
+      const end = dateFnsAddDays(parseISO(draftTaskStartDate), duration - 1);
+      setDraftTaskEndDate(format(end, 'yyyy-MM-dd'));
+    }
+  };
+
+  const handleDraftEndDateChange = (val: string) => {
+    setDraftTaskEndDate(val);
+    if (draftTaskStartDate && val >= draftTaskStartDate) {
+      const diff = differenceInDays(parseISO(val), parseISO(draftTaskStartDate)) + 1;
+      setDraftTaskDurationDays(Math.max(1, diff));
+    }
   };
 
   const handleCreateSubmit = async () => {
@@ -579,10 +624,6 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
     openCreateTaskModal();
   };
 
-
-
-  const [isLocking, setIsLocking] = useState(false);
-
   const handleLockToggle = async () => {
     if (!activeTimeline || !canManageLockedTimeline) return;
 
@@ -594,11 +635,11 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
       } else {
         await timelineService.lock(projectId);
       }
-      
+
       // Refresh timeline state and UI
       await fetchTimeline();
       emitSuccessToast(
-        isCurrentlyApproved ? 'Timeline unlocked - edit mode enabled' : 'Timeline approved and locked', 
+        isCurrentlyApproved ? 'Timeline unlocked - edit mode enabled' : 'Timeline approved and locked',
         'Timeline'
       );
     } catch (error: any) {
@@ -611,6 +652,33 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
       setIsLocking(false);
     }
   };
+
+  const handleDependencyChange = useCallback(async (fromId: string, toId: string, action: 'add' | 'remove') => {
+    if (!activeTimeline || isReadOnly) return;
+
+    try {
+      if (action === 'add') {
+        await timelineService.createDependency({
+          projectId,
+          fromTaskId: fromId,
+          toTaskId: toId,
+        });
+        emitSuccessToast('Dependency created', 'Timeline');
+      } else {
+        const targetTask = activeTimeline.tasks.find((t) => t.id === toId);
+        if (!targetTask) return;
+        const nextDeps = targetTask.dependencies.filter((id) => id !== fromId);
+        await timelineService.patchTask(toId, {
+          projectId,
+          dependencies: nextDeps,
+        });
+        emitSuccessToast('Dependency removed', 'Timeline');
+      }
+      await fetchTimeline();
+    } catch (error: any) {
+      emitErrorToast(error?.response?.data?.message || 'Failed to update dependency', 'Timeline');
+    }
+  }, [activeTimeline, isReadOnly, projectId, fetchTimeline]);
 
   const handleProjectDateChange = async (field: 'startDate' | 'endDate', value: string) => {
     if (isReadOnly) return;
@@ -659,152 +727,181 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
   }
 
   const renderTimelineBody = (fullscreen: boolean) => {
+    const startDate = parseISO(activeTimeline.projectWindow.startDate);
+    const endDate = parseISO(activeTimeline.projectWindow.endDate);
+    const totalDays = differenceInDays(endDate, startDate) + 1;
     const rowsForView = fullscreen ? rows : visibleRows;
 
     return (
       <>
-      <div className="rounded-[28px] border border-surface-200 bg-white p-4 shadow-sm dark:border-surface-800 dark:bg-surface-950">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">Project Timeline</div>
-            <h3 className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{project?.name}</h3>
-            <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-              Drag tasks to move dates, use the edge handles to resize them, and use Link to connect dependencies.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" disabled={isReadOnly} onClick={() => handleZoom('day')} className={`rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${zoom === 'day' ? 'bg-brand-600 text-white' : 'bg-surface-100 text-surface-500 dark:bg-surface-900 dark:text-surface-400'}`}>Day</button>
-            <button type="button" disabled={isReadOnly} onClick={() => handleZoom('week')} className={`rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${zoom === 'week' ? 'bg-brand-600 text-white' : 'bg-surface-100 text-surface-500 dark:bg-surface-900 dark:text-surface-400'}`}>Week</button>
-            <button type="button" disabled={isReadOnly} onClick={() => handleZoom('month')} className={`rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${zoom === 'month' ? 'bg-brand-600 text-white' : 'bg-surface-100 text-surface-500 dark:bg-surface-900 dark:text-surface-400'}`}>Month</button>
-            <button type="button" disabled={isReadOnly} onClick={openCreatePhaseModal} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-surface-900 dark:text-surface-300">Add Phase</button>
-            <button type="button" disabled={isReadOnly} onClick={handleAddTask} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-surface-900 dark:text-surface-300">Add Task</button>
-            <button type="button" onClick={expandAllPhases} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 dark:bg-surface-900 dark:text-surface-300">Open Phases</button>
-            <button type="button" onClick={collapseAllPhases} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 dark:bg-surface-900 dark:text-surface-300">Close Phases</button>
-            <button type="button" disabled={isExporting} onClick={() => void handleExportTimeline('excel')} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-surface-900 dark:text-surface-300">
-              <FileSpreadsheet size={14} className="mr-1 inline-block" />
-              Excel
-            </button>
-            <button type="button" disabled={isExporting} onClick={() => void handleExportTimeline('diagram')} className="rounded-xl bg-surface-100 px-3 py-2 text-xs font-semibold text-surface-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-surface-900 dark:text-surface-300">
-              <ImageIcon size={14} className="mr-1 inline-block" />
-              Diagram
-            </button>
-            <button 
-              type="button" 
-              disabled={!canManageLockedTimeline || isLocking} 
-              onClick={handleLockToggle} 
-              className={cn(
-                "rounded-xl px-3 py-2 text-xs font-semibold transition-all disabled:opacity-50",
-                activeTimeline.status === 'Approved' 
-                  ? "bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300"
-                  : "bg-surface-100 text-surface-600 hover:bg-surface-200 dark:bg-surface-900 dark:text-surface-300"
-              )}
-            >
-              {isLocking ? (
-                <div className="flex items-center gap-1.5 animation-pulse">
-                   <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                   <span>Syncing...</span>
+        <div className="mb-2 rounded-2xl border border-surface-200 bg-white p-3 shadow-xl shadow-surface-200/20 dark:border-surface-800 dark:bg-surface-950 dark:shadow-none">
+          <div className="flex flex-wrap items-center justify-between gap-1.5 px-1">
+            {/* Section 1: Project Identity */}
+            <div className="flex flex-col gap-0.5 min-w-[200px]">
+              <div className="flex items-center gap-1.5">
+                <div className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
+                <div className="text-[9px] font-black uppercase tracking-[0.15em] text-surface-400">Live Project Timeline</div>
+              </div>
+              <h1 className="text-lg font-black tracking-tight text-surface-900 dark:text-surface-50">{project?.name}</h1>
+              <p className="text-[10px] font-bold text-surface-400">
+                Drag to reschedule <span className="mx-1">•</span> Resize to adjust
+              </p>
+            </div>
+
+            {/* Section 2: Timeline Status & Intelligence */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="flex items-center gap-1.5 rounded-xl border border-surface-100 bg-surface-50/50 p-1 dark:border-surface-800 dark:bg-surface-900/50">
+                <style>{`
+                  .hide-calendar-picker::-webkit-calendar-picker-indicator {
+                    display: none;
+                    -webkit-appearance: none;
+                  }
+                `}</style>
+                <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold text-surface-600 dark:text-surface-400">
+                  <Calendar size={12} className="text-brand-500" />
+                  <input
+                    type="date"
+                    value={project?.startDate || activeTimeline.projectWindow.startDate}
+                    onChange={(e) => handleProjectDateChange('startDate', e.target.value)}
+                    disabled={isReadOnly}
+                    className="bg-transparent border-none p-0 w-[90px] focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50 text-[10px] font-black uppercase hide-calendar-picker"
+                    title="Project Start Date"
+                  />
+                  <ArrowRight size={10} className="mx-0.5 opacity-30" />
+                  <input
+                    type="date"
+                    value={project?.endDate || activeTimeline.projectWindow.endDate}
+                    onChange={(e) => handleProjectDateChange('endDate', e.target.value)}
+                    disabled={isReadOnly}
+                    className="bg-transparent border-none p-0 w-[90px] focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50 text-[10px] font-black uppercase hide-calendar-picker"
+                    title="Project Due Date"
+                  />
+                  <span className="ml-1 rounded-md bg-white px-1.5 py-0.5 text-[9px] font-black text-brand-600 shadow-sm dark:bg-surface-800">
+                    {totalDays}d
+                  </span>
                 </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  {activeTimeline.status === 'Approved' ? <Unlock size={14} /> : <Lock size={14} />}
-                  <span>{activeTimeline.status === 'Approved' ? 'Unlock Draft' : 'Approve & Lock'}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1 rounded-full border border-rose-100 bg-rose-50/50 px-2 py-0.5 text-[9px] font-black text-rose-600 dark:border-rose-900/30 dark:bg-rose-950/20">
+                  <Target size={10} />
+                  {activeTimeline.summary.criticalTasks} CRIT
                 </div>
-              )}
-            </button>
+                <div className="flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50/50 px-2 py-0.5 text-[9px] font-black text-amber-600 dark:border-amber-900/30 dark:bg-amber-950/20">
+                  <AlertTriangle size={10} />
+                  {activeTimeline.resourceConflicts.length} CONF
+                </div>
+              </div>
+            </div>
 
+            {/* Section 3: Priority Actions */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={isReadOnly}
+                  onClick={openCreatePhaseModal}
+                  className="group flex items-center gap-1.5 rounded-xl bg-white border border-surface-200 px-3 py-1.5 text-xs font-bold text-surface-700 transition-all hover:border-surface-300 hover:bg-surface-50 active:scale-95 disabled:opacity-50 dark:bg-surface-900 dark:border-surface-800 dark:text-surface-300 dark:hover:bg-surface-800"
+                >
+                  <Sparkles size={12} className="text-brand-500 group-hover:scale-110 transition-transform" />
+                  Phase
+                </button>
+                <button
+                  type="button"
+                  disabled={isReadOnly}
+                  onClick={handleAddTask}
+                  className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-brand-500/20 transition-all hover:bg-brand-700 hover:shadow-brand-500/40 active:scale-95 disabled:opacity-50"
+                >
+                  Add Task
+                </button>
+              </div>
+
+              <div className="relative h-6 w-[1px] bg-surface-100 dark:bg-surface-800" />
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-xl transition-all",
+                    showActionsDropdown ? "bg-surface-900 text-white dark:bg-white dark:text-surface-900" : "bg-surface-100 text-surface-500 hover:bg-surface-200 dark:bg-surface-900 dark:text-surface-400"
+                  )}
+                >
+                  <MoreHorizontal size={16} />
+                </button>
+
+                {showActionsDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-[100]" onClick={() => setShowActionsDropdown(false)} />
+                    <div className="absolute right-0 top-14 z-[101] w-64 origin-top-right rounded-[24px] border border-surface-200 bg-white p-2 shadow-2xl shadow-black/10 animate-in fade-in zoom-in-95 duration-150 dark:border-surface-700 dark:bg-surface-900">
+                      <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-surface-400">Timeline Tools</div>
+
+                      <button onClick={() => { handleExportTimeline('excel'); setShowActionsDropdown(false); }} className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-bold text-surface-600 hover:bg-surface-50 dark:text-surface-300 dark:hover:bg-surface-800 transition-colors">
+                        <FileSpreadsheet size={16} className="text-emerald-500" /> Export Excel
+                      </button>
+                      <button onClick={() => { handleExportTimeline('diagram'); setShowActionsDropdown(false); }} className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-bold text-surface-600 hover:bg-surface-50 dark:text-surface-300 dark:hover:bg-surface-800 transition-colors">
+                        <ImageIcon size={16} className="text-blue-500" /> View Diagram
+                      </button>
+
+                      <div className="my-2 h-[1px] bg-surface-100 dark:bg-surface-800" />
+
+                      <button
+                        disabled={!canManageLockedTimeline || isLocking}
+                        onClick={() => { handleLockToggle(); setShowActionsDropdown(false); }}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-bold transition-all",
+                          activeTimeline.status === 'Approved'
+                            ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/20"
+                            : "text-surface-600 hover:bg-surface-50 dark:text-surface-300 dark:hover:bg-surface-800"
+                        )}
+                      >
+                        {activeTimeline.status === 'Approved' ? <Unlock size={16} /> : <Lock size={16} />}
+                        {activeTimeline.status === 'Approved' ? 'Unlock Draft' : 'Approve & Lock'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full bg-surface-100 px-3 py-1 text-[11px] font-bold text-surface-600 dark:bg-surface-900 dark:text-surface-300 border border-surface-200/50 dark:border-surface-800/50 shadow-sm">
-            <Calendar size={13} className="text-brand-500" />
-            <input
-              type="date"
-              value={project?.startDate || activeTimeline.projectWindow.startDate}
-              onChange={(e) => handleProjectDateChange('startDate', e.target.value)}
-              disabled={isReadOnly}
-              className="bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              title="Project Start Date"
-            />
-            <span className="opacity-30">to</span>
-            <input
-              type="date"
-              value={project?.endDate || activeTimeline.projectWindow.endDate}
-              onChange={(e) => handleProjectDateChange('endDate', e.target.value)}
-              disabled={isReadOnly}
-              className="bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              title="Project End Date"
-            />
-          </div>
-          <span className="rounded-full bg-surface-100 px-3 py-1 text-xs font-medium text-surface-500 dark:bg-surface-900 dark:text-surface-300">
-            <Target size={12} className="mr-1 inline-block" />
-            {activeTimeline.summary.criticalTasks} critical tasks
-          </span>
-          <span className="rounded-full bg-surface-100 px-3 py-1 text-xs font-medium text-surface-500 dark:bg-surface-900 dark:text-surface-300">
-            <AlertTriangle size={12} className="mr-1 inline-block" />
-            {activeTimeline.resourceConflicts.length} resource conflicts
-          </span>
-          {isReadOnly ? (
-            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
-              Locked for editing. Only admins can change this approved timeline.
-            </span>
-          ) : null}
+          {isReadOnly && (
+            <div className="mt-6 flex items-center gap-3 rounded-2xl bg-rose-50/50 p-4 border border-rose-100 dark:bg-rose-950/10 dark:border-rose-900/30">
+              <Lock size={16} className="text-rose-500" />
+              <p className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-tighter">
+                LOCKED FOR EDITING: THIS TIMELINE HAS BEEN APPROVED. CONTACT AN ADMIN TO MODIFY THIS VERSION.
+              </p>
+            </div>
+          )}
 
-          {selectedDependencyFrom ? (() => {
+          {selectedDependencyFrom && (() => {
             const selectedTask = activeTimeline?.tasks.find((t) => t.id === selectedDependencyFrom);
             return (
-              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">
-                <GitBranchPlus size={12} className="mr-1 inline-block" />
-                Select the task that should start after <span className="font-bold underline decoration-brand-400/40 underline-offset-2">{selectedTask?.title || selectedDependencyFrom}</span>
-              </span>
+              <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-brand-600 p-4 text-white shadow-xl shadow-brand-500/30">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                    <GitBranchPlus size={20} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Link Dependency</span>
+                    <span className="text-sm font-bold">Select the next task after <span className="underline decoration-white/40">{selectedTask?.title || 'this task'}</span></span>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedDependencyFrom('')} className="rounded-xl bg-white/20 px-4 py-2 text-xs font-bold hover:bg-white/30 transition-colors">Cancel</button>
+              </div>
             );
-          })() : null}
+          })()}
         </div>
-      </div>
 
-      <div className="overflow-hidden rounded-[28px] border border-surface-200 bg-white shadow-sm dark:border-surface-800 dark:bg-surface-950">
-        <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px minmax(0, 1fr)` }}>
-          <Sidebar
-            rows={rowsForView}
-            totalHeight={totalHeight}
-            viewportHeight={viewportHeight}
-            scrollTop={scrollTop}
-            containerClassName={fullscreen ? 'h-[calc(100vh-280px)] min-h-[520px]' : undefined}
-            users={users}
-            selectedDependencyFrom={selectedDependencyFrom}
-            onSelectDependencyFrom={handleSelectDependency}
-            collapsedPhaseIds={collapsedPhaseIds}
-            onTogglePhase={togglePhase}
+        <div className="relative z-10 -mt-2">
+          <PremiumGanttTimeline
+            timeline={activeTimeline}
+            onTaskUpdate={handleGanttDateChange}
+            onDependencyChange={handleDependencyChange}
+            isReadOnly={isReadOnly}
           />
-          <div
-            ref={scrollRef}
-            className={fullscreen ? 'h-[calc(100vh-280px)] min-h-[520px] overflow-auto overscroll-contain scroll-smooth' : 'h-[72vh] overflow-auto overscroll-contain scroll-smooth'}
-            onWheel={(event) => {
-              const element = event.currentTarget;
-              if (Math.abs(event.deltaX) > 0) return;
-              if (event.shiftKey) {
-                event.preventDefault();
-                element.scrollLeft += event.deltaY;
-              }
-            }}
-            onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-            style={{ scrollbarGutter: 'stable both-edges' }}
-          >
-            <TimelineGrid
-              timeline={activeTimeline}
-              rows={rowsForView}
-              allRows={rows}
-              totalHeight={totalHeight}
-              dayWidth={dayWidth}
-              extraRightPadding={fullscreen ? 180 : 80}
-              onTaskCommit={handleTaskCommit}
-              users={users}
-            />
-          </div>
         </div>
-      </div>
-    </>
-  );
+      </>
+    );
   };
 
   return (
@@ -896,16 +993,26 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
                 <label className="label">Start Date</label>
                 <input
                   value={draftTaskStartDate}
-                  onChange={(event) => setDraftTaskStartDate(event.target.value)}
+                  onChange={(event) => handleDraftStartDateChange(event.target.value)}
                   type="date"
                   className="input"
                 />
               </div>
               <div>
+                <label className="label">End Date</label>
+                <input
+                  value={draftTaskEndDate}
+                  onChange={(event) => handleDraftEndDateChange(event.target.value)}
+                  type="date"
+                  min={draftTaskStartDate}
+                  className="input"
+                />
+              </div>
+              <div className="sm:col-span-2">
                 <label className="label">Duration (days)</label>
                 <input
                   value={draftTaskDurationDays}
-                  onChange={(event) => setDraftTaskDurationDays(Math.max(1, Number(event.target.value) || 1))}
+                  onChange={(event) => handleDraftDurationChange(Number(event.target.value))}
                   type="number"
                   min={1}
                   step={1}

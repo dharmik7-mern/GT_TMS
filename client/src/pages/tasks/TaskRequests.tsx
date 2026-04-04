@@ -41,7 +41,10 @@ const TaskRequestsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<RequestStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const isProjectView = Boolean(projectId);
 
@@ -91,25 +94,42 @@ const TaskRequestsPage: React.FC = () => {
     const query = search.trim().toLowerCase();
     return requests.filter((request) => {
       if (!isProjectView && projectFilter !== 'all' && request.projectId !== projectFilter) return false;
+      if (priorityFilter !== 'all' && request.priority.toLowerCase() !== priorityFilter) return false;
       if (!query) return true;
-      const requester = users.find((member) => member.id === request.requestedBy);
-      const projectName = projects.find((item) => item.id === request.projectId)?.name || '';
-      const assigneeNames = users
-        .filter((member) => request.assigneeIds.includes(member.id))
+
+      const requesterName = users.find((member) => member.id === request.requestedBy)?.name || '';
+      const reviewerNames = users
+        .filter((member) => request.requestedToIds?.includes(member.id))
         .map((member) => member.name)
         .join(' ');
+      const assigneeNames = users
+        .filter((member) => request.assigneeIds?.includes(member.id))
+        .map((member) => member.name)
+        .join(' ');
+      const projectName = projects.find((item) => item.id === request.projectId)?.name || '';
+
       return [
         request.title,
         request.description || '',
-        requester?.name || '',
-        projectName,
+        requesterName,
+        reviewerNames,
         assigneeNames,
+        projectName,
       ]
         .join(' ')
         .toLowerCase()
         .includes(query);
     });
-  }, [isProjectView, projectFilter, projects, requests, search, users]);
+  }, [isProjectView, projectFilter, priorityFilter, projects, requests, search, users]);
+
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const paginatedRequests = useMemo(() => {
+    return filteredRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredRequests, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, projectFilter, priorityFilter, search]);
 
   const summary = useMemo(
     () => ({
@@ -153,82 +173,121 @@ const TaskRequestsPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="page-header flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-2">
-          {isProjectView ? (
-            <Link
-              to={`/projects/${projectId}`}
-              className="inline-flex items-center gap-1 text-sm text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300"
-            >
-              <ArrowLeft size={14} />
-              Back to project
-            </Link>
-          ) : null}
-          {['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '') ? (
-            <button
-              type="button"
-              onClick={() => navigate('/logs?module=task_request')}
-              className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 self-start"
-            >
-              Open task request activity logs
-            </button>
-          ) : null}
-        </div>
+    <div className="max-w-7xl mx-auto space-y-4">
+      {isProjectView && (
+        <Link
+          to={`/projects/${projectId}`}
+          className="inline-flex items-center gap-1 text-sm text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300 mb-2"
+        >
+          <ArrowLeft size={14} />
+          Back to project
+        </Link>
+      )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {([
-            ['all', 'All'],
-            ['pending', 'Pending'],
-            ['approved', 'Approved'],
-            ['rejected', 'Rejected'],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setStatusFilter(key)}
-              className={cn(
-                'rounded-2xl border px-4 py-3 text-left transition-colors',
-                statusFilter === key
-                  ? 'border-brand-200 bg-brand-50 dark:border-brand-900/50 dark:bg-brand-950/20'
-                  : 'border-surface-100 bg-white dark:border-surface-800 dark:bg-surface-900'
-              )}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400">{label}</p>
-              <p className="mt-1 text-2xl font-display font-bold text-surface-900 dark:text-white">
-                {summary[key]}
-              </p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="card p-4">
+      {/* 1. Header Toolbar (Search + Combined Filters) */}
+      <div className="bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 rounded-2xl p-3 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative flex-1">
+          {/* Search Box */}
+          <div className="relative flex-1 group">
+            <ListFilter size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-brand-500 transition-colors" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search requests by task, project, requester, or assignee..."
-              className="input pl-11"
+              placeholder="Search task requests by name, requester, project..."
+              className="w-full bg-surface-50/50 dark:bg-surface-800/30 border border-surface-100 dark:border-surface-800 focus:border-brand-500/50 focus:bg-white dark:focus:bg-surface-800 rounded-xl pl-11 pr-4 py-2 text-[13px] transition-all focus:outline-none focus:ring-4 focus:ring-brand-500/10 placeholder:text-surface-400 dark:placeholder:text-surface-500 font-medium"
             />
-            <ListFilter size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-surface-400" />
           </div>
-          {!isProjectView ? (
-            <select
-              value={projectFilter}
-              onChange={(event) => setProjectFilter(event.target.value)}
-              className="input min-w-[240px]"
-            >
-              <option value="all">All projects</option>
-              {projects.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
+
+          {/* Inline Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Dropdown */}
+            <div className="flex items-center bg-surface-50/50 dark:bg-surface-800/30 rounded-xl px-1 border border-surface-100 dark:border-surface-800 focus-within:border-brand-500/50 focus-within:ring-4 focus-within:ring-brand-500/10 transition-all">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as RequestStatusFilter)}
+                className="bg-transparent border-none py-2 px-3 text-[13px] font-bold text-surface-600 dark:text-surface-300 focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors outline-none"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+
+            {/* Project Dropdown */}
+            {!isProjectView && (
+              <div className="flex items-center bg-surface-50/50 dark:bg-surface-800/30 rounded-xl px-1 border border-surface-100 dark:border-surface-800 focus-within:border-brand-500/50 focus-within:ring-4 focus-within:ring-brand-500/10 transition-all max-w-[200px]">
+                <select
+                  value={projectFilter}
+                  onChange={(e) => setProjectFilter(e.target.value)}
+                  className="bg-transparent border-none py-2 px-3 text-[13px] font-bold text-surface-600 dark:text-surface-300 focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors truncate outline-none"
+                >
+                  <option value="all">All Projects</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Priority Dropdown */}
+            <div className="flex items-center bg-surface-50/50 dark:bg-surface-800/30 rounded-xl px-1 border border-surface-100 dark:border-surface-800 focus-within:border-brand-500/50 focus-within:ring-4 focus-within:ring-brand-500/10 transition-all">
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="bg-transparent border-none py-2 px-3 text-[13px] font-bold text-surface-600 dark:text-surface-300 focus:ring-0 cursor-pointer hover:text-brand-600 transition-colors outline-none"
+              >
+                <option value="all">All Priorities</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* 2. Quick Stats Section (MINIMALIST DESIGN) */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {([
+          ['all', 'All Tasks'],
+          ['pending', 'Pending'],
+          ['approved', 'Approved'],
+          ['rejected', 'Rejected'],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setStatusFilter(key)}
+            className={cn(
+              'group rounded-xl border p-4 text-left transition-all duration-200',
+              statusFilter === key
+                ? 'border-brand-500 bg-white shadow-sm ring-1 ring-brand-500/10'
+                : 'border-surface-100 bg-white dark:border-surface-800 dark:bg-surface-900 hover:border-surface-200 dark:hover:border-surface-700'
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className={cn(
+                  "text-[10px] font-bold uppercase tracking-[0.15em] transition-colors",
+                  statusFilter === key ? "text-brand-600" : "text-surface-400"
+                )}>{label}</p>
+                <p className="text-2xl font-bold text-surface-900 dark:text-white leading-none">
+                  {summary[key]}
+                </p>
+              </div>
+              <div className={cn(
+                "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                statusFilter === key 
+                  ? "bg-brand-50 text-brand-600 dark:bg-brand-950/40" 
+                  : "bg-surface-50 dark:bg-surface-800 text-surface-400"
+              )}>
+                {key === 'all' ? <FolderKanban size={16} /> : key === 'pending' ? <Clock3 size={16} /> : key === 'approved' ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+              </div>
+            </div>
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -245,7 +304,7 @@ const TaskRequestsPage: React.FC = () => {
         />
       ) : (
         <div className="space-y-4">
-          {filteredRequests.map((request) => {
+          {paginatedRequests.map((request) => {
             const requester = users.find((member) => member.id === request.requestedBy);
             const reviewers = users.filter((member) => request.requestedToIds.includes(member.id));
             const assignees = users.filter((member) => request.assigneeIds.includes(member.id));
@@ -353,8 +412,84 @@ const TaskRequestsPage: React.FC = () => {
               </div>
             );
           })}
+
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredRequests.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
+    </div>
+  );
+};
+
+const PaginationControls = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) => {
+  if (totalItems <= itemsPerPage) return null;
+
+  const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter((page) => {
+    if (totalPages <= 5) return true;
+    return page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+  });
+
+  return (
+    <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-100 dark:border-surface-800 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shadow-sm">
+      <span className="text-[11px] font-bold uppercase tracking-widest text-surface-400">
+        Showing {Math.min(totalItems, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(totalItems, currentPage * itemsPerPage)} of {totalItems}
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="rounded-xl border border-surface-100 bg-white px-4 py-2 text-[11px] font-bold text-surface-500 transition-colors hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-400 dark:hover:bg-surface-800"
+        >
+          Prev
+        </button>
+        {pages.map((page, index) => {
+          const prevPage = pages[index - 1];
+          const showGap = prevPage && page - prevPage > 1;
+          return (
+            <React.Fragment key={page}>
+              {showGap ? <span className="px-1 text-xs font-bold text-surface-300 dark:text-surface-600">...</span> : null}
+              <button
+                type="button"
+                onClick={() => onPageChange(page)}
+                className={cn(
+                  'h-9 min-w-9 rounded-xl px-2 text-xs font-bold transition-all',
+                  currentPage === page
+                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/20'
+                    : 'border border-surface-100 bg-white text-surface-500 hover:bg-surface-50 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-400 dark:hover:bg-surface-800'
+                )}
+              >
+                {page}
+              </button>
+            </React.Fragment>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="rounded-xl border border-surface-100 bg-white px-4 py-2 text-[11px] font-bold text-surface-500 transition-colors hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-400 dark:hover:bg-surface-800"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 };

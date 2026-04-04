@@ -282,16 +282,16 @@ export const ProjectDetailPage: React.FC = () => {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
+        className="mb-3"
       >
         <button onClick={() => navigate('/projects')} className="flex items-center gap-1 text-sm text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 transition-colors mb-3">
           <ArrowLeft size={14} />
           All projects
         </button>
 
-        <div className="flex items-start gap-4 flex-wrap">
+        <div className="flex items-center gap-4 flex-wrap">
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-display font-bold text-lg flex-shrink-0"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-display font-bold text-base flex-shrink-0"
             style={{ backgroundColor: project.color }}
           >
             {project.name[0]}
@@ -302,74 +302,74 @@ export const ProjectDetailPage: React.FC = () => {
                 defaultValue={project.name}
                 autoFocus
                 onBlur={e => { void handleProjectNameUpdate(e.target.value); }}
-                className="input text-2xl font-display font-semibold h-auto py-1 max-w-md"
+                className="input text-xl font-display font-semibold h-auto py-0.5 max-w-sm"
               />
             ) : (
               <h1
-                className="font-display font-bold text-2xl text-surface-900 dark:text-white cursor-pointer hover:text-brand-700 dark:hover:text-brand-300 transition-colors flex items-center gap-2 group"
+                className="font-display font-bold text-xl text-surface-900 dark:text-white cursor-pointer hover:text-brand-700 dark:hover:text-brand-300 transition-colors flex items-center gap-2 group"
                 onClick={() => canEditProject && setEditingName(true)}
               >
                 {project.name}
                 {canEditProject ? <Edit3 size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-surface-400" /> : null}
               </h1>
             )}
-            <p className="text-sm text-surface-400 mt-0.5">{project.description}</p>
+            <p className="text-[11px] text-surface-400 mt-0">{project.description}</p>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap flex-shrink-0 ml-auto pt-2 sm:pt-0">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0 ml-auto">
             {/* Progress */}
-            <div className="text-right hidden lg:block">
-              <p className="text-xs text-surface-400 mb-1">Progress</p>
+            <div className="text-right hidden lg:block border-r border-surface-100 dark:border-surface-800 pr-3 mr-1">
+              <p className="text-[10px] text-surface-400 mb-0 font-bold uppercase tracking-tighter">Progress</p>
               <div className="flex items-center gap-2">
-                <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="md" className="w-20 xl:w-24" />
-                <span className="text-sm font-semibold text-surface-700 dark:text-surface-300">{project.progress}%</span>
+                <ProgressBar value={project.progress} color={getProgressColor(project.progress)} size="sm" className="w-16" />
+                <span className="text-xs font-black text-surface-700 dark:text-surface-300">{project.progress}%</span>
               </div>
             </div>
 
             {/* Team */}
-            <div className="hidden lg:block text-right">
-              <p className="text-xs text-surface-400 mb-1">Team</p>
-              <AvatarGroup users={members} max={3} size="sm" />
+            <div className="hidden lg:block text-right border-r border-surface-100 dark:border-surface-800 pr-3 mr-1">
+              <p className="text-[10px] text-surface-400 mb-0 font-bold uppercase tracking-tighter">Team</p>
+              <AvatarGroup users={members} max={3} size="xs" />
             </div>
 
             {/* Due date */}
             {project.endDate && (
-              <div className="hidden xl:block text-right">
-                <p className="text-xs text-surface-400 mb-1">Due date</p>
-                <p className="text-sm font-medium text-surface-700 dark:text-surface-300">{formatDate(project.endDate)}</p>
+              <div className="hidden xl:block text-right border-r border-surface-100 dark:border-surface-800 pr-3 mr-1">
+                <p className="text-[10px] text-surface-400 mb-0 font-bold uppercase tracking-tighter">Due date</p>
+                <p className="text-xs font-black text-surface-700 dark:text-surface-300">{formatDate(project.endDate)}</p>
               </div>
             )}
 
-            <Link to={`/projects/${project.id}/todo`} className="btn-secondary btn-sm sm:btn-md whitespace-nowrap">
-              <ListTodo size={15} />
-              <span className="hidden sm:inline">To-do table</span>
-              <span className="sm:hidden">To-do</span>
-            </Link>
-            <Link to={`/projects/${project.id}/requests`} className="btn-secondary btn-sm sm:btn-md whitespace-nowrap">
-              <Settings2 size={15} />
-              <span className="hidden sm:inline">Task requests</span>
-              <span className="sm:hidden">Requests</span>
-            </Link>
+            <div className="flex items-center gap-1.5 ml-1">
+              <Link to={`/projects/${project.id}/todo`} className="btn-secondary btn-sm whitespace-nowrap">
+                <ListTodo size={14} />
+                <span className="hidden sm:inline">To-do</span>
+              </Link>
+              <Link to={`/projects/${project.id}/requests`} className="btn-secondary btn-sm whitespace-nowrap">
+                <Settings2 size={14} />
+                <span className="hidden sm:inline text-[11px]">Requests</span>
+              </Link>
+            </div>
           </div>
         </div>
 
         {/* Status pills */}
-        <div className="flex items-center gap-2 mt-4 flex-wrap">
+        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
           {(Object.entries(STATUS_CONFIG) as [TaskStatus, typeof STATUS_CONFIG.todo][]).map(([key, cfg]) => (
-            <div key={key} className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wide border transition-colors', 
+            <div key={key} className={cn('flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tight border transition-colors', 
               key === 'todo' && 'bg-surface-50 dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-200 dark:border-surface-700',
               key === 'in_progress' && 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50',
               key === 'done' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50'
             )}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
-              {cfg.label}
+              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: cfg.color }} />
+              {cfg.label.split(' ')[0]}
               <span className="ml-0.5 opacity-60">{statusCounts[key]}</span>
             </div>
           ))}
         </div>
 
         {categories.length ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setSelectedCategoryId('all')}
@@ -434,11 +434,11 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="timeline" className="pt-4">
+        <TabsContent value="timeline" className="pt-2">
           <ProjectTimelineModule projectId={project.id} />
         </TabsContent>
 
-        <TabsContent value="overview" className="pt-4">
+        <TabsContent value="overview" className="pt-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="card p-5 md:col-span-2">
                 <div className="mb-4 flex items-center justify-between gap-3">
