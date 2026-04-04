@@ -182,6 +182,8 @@ export const ProjectDetailPage: React.FC = () => {
         phaseId: data.phaseId || undefined,
         subcategoryId: data.subcategoryId || undefined,
         estimatedHours: data.estimatedHours || undefined,
+        labels: data.labels,
+        tags: data.tags,
         order: projectTasks.filter((task) => task.status === data.status).length,
       };
 

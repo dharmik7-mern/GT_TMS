@@ -97,7 +97,8 @@ export const projectsService = {
 };
 
 export const tasksService = {
-  getAll: (projectId?: string) => api.get('/tasks', { params: { projectId } }),
+  getAll: (projectId?: string, labels?: string[], tags?: string[]) => 
+    api.get('/tasks', { params: { projectId, labels: labels?.join(','), tags: tags?.join(',') } }),
   getById: (id: string) => api.get(`/tasks/${id}`),
   create: (data: unknown) => api.post('/tasks', data),
   getRequests: (params?: { projectId?: string; requestStatus?: 'pending' | 'approved' | 'rejected' }) =>
@@ -141,6 +142,12 @@ export const usersService = {
     fd.append('avatar', file);
     return api.put('/users/profile-photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+};
+
+export const labelsService = {
+  getAll: () => api.get('/labels'),
+  create: (data: { name: string; color: string }) => api.post('/labels', data),
+  delete: (id: string) => api.delete(`/labels/${id}`),
 };
 
 export const teamsService = {

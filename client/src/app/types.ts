@@ -23,6 +23,15 @@ export type QuickTaskStatus = 'todo' | 'in_progress' | 'done';
 export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived';
 export type CompletionReviewStatus = 'pending' | 'approved' | 'changes_requested';
 
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+  workspaceId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CompletionReview {
   completedAt?: string;
   completedBy?: string;
@@ -161,7 +170,8 @@ export interface TaskCreationRequest {
   subcategoryId?: string;
   estimatedHours?: number;
   order: number;
-  labels?: string[];
+  tags?: string[];
+  labels?: string[] | Label[];
   subtasks?: TaskSubtask[];
   requestStatus: 'pending' | 'approved' | 'rejected';
   reviewNote?: string;
@@ -407,7 +417,8 @@ export interface Task {
   subtasks?: TaskSubtask[];
   subtaskCompleted?: number;
   subtaskTotal?: number;
-  labels?: string[];
+  tags?: string[];
+  labels?: string[] | Label[];
   startDate?: string;
   dueDate?: string;
   endDate?: string;

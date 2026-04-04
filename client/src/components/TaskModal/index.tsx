@@ -13,8 +13,8 @@ import { useAuthStore } from '../../context/authStore';
 import { UserAvatar } from '../UserAvatar';
 import { Modal } from '../Modal';
 import { ReassignRequestModal } from '../ReassignRequestModal';
-import type { Activity, Task, Priority, TaskStatus, Comment, User } from '../../app/types';
-import { tasksService, reassignService } from '../../services/api';
+import type { Activity, Task, Priority, TaskStatus, Comment, User, Label } from '../../app/types';
+import { tasksService, reassignService, labelsService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 
 interface TaskModalProps {
@@ -87,7 +87,7 @@ function buildTaskTimeline(task: Task, comments: Comment[]) {
 }
 
 export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initialTab = 'details' }) => {
-  const { tasks, updateTask, deleteTask, projects, users, bootstrap } = useAppStore();
+  const { tasks, updateTask, deleteTask, projects, users, bootstrap, allLabels } = useAppStore();
   const { user } = useAuthStore();
   
   const currentTask = useMemo(() => {
@@ -109,7 +109,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
   const [isEditingPriority, setIsEditingPriority] = useState(false);
   const [isEditingAssignee, setIsEditingAssignee] = useState(false);
   const [isAddingLabel, setIsAddingLabel] = useState(false);
-  const [labelInput, setLabelInput] = useState('');
+  const [tagInput, setTagInput] = useState('');
+  const [isCreatingNewLabel, setIsCreatingNewLabel] = useState(false);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('#71717a');
   const [isReassigning, setIsReassigning] = useState(false);
   const [pendingReassign, setPendingReassign] = useState<any>(null);
   const [selectedSubtaskAssigneeId, setSelectedSubtaskAssigneeId] = useState<string | null>(null);
@@ -937,88 +940,167 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
 
           <div>
             <label className="label">Labels</label>
+            <div className="flex flex-wrap gap-1.5 items-center mb-1">
+              {(currentTask.labels || []).map(label => {
+                const l = typeof label === 'object' ? label : allLabels.find(allL => allL.id === label);
+                if (!l) return null;
+                return (
+                  <span 
+                    key={l.id} 
+                    className="px-2 py-0.5 rounded-md text-[10px] font-bold group relative transition-all"
+                    style={{ backgroundColor: `${l.color}20`, color: l.color }}
+                  >
+                    {l.name}
+                    {canAddSubtask && (
+                      <button 
+                        onClick={async () => {
+                          const next = (currentTask.labels || []).map(lb => typeof lb === 'object' ? lb.id : lb).filter(id => id !== l.id);
+                          await persistTaskUpdate({ labels: next }, 'Label removal failed');
+                        }}
+                        className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                      >
+                        <X size={8} strokeWidth={3} />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+              
+              <div className="relative">
+                {canAddSubtask && (
+                  <button 
+                    type="button"
+                    onClick={() => setIsAddingLabel(!isAddingLabel)}
+                    className="h-6 w-6 rounded-md bg-surface-100 dark:bg-surface-800 text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors flex items-center justify-center"
+                  >
+                    <Plus size={12} strokeWidth={3} />
+                  </button>
+                )}
+
+                {isAddingLabel && (
+                  <div className="absolute left-0 top-full mt-2 z-50 w-56 rounded-xl border border-surface-200 bg-white p-1 shadow-xl dark:border-surface-700 dark:bg-surface-900 animate-in fade-in zoom-in duration-150">
+                    <div className="max-h-48 overflow-y-auto">
+                      <div className="px-2 py-1.5 text-[10px] uppercase tracking-wider font-bold text-surface-400 border-b border-surface-100 dark:border-surface-800 mb-1">Select Labels</div>
+                      {allLabels.map(l => {
+                        const isSelected = (currentTask.labels || []).some(cl => (typeof cl === 'object' ? cl.id : cl) === l.id);
+                        return (
+                          <button
+                            key={l.id}
+                            onClick={async () => {
+                              const currentIds = (currentTask.labels || []).map(cl => typeof cl === 'object' ? cl.id : cl);
+                              const next = isSelected ? currentIds.filter(id => id !== l.id) : [...currentIds, l.id];
+                              await persistTaskUpdate({ labels: next }, 'Label update failed');
+                            }}
+                            className={cn(
+                              "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs transition-colors text-left font-medium",
+                              isSelected ? "bg-surface-100 dark:bg-surface-800" : "hover:bg-surface-50 dark:hover:bg-surface-800"
+                            )}
+                          >
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
+                            <span className="truncate flex-1">{l.name}</span>
+                            {isSelected && <X size={10} className="text-surface-400" />}
+                          </button>
+                        );
+                      })}
+                      
+                      <div className="border-t border-surface-100 dark:border-surface-800 mt-1 pt-1">
+                        {(!isCreatingNewLabel && canManageTask) ? (
+                          <button 
+                            onClick={() => setIsCreatingNewLabel(true)}
+                            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-brand-600 font-bold hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-colors"
+                          >
+                            <Plus size={12} strokeWidth={2.5} />
+                            Create new label
+                          </button>
+                        ) : isCreatingNewLabel ? (
+                          <div className="p-2 space-y-2">
+                             <input 
+                              autoFocus
+                              value={newLabelName}
+                              onChange={e => setNewLabelName(e.target.value)}
+                              placeholder="Label name..."
+                              className="input h-8 text-xs py-1"
+                             />
+                             <div className="flex items-center gap-1.5 flex-wrap">
+                               {['#71717a', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map(c => (
+                                 <button 
+                                  key={c}
+                                  onClick={() => setNewLabelColor(c)}
+                                  className={cn("w-5 h-5 rounded-full border-2 transition-all", newLabelColor === c ? "border-brand-500 scale-110 shadow-sm" : "border-transparent")}
+                                  style={{ backgroundColor: c }}
+                                 />
+                               ))}
+                             </div>
+                             <div className="flex gap-1 pt-1">
+                               <button 
+                                onClick={async () => {
+                                  if (!newLabelName.trim()) return;
+                                  try {
+                                    const res = await labelsService.create({ name: newLabelName.trim(), color: newLabelColor });
+                                    const newL = res.data.data;
+                                    await bootstrap(); // Refresh labels
+                                    const currentIds = (currentTask.labels || []).map(cl => typeof cl === 'object' ? cl.id : cl);
+                                    await persistTaskUpdate({ labels: [...currentIds, newL.id] }, 'Update failed');
+                                    setNewLabelName('');
+                                    setIsCreatingNewLabel(false);
+                                  } catch (e: any) {
+                                    emitErrorToast(e?.response?.data?.error?.message || 'Failed to create label');
+                                  }
+                                }}
+                                className="btn-primary btn-xs flex-1"
+                               >
+                                 Create
+                               </button>
+                               <button onClick={() => setIsCreatingNewLabel(false)} className="btn-secondary btn-xs">Cancel</button>
+                             </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Tags</label>
             <div className="flex flex-wrap gap-1.5 items-center">
-              {(currentTask.labels || []).map(label => (
-                <span key={label} className="badge-gray text-[11px] group relative">
-                  <Tag size={9} />
-                  {label}
-                  {canManageTask && (
+              {(currentTask.tags || []).map(tag => (
+                <span key={tag} className="px-2 py-0.5 rounded-md bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 text-[10px] font-medium text-surface-600 dark:text-surface-400 group relative">
+                  #{tag}
+                  {canAddSubtask && (
                     <button 
                       onClick={async () => {
-                        const next = (currentTask.labels || []).filter(l => l !== label);
-                        await persistTaskUpdate({ labels: next }, 'Label removal failed');
+                        const next = (currentTask.tags || []).filter(t => t !== tag);
+                        await persistTaskUpdate({ tags: next }, 'Tag removal failed');
                       }}
-                      className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                     >
                       <X size={8} strokeWidth={3} />
                     </button>
                   )}
                 </span>
               ))}
-              {(!currentTask.labels || currentTask.labels.length === 0) && !isAddingLabel && <p className="text-xs text-surface-400">No labels</p>}
               
-              {isAddingLabel ? (
-                <div className="relative">
-                  <input
-                    autoFocus
-                    value={labelInput}
-                    onChange={e => setLabelInput(e.target.value)}
-                    onKeyDown={async e => {
-                      if (e.key === 'Enter') {
-                        const trimmed = labelInput.trim();
-                        if (trimmed && !(currentTask.labels || []).includes(trimmed)) {
-                          const next = [...(currentTask.labels || []), trimmed];
-                          await persistTaskUpdate({ labels: next }, 'Label addition failed');
-                        }
-                        setIsAddingLabel(false);
-                        setLabelInput('');
+              <div className="relative">
+                <input 
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter') {
+                      const trimmed = tagInput.trim().replace(/^#/, '');
+                      if (trimmed && !(currentTask.tags || []).includes(trimmed)) {
+                        const next = [...(currentTask.tags || []), trimmed];
+                        await persistTaskUpdate({ tags: next }, 'Tag addition failed');
+                        setTagInput('');
                       }
-                      if (e.key === 'Escape') {
-                        setIsAddingLabel(false);
-                        setLabelInput('');
-                      }
-                    }}
-                    onBlur={() => {
-                      // Small delay to allow clicking on predefined labels if I add them later
-                      setTimeout(() => {
-                        setIsAddingLabel(false);
-                        setLabelInput('');
-                      }, 150);
-                    }}
-                    className="input h-6 text-[10px] w-24 py-0 px-2 min-h-0 border-brand-500/50 focus:ring-1 focus:ring-brand-500/30"
-                    placeholder="New label..."
-                  />
-                  <div className="absolute left-0 top-full mt-1 z-40 w-32 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-xl p-1">
-                    {['ASAP', 'Feedback', 'Blocked', 'Follow-up'].filter(l => !(currentTask.labels || []).includes(l)).map(l => (
-                      <button
-                        key={l}
-                        type="button"
-                        onMouseDown={e => e.preventDefault()} // prevent blur
-                        onClick={async () => {
-                          const next = [...(currentTask.labels || []), l];
-                          await persistTaskUpdate({ labels: next }, 'Label addition failed');
-                          setIsAddingLabel(false);
-                        }}
-                        className="w-full text-left px-2 py-1.5 text-[10px] font-bold text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700 rounded-md transition-colors"
-                      >
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                canManageTask && (
-                  <button 
-                    type="button"
-                    onClick={() => {
-                        setIsAddingLabel(true);
-                    }}
-                    className="badge text-[11px] bg-surface-100 dark:bg-surface-800 text-surface-500 hover:bg-surface-200 transition-colors flex items-center justify-center p-1 min-w-[20px]"
-                  >
-                    <Plus size={10} strokeWidth={3} />
-                  </button>
-                )
-              )}
+                    }
+                  }}
+                  placeholder="Add tag..."
+                  className="bg-transparent border-none outline-none text-[11px] w-20 py-0.5 text-surface-500 focus:text-brand-600 transition-colors"
+                />
+              </div>
             </div>
           </div>
 

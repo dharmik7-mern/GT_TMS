@@ -346,6 +346,8 @@ export async function listTasks({
   limit = 200,
   userId,
   role,
+  labels,
+  tags,
 }) {
   const tenantId = companyId;
   const { Task } = await getTenantModels(companyId);
@@ -354,6 +356,13 @@ export async function listTasks({
     workspaceId,
     $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
   };
+
+  if (labels && Array.isArray(labels) && labels.length > 0) {
+    filter.labels = { $in: labels };
+  }
+  if (tags && Array.isArray(tags) && tags.length > 0) {
+    filter.tags = { $in: tags };
+  }
 
   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
   if (allowed !== null) {
@@ -384,7 +393,7 @@ export async function listTasks({
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Task.find(filter).sort({ projectId: 1, status: 1, order: 1 }).skip(skip).limit(limit),
+    Task.find(filter).sort({ projectId: 1, status: 1, order: 1 }).populate('labels').skip(skip).limit(limit),
     Task.countDocuments(filter),
   ]);
   return { items: await attachTaskActivity({ companyId, workspaceId, tasks: items }), total, page, limit };
@@ -454,7 +463,8 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     timelineType: data.type || 'task',
     estimatedHours: data.estimatedHours ?? null,
     order: data.order ?? 0,
-    labels: data.labels || [],
+    tags: Array.isArray(data.tags) ? data.tags : [],
+    labels: Array.isArray(data.labels) ? data.labels : [],
     subtasks: Array.isArray(data.subtasks)
       ? data.subtasks.map((s, i) => ({
         title: s.title,
@@ -678,6 +688,7 @@ export async function reviewTaskCreationRequest({
         subcategoryId: request.subcategoryId || undefined,
         estimatedHours: request.estimatedHours,
         order: request.order,
+        tags: request.tags || [],
         labels: request.labels || [],
         subtasks: Array.isArray(request.subtasks)
           ? request.subtasks.map((subtask) => ({
@@ -735,6 +746,7 @@ export async function getTaskById({ companyId, workspaceId, userId, role, taskId
     .populate('assigneeIds', 'name avatar color fontColor')
     .populate('reporterId', 'name avatar color fontColor')
     .populate('projectId', 'name')
+    .populate('labels')
     .populate('subtasks.assigneeId', 'name avatar color fontColor');
 
   if (!task) return null;
@@ -849,6 +861,8 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   if (rest.dependencies !== undefined) $set.dependencies = Array.isArray(rest.dependencies) ? rest.dependencies : [];
   if (rest.type !== undefined) $set.timelineType = rest.type;
   if (subtasks !== undefined) $set.subtasks = subtasks;
+  if (rest.tags !== undefined) $set.tags = Array.isArray(rest.tags) ? rest.tags : [];
+  if (rest.labels !== undefined) $set.labels = Array.isArray(rest.labels) ? rest.labels : [];
   if (rest.assigneeIds !== undefined) {
     $set.assigneeIds = Array.isArray(rest.assigneeIds) ? rest.assigneeIds : [];
   }

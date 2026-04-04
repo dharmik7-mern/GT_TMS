@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { Project, Task, Team, Notification, TaskStatus, QuickTask, QuickTaskStatus, User, Workspace, PersonalTask } from '../app/types';
-import { projectsService, tasksService, teamsService, quickTasksService, notificationsService, usersService, workspacesService, personalTasksService } from '../services/api';
+import type { Project, Task, Team, Notification, TaskStatus, QuickTask, QuickTaskStatus, User, Workspace, PersonalTask, Label } from '../app/types';
+import { projectsService, tasksService, teamsService, quickTasksService, notificationsService, usersService, workspacesService, personalTasksService, labelsService } from '../services/api';
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -15,6 +15,7 @@ interface AppStore {
   teams: Team[];
   notifications: Notification[];
   personalTasks: PersonalTask[];
+  allLabels: Label[];
   activeProjectId: string | null;
   sidebarCollapsed: boolean;
   mobileSidebarOpen: boolean;
@@ -67,6 +68,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   teams: [],
   notifications: [],
   personalTasks: [],
+  allLabels: [],
   activeProjectId: null,
   sidebarCollapsed: false,
   mobileSidebarOpen: false,
@@ -78,7 +80,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       document.documentElement.classList.add('dark');
     }
 
-    const [usersRes, workspacesRes, projectsRes, tasksRes, teamsRes, quickRes, notifRes, personalRes] = await Promise.all([
+    const [usersRes, workspacesRes, projectsRes, tasksRes, teamsRes, quickRes, notifRes, personalRes, labelsRes] = await Promise.all([
       usersService.getAll(),
       workspacesService.getAll(),
       projectsService.getAll(),
@@ -87,6 +89,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       quickTasksService.getAll(),
       notificationsService.getAll(),
       personalTasksService.getAll(),
+      labelsService.getAll(),
     ]);
     set({
       users: asArray<User>(usersRes.data.data ?? usersRes.data),
@@ -97,6 +100,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       quickTasks: asArray<QuickTask>(quickRes.data.data ?? quickRes.data),
       notifications: asArray<Notification>(notifRes.data.data ?? notifRes.data),
       personalTasks: asArray<PersonalTask>(personalRes.data.data ?? personalRes.data),
+      allLabels: asArray<Label>(labelsRes.data.data ?? labelsRes.data),
     });
   },
 

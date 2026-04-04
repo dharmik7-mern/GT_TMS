@@ -66,17 +66,30 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
         isDragging && 'shadow-modal rotate-1 opacity-95 scale-105'
       )}
     >
-      {/* Priority & Labels */}
-      <div className="flex items-center gap-2 mb-2.5">
+      {/* Priority, Labels & Categories */}
+      <div className="flex flex-wrap items-center gap-2 mb-2.5">
         <span
           className={cn('badge text-[10px]', priority.bg, priority.text)}
         >
           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: priority.color }} />
           {priority.label}
         </span>
-        {task.labels?.slice(0, 2).map(label => (
-          <span key={label} className="badge-gray text-[10px]">{label}</span>
-        ))}
+        
+        {/* Structured Labels */}
+        {task.labels?.map((label) => {
+          const l = typeof label === 'object' ? label : useAppStore.getState().allLabels.find(al => al.id === label);
+          if (!l) return null;
+          return (
+            <span 
+              key={l.id} 
+              className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
+              style={{ backgroundColor: `${l.color}20`, color: l.color }}
+            >
+              {l.name}
+            </span>
+          );
+        })}
+
         {category && (
           <span
             className="rounded-md px-2 py-0.5 text-[10px] font-semibold"
@@ -101,6 +114,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
       <h4 className="text-sm font-medium text-surface-800 dark:text-surface-200 leading-snug group-hover:text-brand-700 dark:group-hover:text-brand-300 transition-colors">
         {task.title}
       </h4>
+
+      {/* Tags */}
+      {task.tags && task.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
+          {task.tags.map(tag => (
+            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-surface-50 dark:bg-surface-800/50 text-surface-500 dark:text-surface-400 rounded-md border border-surface-100 dark:border-surface-800 flex items-center gap-1">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
+
       {task.description && (
         <p className="mt-1 text-[11px] text-surface-400 line-clamp-2 leading-relaxed">
           {task.description}

@@ -262,6 +262,8 @@ export const ProjectTodoPage: React.FC = () => {
         assigneeIds: values.assigneeIds,
         subcategoryId: values.subcategoryId || undefined,
         estimatedHours: values.estimatedHours || undefined,
+        labels: values.labels,
+        tags: values.tags,
       });
       const created = res.data?.data ?? res.data;
       const createdId = created?.id || created?._id;
@@ -336,17 +338,21 @@ export const ProjectTodoPage: React.FC = () => {
                       <Paperclip size={12} /> {attachCount}
                     </span>
                   )}
-                  {(task.labels || []).map((lb) => (
-                    <span
-                      key={lb}
-                      className={cn(
-                        'text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase tracking-wide',
-                        LABEL_STYLES[lb] || 'bg-surface-200 text-surface-700 dark:bg-surface-700 dark:text-surface-200'
-                      )}
-                    >
-                      {lb}
-                    </span>
-                  ))}
+                  {(task.labels || []).map((lb) => {
+                    const labelId = typeof lb === 'object' ? lb.id : lb;
+                    const labelName = typeof lb === 'object' ? lb.name : lb;
+                    return (
+                      <span
+                        key={labelId}
+                        className={cn(
+                          'text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase tracking-wide',
+                          LABEL_STYLES[labelName] || 'bg-surface-200 text-surface-700 dark:bg-surface-700 dark:text-surface-200'
+                        )}
+                      >
+                        {labelName}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>

@@ -8,7 +8,7 @@ import { getTenantModels } from '../config/tenantDb.js';
 export async function list(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const { projectId, assigneeId, status, priority, page, limit } = req.query;
+    const { projectId, assigneeId, status, priority, page, limit, labels, tags } = req.query;
     const result = await TaskService.listTasks({
       companyId,
       workspaceId,
@@ -20,6 +20,8 @@ export async function list(req, res, next) {
       limit: limit ? Number(limit) : 200,
       userId,
       role,
+      labels: labels ? (Array.isArray(labels) ? labels : labels.split(',')) : undefined,
+      tags: tags ? (Array.isArray(tags) ? tags : tags.split(',')) : undefined,
     });
     return res.status(200).json({
       success: true,

@@ -21,7 +21,8 @@ const taskCreationRequestSchema = new mongoose.Schema(
     subcategoryId: { type: String, trim: true, maxlength: 100, default: null },
     estimatedHours: { type: Number, default: null, min: 0 },
     order: { type: Number, default: 0 },
-    labels: [{ type: String, trim: true, maxlength: 40 }],
+    tags: { type: [String], default: [] },
+    labels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Label', default: [] }],
     subtasks: [
       {
         _id: { type: mongoose.Schema.Types.ObjectId, auto: true },

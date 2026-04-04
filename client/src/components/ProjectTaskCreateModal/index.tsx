@@ -4,6 +4,9 @@ import { getReservedTaskTitleError } from '../../utils/taskTitleValidation';
 import { PRIORITY_CONFIG, STATUS_CONFIG, TASK_TYPE_CONFIG } from '../../app/constants';
 import { Modal } from '../Modal';
 import { UserAvatar } from '../UserAvatar';
+import { useAppStore } from '../../context/appStore';
+import { Tag, X, Plus } from 'lucide-react';
+import { cn } from '../../utils/helpers';
 import type { Priority, Project, ProjectCategory, TaskStatus, TaskType, TimelinePhase, User } from '../../app/types';
 
 export interface ProjectTaskCreateValues {
@@ -19,6 +22,8 @@ export interface ProjectTaskCreateValues {
   subcategoryId?: string;
   assigneeIds: string[];
   estimatedHours?: number;
+  labels: string[];
+  tags: string[];
   files: File[];
 }
 
@@ -54,6 +59,8 @@ function createDefaultValues(project: Project, defaultStatus: TaskStatus): Proje
     subcategoryId: '',
     assigneeIds: [],
     estimatedHours: undefined,
+    labels: [],
+    tags: [],
     files: [],
   };
 }
@@ -157,6 +164,9 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
         : [...current.assigneeIds, userId],
     }));
   };
+
+  const { allLabels } = useAppStore();
+  const [tagInput, setTagInput] = useState('');
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -348,6 +358,66 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
               ))}
             </div>
           ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Labels</label>
+            <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 border border-surface-100 dark:border-surface-800 rounded-xl">
+              {allLabels.map(l => {
+                const isSelected = form.labels.includes(l.id);
+                return (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => setField('labels', isSelected ? form.labels.filter(id => id !== l.id) : [...form.labels, l.id])}
+                    className={cn(
+                      "px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border",
+                      isSelected ? "shadow-sm" : "opacity-40 hover:opacity-100 border-transparent"
+                    )}
+                    style={{ 
+                      backgroundColor: isSelected ? `${l.color}20` : 'transparent', 
+                      color: isSelected ? l.color : 'inherit',
+                      borderColor: isSelected ? l.color : 'transparent'
+                    }}
+                  >
+                    {l.name}
+                  </button>
+                );
+              })}
+              {allLabels.length === 0 && <p className="text-[10px] text-surface-400 italic">No labels created yet</p>}
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Tags</label>
+            <div className="flex flex-wrap gap-1.5 p-2 border border-surface-100 dark:border-surface-800 rounded-xl min-h-[40px]">
+              {form.tags.map(tag => (
+                <span key={tag} className="px-2 py-0.5 rounded-md bg-surface-100 dark:bg-surface-800 text-[10px] font-medium text-surface-600 dark:text-surface-400 flex items-center gap-1">
+                  #{tag}
+                  <button type="button" onClick={() => setField('tags', form.tags.filter(t => t !== tag))}>
+                    <X size={8} />
+                  </button>
+                </span>
+              ))}
+              <input 
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const trimmed = tagInput.trim().replace(/^#/, '');
+                    if (trimmed && !form.tags.includes(trimmed)) {
+                      setField('tags', [...form.tags, trimmed]);
+                      setTagInput('');
+                    }
+                  }
+                }}
+                placeholder="Add tag..."
+                className="bg-transparent border-none outline-none text-[11px] w-20 py-0.5"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="flex gap-3 pt-2">
