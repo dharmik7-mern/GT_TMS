@@ -114,7 +114,7 @@ export default function MISReports() {
                 <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">Employee Overview</p>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-surface-100 text-xs dark:divide-surface-800">
+                <table className="min-w-[100%] divide-y divide-surface-100 text-xs dark:divide-surface-800">
                   <thead className="bg-surface-50 dark:bg-surface-950/40">
                     <tr>
                       <th className="px-4 py-3 text-left">Employee</th>
