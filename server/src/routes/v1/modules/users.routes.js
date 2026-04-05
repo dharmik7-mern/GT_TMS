@@ -27,7 +27,7 @@ router.post(
     z.object({
       name: z.string().trim().min(2).max(120),
       email: z.string().trim().email().max(200),
-      password: z.string().min(8).max(200),
+      password: z.string().min(4).max(200),
       role: z.enum(['super_admin', 'admin', 'manager', 'team_leader', 'team_member']),
       companyId: z.string().trim().min(1).optional(),
       jobTitle: z.string().trim().max(120).optional(),
@@ -48,7 +48,7 @@ router.post(
           rowNumber: z.number().int().positive().optional(),
           name: z.string().trim().min(1).max(120),
           email: z.string().trim().email().max(200),
-          password: z.string().min(8).max(200),
+          password: z.string().min(4).max(200),
           role: z.enum(['super_admin', 'admin', 'manager', 'team_leader', 'team_member']).optional(),
           jobTitle: z.string().trim().max(120).optional(),
           department: z.string().trim().max(120).optional(),
@@ -80,7 +80,7 @@ router.put(
   '/:id/password',
   validateBody(
     z.object({
-      newPassword: z.string().min(8).max(200),
+      newPassword: z.string().min(4).max(200),
     })
   ),
   UsersController.setPassword

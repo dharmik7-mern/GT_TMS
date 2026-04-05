@@ -17,7 +17,7 @@ router.post(
       name: z.string().trim().min(2).max(200),
       adminName: z.string().trim().min(2).max(120),
       adminEmail: z.string().trim().email().max(200),
-      adminPassword: z.string().min(8).max(200),
+      adminPassword: z.string().min(4).max(200),
       initialUserLimit: z.number().int().min(1).max(100000).optional(),
       status: z.enum(['active', 'trial', 'suspended']).default('active'),
     })

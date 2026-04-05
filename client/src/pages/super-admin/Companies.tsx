@@ -273,7 +273,7 @@ export const CompaniesPage: React.FC = () => {
               <div className="col-span-2">
                 <label className="label">Admin Password *</label>
                 <input
-                  {...register('adminPassword', { required: 'Password is required', minLength: { value: 8, message: 'Min 8 characters' } })}
+                  {...register('adminPassword', { required: 'Password is required', minLength: { value: 4, message: 'Min 4 characters' } })}
                   className={cn('input', errors.adminPassword && 'border-rose-400')}
                   placeholder="Create a strong password"
                   type="password"

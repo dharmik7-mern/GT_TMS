@@ -106,13 +106,13 @@ export const ResetPasswordPage: React.FC = () => {
   return (
     <div>
       <h1 className="font-display font-bold text-3xl text-surface-900 dark:text-white mb-2">Set new password</h1>
-      <p className="text-surface-500 mb-8">Your new password must be at least 8 characters</p>
+      <p className="text-surface-500 mb-8">Your new password must be at least 4 characters</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
           <label className="label">New password</label>
           <input
-            {...register('password', { required: 'Required', minLength: { value: 8, message: 'Min 8 chars' } })}
+            {...register('password', { required: 'Required', minLength: { value: 4, message: 'Min 4 chars' } })}
             type={showPassword ? 'text' : 'password'}
             placeholder="Enter new password"
             className="input"
