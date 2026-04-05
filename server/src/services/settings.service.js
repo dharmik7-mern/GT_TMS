@@ -225,8 +225,8 @@ export async function getEffectiveSecuritySettings({ companyId = null, workspace
 
 export function assertPasswordMatchesPolicy(password, securitySettings = DEFAULT_SECURITY_SETTINGS) {
   const trimmedPassword = String(password || '');
-  if (trimmedPassword.length < 8) {
-    const err = new Error('Password must be at least 8 characters long');
+  if (trimmedPassword.length < 4) {
+    const err = new Error('Password must be at least 4 characters long');
     err.statusCode = 400;
     err.code = 'WEAK_PASSWORD';
     throw err;

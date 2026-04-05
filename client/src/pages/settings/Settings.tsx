@@ -702,7 +702,7 @@ export const SettingsPage: React.FC = () => {
                 <div>
                   <label className="label">New password</label>
                   <div className="relative">
-                    <input {...registerSecurity('newPassword', { required: true, minLength: 8 })} type={showNew ? 'text' : 'password'} className="input pr-10" />
+                    <input {...registerSecurity('newPassword', { required: true, minLength: 4 })} type={showNew ? 'text' : 'password'} className="input pr-10" />
                     <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400">
                       {showNew ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
@@ -750,7 +750,7 @@ export const SettingsPage: React.FC = () => {
                   </button>
                 </SettingRow>
                 <p className="mt-3 text-xs text-surface-400">
-                  When off, users in this organization still need at least 8 characters, but uppercase, number, and special-character requirements are removed.
+                  When off, users in this organization still need at least 4 characters, but uppercase, number, and special-character requirements are removed.
                 </p>
               </div>
               )}
