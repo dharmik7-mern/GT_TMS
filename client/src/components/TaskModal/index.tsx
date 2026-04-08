@@ -22,6 +22,7 @@ interface TaskModalProps {
   task: Task | null;
   open: boolean;
   onClose: () => void;
+  initialTab?: string;
 }
 
 type ChecklistItem = { id: string; text: string; done: boolean };
@@ -86,7 +87,7 @@ function buildTaskTimeline(task: Task, comments: Comment[]) {
   return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose }) => {
+export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initialTab }) => {
   const { tasks, updateTask, deleteTask, projects, users, bootstrap, allLabels } = useAppStore();
   const { user } = useAuthStore();
 

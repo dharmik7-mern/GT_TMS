@@ -139,6 +139,7 @@ export const usersService = {
     fd.append('avatar', file);
     return api.put('/users/profile-photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+  delete: (id: string) => api.delete(`/users/${id}`),
 };
 
 export const labelsService = {
