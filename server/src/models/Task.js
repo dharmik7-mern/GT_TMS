@@ -11,7 +11,7 @@ const subtaskSchema = new mongoose.Schema(
   { _id: true, timestamps: true }
 );
 
-const taskStatuses = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'done'];
+const taskStatuses = ['todo', 'scheduled', 'in_progress', 'in_review', 'done'];
 const taskTypes = ['operational', 'design', 'important'];
 const reviewStatuses = ['pending', 'approved', 'changes_requested'];
 const timelineItemTypes = ['task', 'milestone'];
@@ -86,6 +86,13 @@ const taskSchema = new mongoose.Schema(
     isReassignPending: { type: Boolean, default: false, index: true },
     requestedAssigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reassignRequestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    statusHistory: [
+      {
+        status: { type: String, required: true },
+        startTime: { type: Date, required: true, default: Date.now },
+        endTime: { type: Date, default: null },
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -110,7 +117,7 @@ function mapSubtasks(subs) {
       title: s.title,
       isCompleted: Boolean(s.isCompleted),
       order: s.order ?? 0,
-      assigneeId: s.assigneeId ? String(s.assigneeId) : undefined,
+      assigneeId: s.assigneeId ? String(s.assigneeId._id || s.assigneeId.id || s.assigneeId) : undefined,
       assignee,
       createdAt: s.createdAt?.toISOString?.() || undefined,
       updatedAt: s.updatedAt?.toISOString?.() || undefined,
@@ -131,22 +138,22 @@ taskSchema.set('toJSON', {
     ret.projectId = String(ret.projectId);
     ret.assigneeIds = Array.isArray(ret.assigneeIds)
       ? ret.assigneeIds.map((a) => {
-          if (!a) return undefined;
-          const id = typeof a === 'object' && a._id ? a._id : a;
-          return String(id);
-        }).filter(Boolean)
+        if (!a) return undefined;
+        const id = typeof a === 'object' ? (a._id || a.id || a) : a;
+        return String(id);
+      }).filter(Boolean)
       : [];
-    ret.reporterId = ret.reporterId ? String(ret.reporterId._id || ret.reporterId) : undefined;
+    ret.reporterId = ret.reporterId ? String(ret.reporterId._id || ret.reporterId.id || ret.reporterId) : undefined;
     ret.parentTaskId = ret.parentTaskId ? String(ret.parentTaskId) : undefined;
     ret.phaseId = ret.phaseId ? String(ret.phaseId) : undefined;
     ret.subcategoryId = ret.subcategoryId || undefined;
     ret.dependencies = Array.isArray(ret.dependencies) ? ret.dependencies.map((value) => String(value)) : [];
     ret.labels = Array.isArray(ret.labels)
       ? ret.labels.map((v) => {
-          if (!v) return undefined;
-          const id = typeof v === 'object' ? (v._id || v.id || v) : v;
-          return String(id);
-        }).filter(Boolean)
+        if (!v) return undefined;
+        const id = typeof v === 'object' ? (v._id || v.id || v) : v;
+        return String(id);
+      }).filter(Boolean)
       : [];
     const rawSubs = Array.isArray(_doc.subtasks) ? _doc.subtasks : [];
     ret.subtasks = mapSubtasks(rawSubs);
@@ -202,6 +209,13 @@ taskSchema.set('toJSON', {
     ret.isReassignPending = !!ret.isReassignPending;
     ret.requestedAssigneeId = ret.requestedAssigneeId ? String(ret.requestedAssigneeId) : undefined;
     ret.reassignRequestedBy = ret.reassignRequestedBy ? String(ret.reassignRequestedBy) : undefined;
+    ret.statusHistory = Array.isArray(ret.statusHistory)
+      ? ret.statusHistory.map(h => ({
+          status: h.status,
+          startTime: h.startTime?.toISOString?.() || h.startTime,
+          endTime: h.endTime?.toISOString?.() || h.endTime,
+        }))
+      : [];
     delete ret._id;
     delete ret.__v;
     delete ret.tenantId;

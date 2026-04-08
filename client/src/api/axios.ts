@@ -43,13 +43,6 @@ API.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        if (status >= 500) {
-            if (window.location.pathname !== '/500') {
-                window.location.href = '/500';
-            }
-            return Promise.reject(error);
-        }
-
         if (!error.config?.suppressErrorToast) {
             const message =
                 error?.response?.data?.error?.message ||

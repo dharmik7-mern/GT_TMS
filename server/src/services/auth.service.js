@@ -167,9 +167,9 @@ export async function login({ email, companyCode, employeeCode, password }) {
   }
 
   if (!user || !user.isActive) {
-    const err = new Error('Invalid credentials');
+    const err = new Error(user && !user.isActive ? 'Your account is disabled. Contact admin.' : 'Invalid credentials');
     err.statusCode = 401;
-    err.code = 'INVALID_CREDENTIALS';
+    err.code = user && !user.isActive ? 'USER_DISABLED' : 'INVALID_CREDENTIALS';
     throw err;
   }
 

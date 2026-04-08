@@ -33,6 +33,29 @@ export async function list(req, res, next) {
   }
 }
 
+export async function getActivities(req, res, next) {
+  try {
+    const { companyId } = req.auth;
+    const { taskId } = req.params;
+    const result = await TaskService.listTaskActivities({ tenantId: companyId, taskId });
+    return res.status(200).json({ success: true, data: result });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function getTimeTracking(req, res, next) {
+  try {
+    const { companyId } = req.auth;
+    const { taskId } = req.params;
+    const { type } = req.query; // 'project' or 'quick'
+    const result = await TaskService.getTaskTimeTracking({ tenantId: companyId, taskId, type });
+    return res.status(200).json({ success: true, data: result });
+  } catch (e) {
+    return next(e);
+  }
+}
+
 export async function getOne(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
@@ -334,10 +357,10 @@ export async function addComment(req, res, next) {
 export async function getOverdue(req, res, next) {
   try {
     const { companyId, sub: userId, role } = req.auth;
-    const result = await TaskService.getOverdueTasks({ 
-      tenantId: companyId, 
-      userId, 
-      role 
+    const result = await TaskService.getOverdueTasks({
+      tenantId: companyId,
+      userId,
+      role
     });
     return res.status(200).json({ success: true, ...result });
   } catch (e) {

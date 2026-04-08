@@ -87,7 +87,7 @@ const PROJECT_IMPORT_HEADER_ALIASES: Record<string, string[]> = {
 };
 
 const VALID_PROJECT_IMPORT_STATUSES: ProjectStatus[] = ['active', 'on_hold', 'completed', 'archived'];
-const VALID_PROJECT_IMPORT_TASK_STATUSES: TaskStatus[] = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'done'];
+const VALID_PROJECT_IMPORT_TASK_STATUSES: TaskStatus[] = ['todo', 'scheduled', 'in_progress', 'in_review', 'done'];
 const VALID_PROJECT_IMPORT_PRIORITIES: Priority[] = ['low', 'medium', 'high', 'urgent'];
 const STATUS_FILTERS: { value: ProjectStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -424,7 +424,7 @@ const ProjectCard = React.forwardRef<HTMLDivElement, {
                 >
                   <Edit3 size={14} /> Edit
                 </DropdownMenu.Item>
-                <DropdownMenu.Item 
+                <DropdownMenu.Item
                   onClick={() => onArchive(project.id)}
                   className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer text-surface-700 dark:text-surface-300 outline-none"
                 >
@@ -481,19 +481,19 @@ const ProjectRow: React.FC<{ project: Project; onDelete: (id: string) => void; o
   const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
   const canManageProjects = user?.role !== 'team_member' || canEditOtherProjects;
 
-    const isArchived = project.status === 'archived';
-  
-    return (
-      <motion.div
-        layout
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
-        className={cn(
-          "flex items-center gap-4 px-5 py-3.5 border-b border-surface-50 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors group",
-          isArchived && "opacity-60 grayscale-[0.2]"
-        )}
-        onClick={() => navigate(`/projects/${project.id}`)}
-      >
+  const isArchived = project.status === 'archived';
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className={cn(
+        "flex items-center gap-4 px-5 py-3.5 border-b border-surface-50 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors group",
+        isArchived && "opacity-60 grayscale-[0.2]"
+      )}
+      onClick={() => navigate(`/projects/${project.id}`)}
+    >
       <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
         style={{ backgroundColor: project.color }}>
         {project.name[0]}
@@ -688,7 +688,7 @@ export const ProjectsPage: React.FC = () => {
       PROJECT_IMPORT_TEMPLATE_HEADERS.join(','),
       'website-redesign-1,Website Redesign,Company site refresh,active,Design,#3366FF,"Aarav Shah;Maya Roy",,"Priya Singh",,2026-04-01,2026-06-30,250000,INR,"Planning:3;Design:5;Development:12;Testing:4",Homepage Wireframes,Create homepage UI draft,todo,high,Maya Roy,,2026-04-01,3,16,Design,"Create layout;Review copy;Approve visuals"',
       'website-redesign-1,Website Redesign,Company site refresh,active,Design,#3366FF,,,,,2026-04-01,2026-06-30,250000,INR,"Planning:3;Design:5;Development:12;Testing:4",Landing Page Build,Implement final landing page,in_progress,medium,"Aarav Shah;Dev Team Lead",,2026-04-05,6,32,Development,"Set up sections;Connect forms;QA check"',
-      'mobile-app-rollout,Mobile App Rollout,Launch v2 mobile app,on_hold,Product,#0F766E,,"owner@company.com","Product Head","head@company.com",2026-05-10,2026-08-20,500000,USD,"Planning:4;Development:20;Testing:8",Sprint Planning,Prepare sprint board,todo,medium,,"scrum@company.com",2026-05-10,2,8,Planning,"Backlog review;Capacity plan"',
+      'mobile-app-rollout,Mobile App Rollout,Launch v2 mobile app,on_hold,Product,#0F766E,,"owner@company.com","Product Head","head@company.com",2026-05-10,2026-08-20,500000,USD,"Planning:4;Development:20;Testing:8",Sprint Planning,Prepare sprint board,todo,medium,,"scrum@company.com",2026-05-10,2,8,Planning,"New task;Capacity plan"',
     ].join('\n');
     const blob = new Blob([sampleRows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

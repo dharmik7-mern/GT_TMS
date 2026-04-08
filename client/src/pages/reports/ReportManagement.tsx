@@ -33,7 +33,7 @@ const PERIODS = [
 ] as const;
 
 const COLORS = { blue: '#2f55f5', cyan: '#0ea5e9', green: '#10b981', amber: '#f59e0b', red: '#ef4444', slate: '#94a3b8', violet: '#7c3aed' };
-const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', scheduled: '#8b5cf6', in_progress: '#2f55f5', in_review: '#f59e0b', done: '#10b981', backlog: '#cbd5e1' };
+const STATUS_COLORS: Record<string, string> = { todo: '#94a3b8', scheduled: '#8b5cf6', in_progress: '#2f55f5', in_review: '#f59e0b', done: '#10b981' };
 const PRIORITY_COLORS: Record<Priority, string> = { low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' };
 
 const parseDate = (value?: string | null) => {

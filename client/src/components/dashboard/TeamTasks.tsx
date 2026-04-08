@@ -71,7 +71,7 @@ export const TeamTasks: React.FC<Props> = ({ tasks, loading, onRowClick }) => {
                           'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-400',
                         (task.status === 'done' || task.status === 'completed') &&
                           'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400',
-                        (task.status === 'todo' || task.status === 'pending' || task.status === 'backlog') &&
+                        (task.status === 'todo' || task.status === 'pending') &&
                           'border-surface-200 bg-surface-100 text-surface-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-300'
                       )}
                     >

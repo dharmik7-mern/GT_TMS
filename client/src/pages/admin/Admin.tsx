@@ -12,6 +12,7 @@ import { useAppStore } from '../../context/appStore';
 import { usersService, workspacesService } from '../../services/api';
 import { UserAvatar } from '../../components/UserAvatar';
 import { Modal } from '../../components/Modal';
+import { DeactivationModal } from '../../components/DeactivationModal';
 import { Table, ProgressBar, EmptyState } from '../../components/ui';
 import { emitSuccessToast } from '../../context/toastBus';
 import type { User, Role, UserImportResult, UserImportRow, UserPerformance } from '../../app/types';
@@ -145,22 +146,23 @@ export const AdminWorkspacesPage: React.FC = () => {
             'MRR': '/admin/billing',
           };
           return (
-          <motion.button
-            type="button"
-            key={stat.label}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            onClick={() => navigate(destinations[stat.label] || '/admin/workspaces')}
-            className="card p-4 text-left cursor-pointer hover:shadow-card-hover transition-all"
-          >
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: `${stat.color}15` }}>
-              <div style={{ color: stat.color }}>{stat.icon}</div>
-            </div>
-            <p className="font-display font-bold text-2xl text-surface-900 dark:text-white">{stat.value}</p>
-            <p className="text-xs text-surface-400">{stat.label}</p>
-          </motion.button>
-        )})}
+            <motion.button
+              type="button"
+              key={stat.label}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              onClick={() => navigate(destinations[stat.label] || '/admin/workspaces')}
+              className="card p-4 text-left cursor-pointer hover:shadow-card-hover transition-all"
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: `${stat.color}15` }}>
+                <div style={{ color: stat.color }}>{stat.icon}</div>
+              </div>
+              <p className="font-display font-bold text-2xl text-surface-900 dark:text-white">{stat.value}</p>
+              <p className="text-xs text-surface-400">{stat.label}</p>
+            </motion.button>
+          )
+        })}
       </div>
 
       {/* Search */}
@@ -247,6 +249,8 @@ export const AdminUsersPage: React.FC = () => {
   const [importRows, setImportRows] = useState<UserImportRow[]>([]);
   const [importParseErrors, setImportParseErrors] = useState<string[]>([]);
   const [importResult, setImportResult] = useState<UserImportResult | null>(null);
+  const [deactivateModalOpen, setDeactivateModalOpen] = useState(false);
+  const [targetDeactivateUser, setTargetDeactivateUser] = useState<User | null>(null);
   const { users, addUser, bootstrap } = useAppStore();
 
   const filtered = users.filter(u => {
@@ -360,14 +364,13 @@ export const AdminUsersPage: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const handleToggleEnable = async (u: User) => {
     try {
-      await usersService.delete(userId);
+      await usersService.update(u.id, { isActive: true });
+      emitSuccessToast(`${u.name} has been enabled successfully.`);
       await bootstrap();
-      if (selectedUser?.id === userId) setSelectedUser(null);
     } catch {
-      // shared interceptor shows the error
-      console.log("Error occured!! while deleting the user");
+      // shared interceptor shows error
     }
   };
 
@@ -492,9 +495,26 @@ export const AdminUsersPage: React.FC = () => {
             {
               key: 'isActive', header: 'Status',
               render: (u) => (
-                <span className={cn('badge text-xs', u.isActive ? 'badge-green' : 'badge-gray')}>
-                  {u.isActive ? 'Active' : 'Inactive'}
-                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (u.isActive) {
+                      setTargetDeactivateUser(u);
+                      setDeactivateModalOpen(true);
+                    } else {
+                      void handleToggleEnable(u);
+                    }
+                  }}
+                  className={cn(
+                    "badge text-[10px] font-bold uppercase tracking-wider transition-all min-w-[72px] text-center cursor-pointer",
+                    u.isActive 
+                      ? "bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100" 
+                      : "bg-surface-100 text-surface-500 border border-surface-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-100"
+                  )}
+                >
+                  {u.isActive ? 'Active' : 'Disabled'}
+                </button>
               )
             },
             { key: 'employeeId', header: 'Employee ID', render: (u) => <span className="text-xs text-surface-500">{u.employeeId || '—'}</span> },
@@ -502,8 +522,7 @@ export const AdminUsersPage: React.FC = () => {
               key: 'actions', header: '', align: 'right',
               render: (u) => (
                 <div className="flex items-center gap-1 justify-end">
-                  <button onClick={() => navigate(`/admin/users/${u.id}`)} className="btn-ghost btn w-7 h-7"><Edit3 size={13} /></button>
-                  <button onClick={() => { void handleDeleteUser(u.id); }} className="btn-ghost btn w-7 h-7 text-rose-400 hover:bg-rose-50"><Trash2 size={13} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); navigate(`/admin/users/${u.id}`); }} className="btn-ghost btn w-8 h-8 rounded-lg"><Edit3 size={14} /></button>
                 </div>
               )
             },
@@ -549,30 +568,30 @@ export const AdminUsersPage: React.FC = () => {
                     {userOverview.insight?.headline || 'Overview loaded successfully.'}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Assigned</p>
-                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.assignedTasks}</p>
-                  </div>
-                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Completed</p>
-                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.completedTasks}</p>
-                  </div>
-                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Overdue Open</p>
-                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.overdueOpenTasks}</p>
-                  </div>
-                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Performance</p>
-                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.performanceScore}%</p>
-                  </div>
-                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Due Today</p>
-                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.dueTodayTasks}</p>
-                  </div>
-                  <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-surface-400">Completed Today</p>
-                    <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.todayCompletedTasks}</p>
-                  </div>
+                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Assigned</p>
+                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.assignedTasks}</p>
+                    </div>
+                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Completed</p>
+                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.completedTasks}</p>
+                    </div>
+                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Overdue Open</p>
+                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.overdueOpenTasks}</p>
+                    </div>
+                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Performance</p>
+                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.performanceScore}%</p>
+                    </div>
+                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Due Today</p>
+                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.dueTodayTasks}</p>
+                    </div>
+                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Completed Today</p>
+                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.todayCompletedTasks}</p>
+                    </div>
                   </div>
                   {userOverview.currentWorkload?.length ? (
                     <div className="rounded-xl border border-surface-100 dark:border-surface-800 p-3">
@@ -913,6 +932,15 @@ export const AdminUsersPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+      <DeactivationModal
+        open={deactivateModalOpen}
+        onClose={() => {
+          setDeactivateModalOpen(false);
+          setTargetDeactivateUser(null);
+        }}
+        user={targetDeactivateUser}
+        onSuccess={bootstrap}
+      />
     </div>
   );
 };

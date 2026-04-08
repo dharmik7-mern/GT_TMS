@@ -4,10 +4,119 @@ import { sendTemplatedEmailSafe } from './mail.service.js';
 import { syncProjectStats } from './project.service.js';
 import { hasWorkspacePermission } from './permission.service.js';
 import { assertAllowedTaskTitle, normalizeTaskTitle } from '../utils/taskTitleValidation.js';
+import { getTaskActivityModel } from '../models/TaskActivity.js';
 import { uploadIncomingFiles } from './storage.service.js';
 
 function strId(x) {
   return x ? String(x) : '';
+}
+
+async function logTaskActivity({ tenantId, taskId, userId, action, oldValue, newValue, message }) {
+  try {
+    const TaskActivity = await getTaskActivityModel(tenantId);
+    await TaskActivity.create({
+      tenantId,
+      taskId,
+      userId,
+      action,
+      oldValue: oldValue ? String(oldValue) : null,
+      newValue: newValue ? String(newValue) : null,
+      message,
+    });
+  } catch (err) {
+    console.error('[logTaskActivity] Error:', err);
+  }
+}
+
+async function updateTaskStatusHistory({ tenantId, taskId, userId, fromStatus, toStatus, type = 'project' }) {
+  try {
+    const { Task, QuickTask } = await getTenantModels(tenantId);
+    const Model = type === 'quick' ? QuickTask : Task;
+    const task = await Model.findById(taskId);
+    if (!task) return;
+
+    const now = new Date();
+    const history = task.statusHistory || [];
+    
+    // Close previous status if exists
+    if (history.length > 0) {
+      const lastEntry = history[history.length - 1];
+      if (!lastEntry.endTime) {
+        lastEntry.endTime = now;
+        lastEntry.duration = Math.max(0, Math.floor((now.getTime() - new Date(lastEntry.startTime).getTime()) / 1000));
+      }
+    }
+
+    // Add new status entry
+    history.push({
+      status: toStatus,
+      startTime: now,
+      endTime: null
+    });
+
+    task.statusHistory = history;
+    await task.save();
+
+    // Also log to TaskActivity
+    await logTaskActivity({
+      tenantId,
+      taskId,
+      userId,
+      action: 'STATUS_CHANGED',
+      oldValue: fromStatus,
+      newValue: toStatus,
+      message: `Changed status from ${fromStatus} to ${toStatus}`
+    });
+  } catch (err) {
+    console.error('[updateTaskStatusHistory] Error:', err);
+  }
+}
+
+export function calculateTimeSpent(statusHistory) {
+  if (!Array.isArray(statusHistory)) return { totalTimeSpent: 0, timeSpentByStatus: {}, statusHistory: [] };
+
+  const timeSpentByStatus = {};
+  let totalTimeSpent = 0;
+  const now = new Date();
+
+  const historyPoints = statusHistory.map(entry => {
+    const start = new Date(entry.startTime);
+    const end = entry.endTime ? new Date(entry.endTime) : now;
+    const duration = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+    
+    timeSpentByStatus[entry.status] = (timeSpentByStatus[entry.status] || 0) + duration;
+    totalTimeSpent += duration;
+
+    return {
+      status: entry.status,
+      changedAt: entry.startTime,
+      duration
+    };
+  });
+
+  return {
+    totalTimeSpent,
+    timeSpentByStatus,
+    statusHistory: historyPoints
+  };
+}
+
+export async function listTaskActivities({ tenantId, taskId }) {
+  const TaskActivity = await getTaskActivityModel(tenantId);
+  return TaskActivity.find({ tenantId, taskId }).sort({ createdAt: -1 }).limit(100);
+}
+
+export async function getTaskTimeTracking({ tenantId, taskId, type }) {
+  let task;
+  const { QuickTask, Task } = await getTenantModels(tenantId);
+  if (type === 'quick') {
+    task = await QuickTask.findById(taskId);
+  } else {
+    task = await Task.findById(taskId);
+  }
+
+  if (!task) return null;
+  return calculateTimeSpent(task.statusHistory);
 }
 
 function isAdminRole(role) {
@@ -485,13 +594,26 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     tenantId,
     workspaceId,
     userId,
-    type: 'task_created',
-    description: `Created task "${task.title}"`,
-    entityType: 'task',
     entityId: task._id,
     metadata: { projectId: task.projectId },
   });
 
+  // Log initial status
+  await updateTaskStatusHistory({
+    tenantId,
+    taskId: task._id,
+    userId,
+    fromStatus: null,
+    toStatus: task.status,
+    type: 'project'
+  });
+  await logTaskActivity({
+    tenantId,
+    taskId: task._id,
+    userId,
+    action: 'CREATED',
+    message: `Created task "${task.title}" with status "${task.status}"`
+  });
   if (task.assigneeIds?.length) {
     await Notification.insertMany(
       task.assigneeIds.map((assignee) => ({
@@ -772,9 +894,23 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
   if (projectTask) {
     const t = typeof projectTask.toJSON === 'function' ? projectTask.toJSON() : projectTask;
     const reporterObj = projectTask?.reporterId;
-    t.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
-    t.reporterName = reporterObj?.name || t.reporterName;
-    t.assigneeIds = Array.isArray(t.assigneeIds) ? t.assigneeIds.map((a) => String(a?._id || a)) : [];
+
+    // If it's an object (populated), extract ID and Name
+    const reporterId = typeof reporterObj === 'object' ? (reporterObj?._id || reporterObj?.id) : reporterObj;
+    t.reporterId = reporterId ? String(reporterId) : (t.reporterId || '');
+    t.reporterName = (typeof reporterObj === 'object' ? reporterObj?.name : null) || t.reporterName || 'System';
+    t.reporterAvatar = (typeof reporterObj === 'object' ? reporterObj?.avatar : null) || t.reporterAvatar;
+
+    // Handle assigneeIds mapping
+    if (Array.isArray(t.assigneeIds)) {
+      t.assigneeIds = t.assigneeIds.map(a => {
+        if (typeof a === 'object') return String(a._id || a.id || a);
+        return String(a);
+      }).filter(Boolean);
+    } else {
+      t.assigneeIds = [];
+    }
+
     t.type = 'project';
     return t;
   }
@@ -792,10 +928,20 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
     const qtDoc = typeof quickTask.toJSON === 'function' ? quickTask.toJSON() : quickTask;
     qtDoc.type = 'quick';
     const reporterObj = quickTask.reporterId;
-    qtDoc.reporterName = reporterObj?.name || qtDoc.reporterName;
-    qtDoc.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
-    qtDoc.assigneeIds = Array.isArray(qtDoc.assigneeIds) ? qtDoc.assigneeIds.map((a) => String(a?._id || a)) : [];
-    if (quickTask.assigneeIds?.length) {
+
+    const rId = typeof reporterObj === 'object' ? (reporterObj?._id || reporterObj?.id) : reporterObj;
+    qtDoc.reporterId = rId ? String(rId) : (qtDoc.reporterId || '');
+    qtDoc.reporterName = (typeof reporterObj === 'object' ? reporterObj?.name : null) || qtDoc.reporterName || 'System';
+    qtDoc.reporterAvatar = (typeof reporterObj === 'object' ? reporterObj?.avatar : null) || qtDoc.reporterAvatar;
+
+    if (Array.isArray(qtDoc.assigneeIds)) {
+      qtDoc.assigneeIds = qtDoc.assigneeIds.map(a => {
+        if (typeof a === 'object') return String(a._id || a.id || a);
+        return String(a);
+      }).filter(Boolean);
+    }
+
+    if (quickTask.assigneeIds?.length && typeof quickTask.assigneeIds[0] === 'object') {
       qtDoc.assigneeNames = quickTask.assigneeIds.map((u) => u?.name).filter(Boolean);
     }
     return qtDoc;
@@ -872,6 +1018,18 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   if (rest.assigneeIds !== undefined) {
     $set.assigneeIds = Array.isArray(rest.assigneeIds) ? rest.assigneeIds : [];
   }
+  if (rest.assigneeIds !== undefined && strId(beforeAssigneeIds) !== strId($set.assigneeIds)) {
+    await logTaskActivity({
+      tenantId,
+      taskId,
+      userId,
+      action: 'ASSIGNED',
+      oldValue: beforeAssigneeIds.join(', '),
+      newValue: $set.assigneeIds.join(', '),
+      message: `Updated assignees to ${$set.assigneeIds.length} people`
+    });
+  }
+
   if (completionRemark !== undefined || rest.status !== undefined) {
     $set.completionReview = buildCompletionState({
       existingReview: existing.completionReview,
@@ -885,9 +1043,27 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   const task = await Task.findOneAndUpdate({ _id: taskId, tenantId }, { $set }, { new: true });
   if (!task) return null;
 
-  const changedFields = Object.keys(updates || {});
-  const specializedOnlyFields = new Set(['status', 'assigneeIds']);
-  const hasGenericTaskChanges = changedFields.some((field) => !specializedOnlyFields.has(field));
+  const specializedOnlyFields = new Set(['status', 'assigneeIds', 'type', 'completionRemark']);
+  const actualGenericChanges = [];
+  for (const field of Object.keys(updates || {})) {
+    if (specializedOnlyFields.has(field)) continue;
+    
+    let isChanged = false;
+    const oldVal = existing[field];
+    const newVal = updates[field];
+
+    if (oldVal instanceof Date || newVal instanceof Date) {
+      isChanged = new Date(oldVal || 0).getTime() !== new Date(newVal || 0).getTime();
+    } else if (Array.isArray(oldVal) || Array.isArray(newVal)) {
+      isChanged = JSON.stringify(oldVal || []) !== JSON.stringify(newVal || []);
+    } else {
+      isChanged = String(oldVal || '') !== String(newVal || '');
+    }
+
+    if (isChanged) actualGenericChanges.push(field);
+  }
+
+  const hasGenericTaskChanges = actualGenericChanges.length > 0;
   const activityEntries = [];
 
   if (hasGenericTaskChanges) {
@@ -896,14 +1072,22 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
       workspaceId,
       userId,
       type: 'task_updated',
-      description: `Updated task "${task.title}"`,
+      description: `Updated task details: ${actualGenericChanges.join(', ')}`,
       entityType: 'task',
       entityId: task._id,
-      metadata: { projectId: task.projectId, changedFields },
+      metadata: { projectId: task.projectId, changedFields: actualGenericChanges },
     });
   }
 
   if (previousStatus !== task.status) {
+    await updateTaskStatusHistory({
+      tenantId,
+      taskId: task._id,
+      userId,
+      fromStatus: previousStatus,
+      toStatus: task.status,
+      type: 'project'
+    });
     activityEntries.push({
       tenantId,
       workspaceId,
@@ -1145,6 +1329,15 @@ export async function addSubtask({ companyId, workspaceId, userId, role, taskId,
   task.subtasks.push({ title, isCompleted: Boolean(isCompleted), order, assigneeId: subAssignee });
   await task.save();
 
+  await logTaskActivity({
+    tenantId,
+    taskId: task._id,
+    userId,
+    action: 'SUBTASK_ADDED',
+    newValue: title,
+    message: `added subtask: "${title}"`
+  });
+
   if (subAssignee) {
     await createSubtaskNotification({
       tenantId,
@@ -1271,12 +1464,23 @@ export async function addTaskAttachments({ companyId, workspaceId, userId, role,
   if (!attachments.length) return task;
 
   await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { attachments } });
+
+  for (const attachment of attachments) {
+    await logTaskActivity({
+      tenantId,
+      taskId: taskId,
+      userId,
+      action: 'ATTACHMENT_ADDED',
+      newValue: attachment.name,
+      message: `added attachment: "${attachment.name}"`
+    });
+  }
   return Task.findOne({ _id: taskId, tenantId, workspaceId });
 }
 
 export async function addTaskComment({ companyId, workspaceId, userId, role, taskId, content }) {
   const tenantId = companyId;
-  const { Task } = await getTenantModels(companyId);
+  const { Task, Label, User } = await getTenantModels(companyId);
 
   const task = await Task.findOne({
     _id: taskId,
@@ -1298,8 +1502,66 @@ export async function addTaskComment({ companyId, workspaceId, userId, role, tas
     updatedAt: new Date(),
   };
 
-  await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { comments: comment } });
-  return Task.findOne({ _id: taskId, tenantId, workspaceId });
+  // 1. Ensure "Comment" label exists and add it
+  let commentLabel = await Label.findOne({ tenantId, workspaceId, name: 'Comment' });
+  if (!commentLabel) {
+    try {
+      commentLabel = await Label.create({
+        tenantId,
+        workspaceId,
+        name: 'Comment',
+        color: '#3b82f6',
+      });
+    } catch (e) {
+      // If concurrent creation failed due to unique index, find it
+      commentLabel = await Label.findOne({ tenantId, workspaceId, name: 'Comment' });
+    }
+  }
+
+  const update = {
+    $push: { comments: comment },
+  };
+
+  if (commentLabel && (!task.labels || !task.labels.some(l => String(l) === String(commentLabel._id)))) {
+    update.$addToSet = { labels: commentLabel._id };
+  }
+
+  await Task.updateOne({ _id: taskId, tenantId }, update);
+
+  await logTaskActivity({
+    tenantId,
+    taskId: taskId,
+    userId,
+    action: 'COMMENT_ADDED',
+    message: `added a comment`
+  });
+
+  // 2. Notifications
+  const sender = await User.findById(userId).select('name').lean();
+  const recipients = new Set();
+  if (task.reporterId && String(task.reporterId) !== String(userId)) recipients.add(String(task.reporterId));
+  (task.assigneeIds || []).forEach(aid => {
+    if (aid && String(aid) !== String(userId)) recipients.add(String(aid));
+  });
+
+  if (recipients.size > 0) {
+    await notifyUsers({
+      tenantId,
+      workspaceId: task.workspaceId,
+      userIds: Array.from(recipients),
+      type: 'comment_added',
+      title: 'New comment on task',
+      message: `${sender?.name || 'Someone'} commented on "${task.title}": ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+      relatedId: taskId,
+    });
+  }
+
+  return Task.findOne({ _id: taskId, tenantId })
+    .populate('assigneeIds', 'name avatar color fontColor')
+    .populate('reporterId', 'name avatar color fontColor')
+    .populate('projectId', 'name')
+    .populate('labels')
+    .populate('subtasks.assigneeId', 'name avatar color fontColor');
 }
 
 export async function getOverdueTasks({ tenantId, userId, role }) {

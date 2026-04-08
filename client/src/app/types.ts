@@ -2,7 +2,6 @@ export type Role = 'super_admin' | 'admin' | 'manager' | 'team_leader' | 'team_m
 
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus =
-  | 'backlog'
   | 'todo'
   | 'scheduled'
   | 'in_progress'
@@ -532,6 +531,7 @@ export interface Activity {
   createdAt: string;
   metadata?: Record<string, unknown>;
 }
+
 
 export interface KanbanColumn {
   id: TaskStatus;

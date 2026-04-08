@@ -1347,7 +1347,6 @@ const TaskDetailOverlay: React.FC<{
                       value={data.status}
                       onChange={(e) => onUpdateField('status', e.target.value)}
                     >
-                      <option value="backlog" className="dark:bg-surface-900">Backlog</option>
                       <option value="todo" className="dark:bg-surface-900">Todo</option>
                       <option value="in_progress" className="dark:bg-surface-900">In Progress</option>
                       <option value="in_review" className="dark:bg-surface-900">In Review</option>
@@ -1385,16 +1384,24 @@ const TaskDetailOverlay: React.FC<{
                     <>
                       <div className="flex items-center gap-6">
                         <span className="text-[13px] text-gray-400 dark:text-surface-500 font-medium w-24">Responsible</span>
-                        <select
-                          className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-2 py-1 rounded appearance-none transition-colors"
-                          value={(responsible as any).id || ''}
-                          onChange={(e) => onUpdateField('assigneeIds', [e.target.value])}
-                        >
-                          <option value="" className="dark:bg-surface-900">Unassigned</option>
-                          {users.map(u => (
-                            <option key={u.id} value={u.id} className="dark:bg-surface-900">{u.name}</option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <UserAvatar 
+                            name={responsible.name} 
+                            avatar={(responsible as any).avatar} 
+                            size="xs" 
+                            color={(responsible as any).color} 
+                          />
+                          <select
+                            className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-2 py-1 rounded appearance-none transition-colors"
+                            value={(responsible as any).id || ''}
+                            onChange={(e) => onUpdateField('assigneeIds', e.target.value ? [e.target.value] : [])}
+                          >
+                            <option value="" className="dark:bg-surface-900">Unassigned</option>
+                            {users.map(u => (
+                              <option key={u.id} value={u.id} className="dark:bg-surface-900">{u.name}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-6">

@@ -3,8 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, List, BarChart3, Settings2, Plus, ListTodo,
-  ArrowLeft, Edit3, Calendar, Flag,
-  Users
+  ArrowLeft, Edit3, Calendar, Flag, Users, ChevronDown
 } from 'lucide-react';
 import { cn, formatDate, getProgressColor } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
@@ -15,10 +14,11 @@ import { TaskModal } from '../../components/TaskModal';
 import { TaskCard } from '../../components/TaskCard';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar, EmptyState, Tabs, TabsContent } from '../../components/ui';
-import type { Task, TaskStatus, TimelinePhase, TaskCreationRequest, Priority } from '../../app/types';
+import type { Task, TaskStatus, TimelinePhase, TaskCreationRequest, Priority, ProjectSdlcPhase } from '../../app/types';
 import { projectsService, tasksService, timelineService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 import { ProjectTimelineModule } from '../../components/ProjectTimelineModule';
+import { Modal } from '../../components/Modal';
 import { ProjectTaskCreateModal, type ProjectTaskCreateValues } from '../../components/ProjectTaskCreateModal';
 
 export const ProjectDetailPage: React.FC = () => {
@@ -38,8 +38,11 @@ export const ProjectDetailPage: React.FC = () => {
   const [timelinePhases, setTimelinePhases] = useState<TimelinePhase[]>([]);
   const [taskRequests, setTaskRequests] = useState<TaskCreationRequest[]>([]);
   const [loadingTaskRequests, setLoadingTaskRequests] = useState(false);
+  const [isRequestsCollapsed, setIsRequestsCollapsed] = useState(false);
+  const [isSdlcEditorOpen, setIsSdlcEditorOpen] = useState(false);
+  const [editingSdlcPlan, setEditingSdlcPlan] = useState<ProjectSdlcPhase[]>([]);
+  const [isSavingSdlc, setIsSavingSdlc] = useState(false);
   const notificationTaskId = searchParams.get('taskId');
-  const notificationTab = searchParams.get('tab') === 'activity' ? 'activity' : 'details';
 
   const project = projects.find(p => p.id === id);
   const workspacePermissions = workspaces[0]?.settings?.permissions || {};
@@ -104,6 +107,34 @@ export const ProjectDetailPage: React.FC = () => {
       cancelled = true;
     };
   }, [project?.id]);
+
+  const handleSdlcUpdate = async () => {
+    if (!project) return;
+    try {
+      setIsSavingSdlc(true);
+      await projectsService.update(project.id, { sdlcPlan: editingSdlcPlan });
+      emitSuccessToast('Delivery plan updated successfully', 'Project');
+      setIsSdlcEditorOpen(false);
+    } catch (error: any) {
+      emitErrorToast(error?.response?.data?.message || 'Failed to update delivery plan', 'Project');
+    } finally {
+      setIsSavingSdlc(false);
+    }
+  };
+
+  const handleAddSdlcPhase = () => {
+    setEditingSdlcPlan([...editingSdlcPlan, { name: '', durationDays: 1 }]);
+  };
+
+  const handleRemoveSdlcPhase = (index: number) => {
+    setEditingSdlcPlan(editingSdlcPlan.filter((_, i) => i !== index));
+  };
+
+  const updateSdlcPhase = (index: number, field: keyof ProjectSdlcPhase, value: any) => {
+    const next = [...editingSdlcPlan];
+    next[index] = { ...next[index], [field]: value };
+    setEditingSdlcPlan(next);
+  };
 
   if (!project) {
     return (
@@ -453,10 +484,10 @@ export const ProjectDetailPage: React.FC = () => {
             )}
           </div>
         </TabsContent>
-
-        <TabsContent value="timeline" className="pt-2">
+        <TabsContent value="timeline" className="pt-4">
           <ProjectTimelineModule projectId={project.id} />
         </TabsContent>
+
 
         <TabsContent value="overview" className="pt-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -469,59 +500,68 @@ export const ProjectDetailPage: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setIsRequestsCollapsed(!isRequestsCollapsed)} 
+                      className="p-1 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors text-surface-400 hover:text-surface-600 dark:hover:text-surface-300"
+                      title={isRequestsCollapsed ? 'Expand' : 'Collapse'}
+                    >
+                      <ChevronDown size={18} className={cn("transition-transform duration-200", isRequestsCollapsed && "-rotate-90")} />
+                    </button>
                     <Link to={`/projects/${project.id}/requests`} className="text-xs font-medium text-brand-600 dark:text-brand-400">
                       Open full page
                     </Link>
                     {loadingTaskRequests ? <span className="text-xs text-surface-400">Loading...</span> : null}
                   </div>
                 </div>
-              <div className="space-y-3">
-                {taskRequests.length === 0 ? (
-                  <p className="text-sm text-surface-400">No task requests found for this project.</p>
-                ) : (
-                  taskRequests.slice(0, 8).map((request) => {
-                    const requester = users.find((member) => member.id === request.requestedBy);
-                    const assignees = users.filter((member) => request.assigneeIds.includes(member.id));
-                    return (
-                      <div key={request.id} className="rounded-2xl border border-surface-100 dark:border-surface-800 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">{request.title}</p>
-                            <p className="mt-1 text-xs text-surface-400">
-                              Requested by {requester?.name || 'Unknown user'} on {formatDate(request.createdAt)}
-                            </p>
-                            {request.description ? (
-                              <p className="mt-2 text-sm text-surface-600 dark:text-surface-300">{request.description}</p>
-                            ) : null}
-                            <p className="mt-2 text-xs text-surface-500">
-                              Assignees: {assignees.length ? assignees.map((member) => member.name).join(', ') : 'Not assigned yet'}
-                            </p>
-                            {request.reviewNote ? <p className="mt-2 text-xs text-surface-500">Note: {request.reviewNote}</p> : null}
+              {!isRequestsCollapsed && (
+                <div className="space-y-3">
+                  {taskRequests.length === 0 ? (
+                    <p className="text-sm text-surface-400">No task requests found for this project.</p>
+                  ) : (
+                    taskRequests.slice(0, 8).map((request) => {
+                      const requester = users.find((member) => member.id === request.requestedBy);
+                      const assignees = users.filter((member) => request.assigneeIds.includes(member.id));
+                      return (
+                        <div key={request.id} className="rounded-2xl border border-surface-100 dark:border-surface-800 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">{request.title}</p>
+                              <p className="mt-1 text-xs text-surface-400">
+                                Requested by {requester?.name || 'Unknown user'} on {formatDate(request.createdAt)}
+                              </p>
+                              {request.description ? (
+                                <p className="mt-2 text-sm text-surface-600 dark:text-surface-300">{request.description}</p>
+                              ) : null}
+                              <p className="mt-2 text-xs text-surface-500">
+                                Assignees: {assignees.length ? assignees.map((member) => member.name).join(', ') : 'Not assigned yet'}
+                              </p>
+                              {request.reviewNote ? <p className="mt-2 text-xs text-surface-500">Note: {request.reviewNote}</p> : null}
+                            </div>
+                            <span className={cn(
+                              'badge text-[10px]',
+                              request.requestStatus === 'approved' && 'badge-green',
+                              request.requestStatus === 'rejected' && 'badge-rose',
+                              request.requestStatus === 'pending' && 'badge-amber'
+                            )}>
+                              {request.requestStatus}
+                            </span>
                           </div>
-                          <span className={cn(
-                            'badge text-[10px]',
-                            request.requestStatus === 'approved' && 'badge-green',
-                            request.requestStatus === 'rejected' && 'badge-rose',
-                            request.requestStatus === 'pending' && 'badge-amber'
-                          )}>
-                            {request.requestStatus}
-                          </span>
+                          {canReviewTaskRequests && request.requestStatus === 'pending' ? (
+                            <div className="mt-3 flex gap-2">
+                              <button onClick={() => { void handleReviewTaskRequest(request.id, 'approve'); }} className="btn-primary btn-sm">
+                                Approve
+                              </button>
+                              <button onClick={() => { void handleReviewTaskRequest(request.id, 'reject'); }} className="btn-secondary btn-sm">
+                                Reject
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
-                        {canReviewTaskRequests && request.requestStatus === 'pending' ? (
-                          <div className="mt-3 flex gap-2">
-                            <button onClick={() => { void handleReviewTaskRequest(request.id, 'approve'); }} className="btn-primary btn-sm">
-                              Approve
-                            </button>
-                            <button onClick={() => { void handleReviewTaskRequest(request.id, 'reject'); }} className="btn-secondary btn-sm">
-                              Reject
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
             <div className="card p-5">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Task Distribution</h3>
@@ -620,10 +660,24 @@ export const ProjectDetailPage: React.FC = () => {
             </div>
 
             <div className="card p-5">
-              <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Delivery Planning</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-surface-900 dark:text-white">Delivery Planning</h3>
+                {user?.role !== 'team_member' && (
+                  <button 
+                    onClick={() => {
+                      setEditingSdlcPlan(project.sdlcPlan || []);
+                      setIsSdlcEditorOpen(true);
+                    }}
+                    className="p-1.5 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors text-surface-400 hover:text-brand-600"
+                    title="Configure Delivery Plan"
+                  >
+                    <Settings2 size={16} />
+                  </button>
+                )}
+              </div>
               {project.sdlcPlan && project.sdlcPlan.length > 0 ? (
                 <div className="space-y-3">
-                  {project.sdlcPlan.map((phase) => (
+                  {project.sdlcPlan.map((phase, idx) => (
                     <div key={`${phase.name}-${phase.durationDays}`} className="flex items-center justify-between gap-3 rounded-xl bg-surface-50 dark:bg-surface-800/60 px-4 py-3 border border-transparent dark:border-surface-700/50">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-surface-800 dark:text-surface-200">{phase.name}</p>
@@ -762,14 +816,12 @@ export const ProjectDetailPage: React.FC = () => {
       <TaskModal
         task={selectedTask}
         open={showTaskModal}
-        initialTab={notificationTab}
         onClose={() => {
           setShowTaskModal(false);
           setSelectedTaskId(null);
           if (notificationTaskId) {
             const nextParams = new URLSearchParams(searchParams);
             nextParams.delete('taskId');
-            nextParams.delete('tab');
             setSearchParams(nextParams, { replace: true });
           }
         }}
@@ -787,6 +839,73 @@ export const ProjectDetailPage: React.FC = () => {
         title={canCreateTask ? 'New Task' : 'Request Task'}
         onCreatePhase={handleCreatePhase}
       />
+
+      <Modal
+        open={isSdlcEditorOpen}
+        onClose={() => setIsSdlcEditorOpen(false)}
+        title="Customize Delivery Plan"
+        description="Define the phases and duration for this project's lifecycle."
+        size="lg"
+      >
+        <div className="p-6">
+          <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+            {editingSdlcPlan.map((phase, idx) => (
+              <div key={idx} className="flex items-end gap-3 p-4 rounded-2xl bg-surface-50 dark:bg-surface-900/50 border border-surface-100 dark:border-surface-800">
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest ml-1">Phase Name</label>
+                  <input 
+                    type="text" 
+                    value={phase.name} 
+                    onChange={(e) => updateSdlcPhase(idx, 'name', e.target.value)}
+                    placeholder="e.g. Design, Testing..."
+                    className="w-full h-10 rounded-xl border border-surface-200 bg-white px-3 text-sm focus:ring-2 focus:ring-brand-500/20 dark:border-surface-800 dark:bg-surface-950"
+                  />
+                </div>
+                <div className="w-32 space-y-1.5">
+                  <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest ml-1">Duration (days)</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    value={phase.durationDays} 
+                    onChange={(e) => updateSdlcPhase(idx, 'durationDays', parseInt(e.target.value) || 0)}
+                    className="w-full h-10 rounded-xl border border-surface-200 bg-white px-3 text-sm focus:ring-2 focus:ring-brand-500/20 dark:border-surface-800 dark:bg-surface-950"
+                  />
+                </div>
+                <button 
+                  onClick={() => handleRemoveSdlcPhase(idx)}
+                  className="h-10 w-10 flex flex-shrink-0 items-center justify-center rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                >
+                  <Plus size={18} className="rotate-45" />
+                </button>
+              </div>
+            ))}
+
+            <button 
+              onClick={handleAddSdlcPhase}
+              className="w-full py-3 border-2 border-dashed border-surface-200 dark:border-surface-800 rounded-2xl text-surface-400 hover:text-brand-600 hover:border-brand-300 dark:hover:border-surface-700 transition-all flex items-center justify-center gap-2 group"
+            >
+              <Plus size={18} className="group-hover:scale-110 transition-transform" />
+              <span className="text-sm font-semibold">Add New Phase</span>
+            </button>
+          </div>
+
+          <div className="mt-8 flex items-center justify-end gap-3">
+            <button 
+              onClick={() => setIsSdlcEditorOpen(false)}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSdlcUpdate}
+              disabled={isSavingSdlc}
+              className="btn-primary"
+            >
+              {isSavingSdlc ? 'Saving Changes...' : 'Save Plan'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

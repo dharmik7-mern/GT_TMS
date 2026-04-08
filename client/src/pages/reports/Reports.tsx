@@ -75,7 +75,6 @@ const TASK_STATUS_COLORS: Record<string, string> = {
   done: '#10b981',
   in_progress: '#3366ff',
   todo: '#8896b8',
-  backlog: '#cbd5e1',
   scheduled: '#8b5cf6',
   in_review: '#f59e0b',
 };

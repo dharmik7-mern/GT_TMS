@@ -48,13 +48,6 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (status >= 500) {
-      if (window.location.pathname !== '/500') {
-        window.location.href = '/500';
-      }
-      return Promise.reject(error);
-    }
-
     if (!error.config?.suppressErrorToast) {
       const message =
         error?.response?.data?.error?.message ||
@@ -97,7 +90,7 @@ export const projectsService = {
 };
 
 export const tasksService = {
-  getAll: (projectId?: string, labels?: string[], tags?: string[]) => 
+  getAll: (projectId?: string, labels?: string[], tags?: string[]) =>
     api.get('/tasks', { params: { projectId, labels: labels?.join(','), tags: tags?.join(',') } }),
   getById: (id: string) => api.get(`/tasks/${id}`),
   create: (data: unknown) => api.post('/tasks', data),
@@ -121,6 +114,9 @@ export const tasksService = {
     for (const f of files) fd.append('files', f);
     return api.post(`/tasks/${taskId}/attachments`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+  addComment: (taskId: string, body: { content: string }) => api.post(`/tasks/${taskId}/comments`, body),
+  getActivities: (taskId: string) => api.get(`/tasks/${taskId}/activities`),
+  getTimeTracking: (taskId: string, type: 'project' | 'quick') => api.get(`/tasks/${taskId}/time-tracking`, { params: { type } }),
 };
 
 export const usersService = {
@@ -131,7 +127,8 @@ export const usersService = {
   importBulk: (rows: unknown[]) => api.post('/users/import', { rows }),
   update: (id: string, data: unknown) => api.put(`/users/${id}`, data),
   setPassword: (id: string, data: { newPassword: string }) => api.put(`/users/${id}/password`, data),
-  delete: (id: string) => api.delete(`/users/${id}`),
+  getPendingTasks: (id: string) => api.get(`/users/${id}/pending-tasks`),
+  reassignAndDeactivate: (id: string, data: { mappings: any[] }) => api.post(`/users/${id}/reassign-and-deactivate`, data),
   me: () => api.get('/users/me'),
   myPerformance: () => api.get('/users/me/performance'),
   updateMe: (data: unknown) => api.put('/users/me', data),

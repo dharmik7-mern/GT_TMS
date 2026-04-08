@@ -81,8 +81,7 @@ export const Topbar: React.FC = () => {
     <header
       className={cn(
         'fixed top-0 right-0 z-20 flex h-[60px] items-center gap-3 border-b border-surface-100 bg-white/88 px-4 backdrop-blur-xl transition-all duration-250 dark:border-surface-800 dark:bg-surface-950/88',
-        sidebarCollapsed ? 'md:left-16' : 'md:left-[260px]',
-        'left-0'
+        sidebarCollapsed ? 'md:left-16' : 'md:left-[260px]'
       )}
     >
       {/* Page Title - Always Uppercase */}

@@ -22,7 +22,6 @@ import { LabelManagementModal } from '../LabelManagementModal';
 import type { Task, TaskStatus } from '../../app/types';
 
 const BASE_COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
-  { id: 'backlog', title: 'Backlog', color: '#8896b8' },
   { id: 'todo', title: 'New task', color: '#5e72a0' },
   { id: 'scheduled', title: 'Scheduled', color: '#0ea5e9' },
   { id: 'in_progress', title: 'In Progress', color: '#3366ff' },

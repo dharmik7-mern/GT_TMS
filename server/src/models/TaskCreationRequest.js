@@ -10,7 +10,7 @@ const taskCreationRequestSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 300 },
     description: { type: String, trim: true, maxlength: 10000, default: '' },
     priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
-    status: { type: String, enum: ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'], default: 'todo' },
+    status: { type: String, enum: ['todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'], default: 'todo' },
     assigneeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
     requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     requestedToIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }],

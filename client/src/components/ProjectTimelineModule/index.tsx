@@ -379,8 +379,8 @@ export const ProjectTimelineModule: React.FC<ProjectTimelineModuleProps> = ({ pr
         <rect x="0" y="0" width="${sidebarWidth}" height="${height}" fill="#ffffff" />
         <text x="24" y="34" fill="#94a3b8" font-size="14" font-weight="700" letter-spacing="3">TIMELINE OUTLINE</text>
         ${backgroundColumns}
-        ${phaseBands}
         ${dependencyLines}
+        ${phaseBands}
       </svg>
     `;
 

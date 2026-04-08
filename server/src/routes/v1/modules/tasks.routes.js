@@ -18,7 +18,7 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024, files: 10 },
 });
 
-const statusEnum = z.enum(['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done']);
+const statusEnum = z.enum(['todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done']);
 const taskTypeEnum = z.enum(['operational', 'design', 'important']);
 const timelineTypeEnum = z.enum(['task', 'milestone']);
 
@@ -125,6 +125,8 @@ router.get('/reassign-request/status/:taskId', ReassignController.getStatusForTa
 router.get('/overdue', TasksController.getOverdue);
 router.get('/', TasksController.list);
 router.get('/detail/:id', TasksController.getDetail);
+router.get('/:id/activities', TasksController.getActivities);
+router.get('/:id/time-tracking', TasksController.getTimeTracking);
 router.get('/:id', TasksController.getOne);
 router.post('/', validateBody(taskCreateSchema), TasksController.create);
 router.put('/:id', validateBody(taskUpdateSchema), TasksController.update);

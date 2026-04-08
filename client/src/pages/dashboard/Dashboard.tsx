@@ -354,6 +354,7 @@ export const DashboardPage: React.FC = () => {
             </motion.div>
           </div>
         </div>
+        <OverdueTasksPopup />
       </div>
     );
   }
@@ -572,7 +573,7 @@ export const DashboardPage: React.FC = () => {
                             'px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wide border',
                             (task.status === 'in_progress') && 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50',
                             (task.status === 'done' || task.status === 'completed') && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
-                            (task.status === 'todo' || task.status === 'pending' || task.status === 'backlog') && 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50'
+                            (task.status === 'todo' || task.status === 'pending') && 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50'
                           )}>
                             {task.status.replace('_', ' ')}
                           </span>

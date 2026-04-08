@@ -11,7 +11,6 @@ export const PRIORITY_CONFIG = {
 } as const;
 
 export const STATUS_CONFIG = {
-  backlog: { label: 'Backlog', color: '#8896b8', bg: 'bg-surface-100 dark:bg-surface-800', text: 'text-surface-600 dark:text-surface-400' },
   todo: { label: 'New task', color: '#5e72a0', bg: 'bg-slate-50 dark:bg-slate-900/40', text: 'text-slate-700 dark:text-slate-300' },
   scheduled: { label: 'Scheduled', color: '#0ea5e9', bg: 'bg-sky-50 dark:bg-sky-950/30', text: 'text-sky-700 dark:text-sky-400' },
   in_progress: { label: 'In Progress', color: '#3366ff', bg: 'bg-brand-50 dark:bg-brand-950/30', text: 'text-brand-700 dark:text-brand-400' },

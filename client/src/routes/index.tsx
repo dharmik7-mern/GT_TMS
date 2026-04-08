@@ -1,5 +1,4 @@
 import React from 'react';
-import Error500Page from '../pages/errors/Error500Page';
 import NotFound404 from '../pages/errors/NotFound404';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
@@ -48,7 +47,6 @@ import {
   RolesPermissions as SARoles,
   Notifications as SABroadcast,
   Settings as SASettings,
-  Logs as SALogs,
   Support as SASupport,
 } from '../pages/super-admin';
 
@@ -140,14 +138,6 @@ export const router = createBrowserRouter([
       { path: 'users', element: <SAUsers /> },
       { path: 'roles-permissions', element: <SARoles /> },
       { path: 'settings', element: <SettingsRoute /> },
-      {
-        path: 'logs',
-        element: (
-          <RequireRole roles={['super_admin', 'admin', 'manager', 'team_leader']}>
-            <SALogs />
-          </RequireRole>
-        ),
-      },
       { path: 'support', element: <SASupport /> },
       { path: 'broadcast-notifications', element: <SABroadcast /> },
       { path: 'profile', element: <UserSettingsPage /> },
@@ -159,12 +149,7 @@ export const router = createBrowserRouter([
       { path: 'admin/permissions', element: <AdminPermissionsPage /> },
       { path: 'admin/billing', element: <AdminBillingPage /> },
       { path: 'planner', element: <PlannerPage /> },
-
     ],
-  },
-  {
-    path: '/500',
-    element: <Error500Page />,
   },
   {
     path: '*',

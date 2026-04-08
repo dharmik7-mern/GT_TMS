@@ -60,61 +60,67 @@ quickTaskSchema.index({ workspaceId: 1, status: 1 });
 quickTaskSchema.set('toJSON', {
   transform: (_doc, ret) => {
     ret.id = String(ret._id);
-    ret.assigneeIds = Array.isArray(ret.assigneeIds) ? ret.assigneeIds.map((a) => String(a)) : [];
-    ret.reporterId = String(ret.reporterId);
+    ret.reporterId = ret.reporterId ? String(ret.reporterId._id || ret.reporterId.id || ret.reporterId) : undefined;
+    ret.assigneeIds = Array.isArray(ret.assigneeIds)
+      ? ret.assigneeIds.map((a) => {
+        if (!a) return undefined;
+        const id = typeof a === 'object' ? (a._id || a.id || a) : a;
+        return String(id);
+      }).filter(Boolean)
+      : [];
     ret.createdAt = ret.createdAt?.toISOString?.() || ret.createdAt;
     ret.updatedAt = ret.updatedAt?.toISOString?.() || ret.updatedAt;
     ret.dueDate = ret.dueDate ? new Date(ret.dueDate).toISOString().split('T')[0] : undefined;
     ret.isPrivate = !!ret.isPrivate;
-    ret.createdBy = ret.createdBy ? String(ret.createdBy) : String(ret.reporterId);
-    ret.assignedTo = ret.assignedTo ? String(ret.assignedTo) : (ret.assigneeIds?.[0] ? String(ret.assigneeIds[0]) : undefined);
+    ret.createdBy = ret.createdBy ? String(ret.createdBy._id || ret.createdBy.id || ret.createdBy) : ret.reporterId;
+    ret.assignedTo = ret.assignedTo ? String(ret.assignedTo._id || ret.assignedTo.id || ret.assignedTo) : (ret.assigneeIds?.[0] || undefined);
 
     ret.attachments = Array.isArray(ret.attachments)
       ? ret.attachments.map((a) => ({
-          id: String(a._id),
-          name: a.name,
-          url: a.url,
-          size: a.size,
-          type: a.type,
-          uploadedBy: String(a.uploadedBy),
-          createdAt: new Date(a.createdAt).toISOString(),
-        }))
+        id: String(a._id),
+        name: a.name,
+        url: a.url,
+        size: a.size,
+        type: a.type,
+        uploadedBy: String(a.uploadedBy),
+        createdAt: new Date(a.createdAt).toISOString(),
+      }))
       : [];
 
     ret.comments = Array.isArray(ret.comments)
       ? ret.comments.map((c) => ({
-          id: String(c._id),
-          content: c.content,
-          authorId: String(c.authorId),
-          taskId: String(ret._id),
-          createdAt: new Date(c.createdAt).toISOString(),
-          updatedAt: new Date(c.updatedAt).toISOString(),
-        }))
+        id: String(c._id),
+        content: c.content,
+        authorId: String(c.authorId),
+        taskId: String(ret._id),
+        createdAt: new Date(c.createdAt).toISOString(),
+        updatedAt: new Date(c.updatedAt).toISOString(),
+      }))
       : [];
     ret.completionReview = ret.completionReview
       ? {
-          completedAt: ret.completionReview.completedAt ? new Date(ret.completionReview.completedAt).toISOString() : undefined,
-          completedBy: ret.completionReview.completedBy ? String(ret.completionReview.completedBy) : undefined,
-          completionRemark: ret.completionReview.completionRemark || '',
-          reviewStatus: ret.completionReview.reviewStatus || 'pending',
-          rating: typeof ret.completionReview.rating === 'number' ? ret.completionReview.rating : undefined,
-          reviewRemark: ret.completionReview.reviewRemark || '',
-          reviewedAt: ret.completionReview.reviewedAt ? new Date(ret.completionReview.reviewedAt).toISOString() : undefined,
-          reviewedBy: ret.completionReview.reviewedBy ? String(ret.completionReview.reviewedBy) : undefined,
-        }
+        completedAt: ret.completionReview.completedAt ? new Date(ret.completionReview.completedAt).toISOString() : undefined,
+        completedBy: ret.completionReview.completedBy ? String(ret.completionReview.completedBy) : undefined,
+        completionRemark: ret.completionReview.completionRemark || '',
+        reviewStatus: ret.completionReview.reviewStatus || 'pending',
+        rating: typeof ret.completionReview.rating === 'number' ? ret.completionReview.rating : undefined,
+        reviewRemark: ret.completionReview.reviewRemark || '',
+        reviewedAt: ret.completionReview.reviewedAt ? new Date(ret.completionReview.reviewedAt).toISOString() : undefined,
+        reviewedBy: ret.completionReview.reviewedBy ? String(ret.completionReview.reviewedBy) : undefined,
+      }
       : {
-          reviewStatus: 'pending',
-          rating: undefined,
-          completionRemark: '',
-          reviewRemark: '',
-        };
+        reviewStatus: 'pending',
+        rating: undefined,
+        completionRemark: '',
+        reviewRemark: '',
+      };
 
     ret.labels = Array.isArray(ret.labels)
       ? ret.labels.map((v) => {
-          if (!v) return undefined;
-          const id = typeof v === 'object' ? (v._id || v.id || v) : v;
-          return String(id);
-        }).filter(Boolean)
+        if (!v) return undefined;
+        const id = typeof v === 'object' ? (v._id || v.id || v) : v;
+        return String(id);
+      }).filter(Boolean)
       : [];
     ret.tags = Array.isArray(ret.tags) ? ret.tags.filter(t => typeof t === 'string' && t.trim()) : [];
 

@@ -68,7 +68,7 @@ const importSchema = z.object({
       sdlcPlan: optionalTrimmedString(2000),
       taskTitle: optionalTrimmedString(300),
       taskDescription: optionalTrimmedString(10000),
-      taskStatus: z.enum(['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done']).optional(),
+      taskStatus: z.enum(['todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done']).optional(),
       taskPriority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
       taskAssigneeEmails: optionalTrimmedString(1000),
       taskAssigneeNames: optionalTrimmedString(1000),

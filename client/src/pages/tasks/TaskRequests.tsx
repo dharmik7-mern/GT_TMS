@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Clock3, FolderKanban, ListFilter, XCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, Check, CheckCircle2, Clock3, FolderKanban, ListFilter, MoreHorizontal, Plus, User, X, XCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { EmptyState } from '../../components/ui';
 import { UserAvatar } from '../../components/UserAvatar';
 import { useAppStore } from '../../context/appStore';
@@ -44,6 +45,7 @@ const TaskRequestsPage: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedRequest, setSelectedRequest] = useState<TaskCreationRequest | null>(null);
   const itemsPerPage = 10;
 
   const isProjectView = Boolean(projectId);
@@ -304,114 +306,136 @@ const TaskRequestsPage: React.FC = () => {
         />
       ) : (
         <div className="space-y-4">
-          {paginatedRequests.map((request) => {
-            const requester = users.find((member) => member.id === request.requestedBy);
-            const reviewers = users.filter((member) => request.requestedToIds.includes(member.id));
-            const assignees = users.filter((member) => request.assigneeIds.includes(member.id));
-            const linkedProject = projects.find((item) => item.id === request.projectId);
-            const meta = REQUEST_STATUS_META[request.requestStatus];
-            const StatusIcon = meta.icon;
-            return (
-              <div key={request.id} className="card p-5">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={cn('badge text-[10px]', meta.badge)}>
-                        <StatusIcon size={12} />
-                        {meta.label}
-                      </span>
-                      <span className="badge badge-blue text-[10px]">{request.priority}</span>
-                      {!isProjectView ? (
-                        <Link
-                          to={`/projects/${request.projectId}/requests`}
-                          className="rounded-full border border-surface-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-surface-500 transition-colors hover:border-brand-200 hover:text-brand-600 dark:border-surface-700 dark:text-surface-300 dark:hover:border-brand-800 dark:hover:text-brand-400"
-                        >
-                          {linkedProject?.name || 'Project'}
-                        </Link>
-                      ) : null}
-                    </div>
+          <div className="bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-surface-50/50 dark:bg-surface-800/50 text-surface-400 dark:text-surface-500 font-semibold border-b border-surface-100 dark:border-surface-800">
+                  <tr>
+                    <th className="px-6 py-4 font-bold uppercase tracking-wider min-w-[240px]">Task Name</th>
+                    <th className="px-4 py-4 font-bold uppercase tracking-wider text-center">Status</th>
+                    <th className="px-4 py-4 font-bold uppercase tracking-wider text-center">Priority</th>
+                    <th className="px-4 py-4 font-bold uppercase tracking-wider text-center">Due Date</th>
+                    <th className="px-4 py-4 font-bold uppercase tracking-wider">Requested By</th>
+                    <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-100 dark:divide-surface-800/70">
+                  {paginatedRequests.map((request) => {
+                    const linkedProject = projects.find((item) => item.id === request.projectId);
+                    const requester = users.find((u) => u.id === request.requestedBy);
+                    const meta = REQUEST_STATUS_META[request.requestStatus];
+                    const StatusIcon = meta.icon;
+                    const canReview = canReviewRequest(request);
+                    const isProcessing = processingRequestId === request.id;
 
-                    <div>
-                      <h3 className="text-lg font-display font-semibold text-surface-900 dark:text-white">
-                        {request.title}
-                      </h3>
-                      {request.description ? (
-                        <p className="mt-1 text-sm leading-6 text-surface-500 dark:text-surface-400">{request.description}</p>
-                      ) : null}
-                    </div>
-
-                    <div className="grid gap-3 text-sm text-surface-500 md:grid-cols-2 xl:grid-cols-4">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400">Requested By</p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <UserAvatar name={requester?.name || 'Unknown'} color={requester?.color} size="xs" />
-                          <span>{requester?.name || 'Unknown user'}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400">Reviewers</p>
-                        <p className="mt-2">{reviewers.length ? reviewers.map((member) => member.name).join(', ') : 'Not assigned'}</p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400">Assignees</p>
-                        <p className="mt-2">{assignees.length ? assignees.map((member) => member.name).join(', ') : 'No assignee selected'}</p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400">Timeline</p>
-                        <p className="mt-2">
-                          {request.startDate ? formatDate(request.startDate) : 'Not set'} to {request.dueDate ? formatDate(request.dueDate) : 'Not set'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {request.reviewNote ? (
-                      <div className="rounded-2xl bg-surface-50 px-4 py-3 text-sm text-surface-600 dark:bg-surface-800/70 dark:text-surface-300">
-                        <span className="font-medium text-surface-800 dark:text-surface-100">Review note:</span> {request.reviewNote}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex min-w-[220px] flex-col gap-3 xl:items-end">
-                    <div className="text-sm text-surface-500 xl:text-right">
-                      <p>Created {formatDate(request.createdAt)}</p>
-                      {request.reviewedAt ? <p className="mt-1">Reviewed {formatDate(request.reviewedAt)}</p> : null}
-                    </div>
-
-                    {request.createdTaskId ? (
-                      <Link to={`/tasks`} className="btn-secondary btn-sm">
-                        Open tasks
-                      </Link>
-                    ) : null}
-
-                    {request.requestStatus === 'pending' && canReviewRequest(request) ? (
-                      <div className="flex flex-wrap gap-2 xl:justify-end">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleReview(request.id, 'approve');
-                          }}
-                          disabled={processingRequestId === request.id}
-                          className="btn-primary btn-sm"
-                        >
-                          {processingRequestId === request.id ? 'Working...' : 'Approve'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleReview(request.id, 'reject');
-                          }}
-                          disabled={processingRequestId === request.id}
-                          className="btn-secondary btn-sm"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    return (
+                      <tr 
+                        key={request.id} 
+                        className="group hover:bg-surface-50/50 dark:hover:bg-surface-800/30 transition-colors cursor-pointer"
+                        onClick={() => setSelectedRequest(request)}
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[13px] font-bold text-surface-900 dark:text-white group-hover:text-brand-600 transition-colors truncate max-w-[300px]">
+                              {request.title}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {!isProjectView && linkedProject && (
+                                <span className="text-[10px] bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded font-black tracking-widest uppercase truncate max-w-[120px]">
+                                  {linkedProject.name}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-surface-400 dark:text-surface-500 font-medium">
+                                Created {formatDate(request.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <div className="flex justify-center">
+                            <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-transparent', meta.badge)}>
+                              <StatusIcon size={12} />
+                              {meta.label}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <div className="flex justify-center">
+                            <span className={cn(
+                              'px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-transparent',
+                              request.priority === 'urgent' ? 'bg-rose-100 text-rose-600 dark:bg-rose-950/30' :
+                              request.priority === 'high' ? 'bg-amber-100 text-amber-600 dark:bg-amber-950/30' :
+                              request.priority === 'medium' ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/30' :
+                              'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/30'
+                            )}>
+                              {request.priority}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className="text-[11px] font-bold text-surface-600 dark:text-surface-400">
+                            {request.dueDate ? formatDate(request.dueDate) : '---'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <UserAvatar name={requester?.name || 'User'} color={requester?.color} size="xs" />
+                            <span className="text-[11px] font-bold text-surface-700 dark:text-surface-300 truncate max-w-[100px]">
+                              {requester?.name || 'Unknown'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            {request.requestStatus === 'pending' && canReview ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleReview(request.id, 'approve');
+                                  }}
+                                  disabled={isProcessing}
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm disabled:opacity-50"
+                                  title="Approve"
+                                >
+                                  {isProcessing ? <Clock3 size={14} className="animate-spin" /> : <Check size={14} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleReview(request.id, 'reject');
+                                  }}
+                                  disabled={isProcessing}
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-all shadow-sm disabled:opacity-50"
+                                  title="Reject"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : request.createdTaskId ? (
+                              <Link 
+                                to="/tasks" 
+                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-50 text-brand-600 hover:bg-brand-500 hover:text-white transition-all"
+                                title="Open Task"
+                              >
+                                <Plus size={14} />
+                              </Link>
+                            ) : (
+                              <div className="w-8 h-8 flex items-center justify-center text-surface-300">
+                                <MoreHorizontal size={14} />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <PaginationControls
             currentPage={currentPage}
@@ -422,10 +446,190 @@ const TaskRequestsPage: React.FC = () => {
           />
         </div>
       )}
+
+      {/* Request Detail Overlay */}
+      <AnimatePresence>
+        {selectedRequest && (
+          <RequestDetailOverlay
+            request={selectedRequest}
+            onClose={() => setSelectedRequest(null)}
+            onReview={handleReview}
+            isProcessing={processingRequestId === selectedRequest.id}
+            canReview={canReviewRequest(selectedRequest)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
+const RequestDetailOverlay: React.FC<{
+  request: TaskCreationRequest;
+  onClose: () => void;
+  onReview: (id: string, action: 'approve' | 'reject') => Promise<void>;
+  isProcessing: boolean;
+  canReview: boolean;
+}> = ({ request, onClose, onReview, isProcessing, canReview }) => {
+  const { users, projects } = useAppStore();
+  const linkedProject = projects.find((p) => p.id === request.projectId);
+  const requester = users.find((m) => m.id === request.requestedBy);
+  const reviewers = users.filter((m) => request.requestedToIds.includes(m.id));
+  const assignees = users.filter((m) => request.assigneeIds.includes(m.id));
+  const meta = REQUEST_STATUS_META[request.requestStatus];
+  const StatusIcon = meta.icon;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 backdrop-blur-[2px] md:items-center"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 200 }}
+        className="h-[92vh] w-full max-w-[650px] rounded-t-[1.5rem] bg-white shadow-2xl flex flex-col md:h-full md:rounded-none dark:bg-surface-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-8 py-5 border-b border-surface-200 dark:border-surface-800">
+          <div className="flex items-center gap-2 text-[10px] font-bold text-surface-400 dark:text-surface-500 uppercase tracking-widest">
+            <span>{linkedProject?.name || 'Project'}</span>
+            <span>/</span>
+            <span className="text-surface-500">Task Request</span>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-full transition-colors text-surface-400">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={cn('badge text-[10px] font-bold uppercase tracking-wider', meta.badge)}>
+                <StatusIcon size={12} />
+                {meta.label}
+              </span>
+              <span className="badge badge-blue text-[10px] font-bold uppercase tracking-wider">
+                {request.priority}
+              </span>
+            </div>
+            <h1 className="text-3xl font-bold text-surface-900 dark:text-white leading-tight">
+              {request.title}
+            </h1>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12 pt-4 border-t border-surface-100 dark:border-surface-800">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400">Requested By</p>
+              <div className="flex items-center gap-3">
+                <UserAvatar name={requester?.name || 'Unknown'} color={requester?.color} size="sm" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-surface-900 dark:text-white">{requester?.name || 'Unknown'}</span>
+                  <span className="text-xs text-surface-400">{requester?.email}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400">Assignees</p>
+              <div className="flex -space-x-2">
+                {assignees.map((a) => (
+                  <UserAvatar key={a.id} name={a.name} color={a.color} size="sm" className="border-2 border-white dark:border-surface-900" />
+                ))}
+                {!assignees.length && <span className="text-sm text-surface-400">No assignee selected</span>}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400">Timeline</p>
+              <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-300 font-bold">
+                <Calendar size={14} className="text-surface-400" />
+                <span>{request.startDate ? formatDate(request.startDate) : '---'}</span>
+                <span className="text-surface-300">to</span>
+                <span>{request.dueDate ? formatDate(request.dueDate) : '---'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400">Status Info</p>
+              <div className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-300 font-bold">
+                <Clock3 size={14} className="text-surface-400" />
+                <span>Created on {formatDate(request.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400">Description</p>
+            <div className="prose prose-sm dark:prose-invert max-w-none bg-surface-50 dark:bg-surface-800/40 p-5 rounded-2xl border border-surface-100 dark:border-surface-800">
+              {request.description ? (
+                <p className="whitespace-pre-wrap text-surface-700 dark:text-surface-300 leading-relaxed font-medium">
+                  {request.description}
+                </p>
+              ) : (
+                <p className="italic text-surface-400">No description provided for this request.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400">Reviewers</p>
+            <div className="flex flex-wrap gap-2">
+              {reviewers.map((r) => (
+                <div key={r.id} className="flex items-center gap-2 bg-surface-50 dark:bg-surface-800 px-3 py-1.5 rounded-full border border-surface-100 dark:border-surface-700">
+                  <UserAvatar name={r.name} color={r.color} size="xs" />
+                  <span className="text-xs font-bold text-surface-600 dark:text-surface-300">{r.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {request.reviewNote && (
+            <div className="space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-surface-400">Review History</p>
+              <div className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/50 p-5 rounded-2xl">
+                <div className="flex items-start gap-3">
+                  <Clock3 size={16} className="mt-1 text-amber-500" />
+                  <div>
+                    <p className="text-sm font-bold text-amber-900 dark:text-amber-200">Rejection Note</p>
+                    <p className="mt-1 text-sm text-amber-800/80 dark:text-amber-300/80 italic leading-relaxed">"{request.reviewNote}"</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        {request.requestStatus === 'pending' && canReview && (
+          <div className="p-8 border-t border-surface-200 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-800/30 flex gap-4">
+            <button
+              onClick={() => onReview(request.id, 'approve')}
+              disabled={isProcessing}
+              className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white h-12 rounded-xl font-bold transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2"
+            >
+              {isProcessing ? <Clock3 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+              Approve Request
+            </button>
+            <button
+              onClick={() => onReview(request.id, 'reject')}
+              disabled={isProcessing}
+              className="flex-1 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 text-surface-700 dark:text-surface-200 h-12 rounded-xl font-bold hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all flex items-center justify-center gap-2"
+            >
+              <XCircle size={18} />
+              Reject Request
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};
 const PaginationControls = ({
   currentPage,
   totalPages,
