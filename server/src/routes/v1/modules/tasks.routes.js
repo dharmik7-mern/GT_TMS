@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 
 import { requireAuth } from '../../../middleware/auth.middleware.js';
+import { enforceIdempotency } from '../../../middleware/idempotency.middleware.js';
+import { mutationRateLimiter } from '../../../middleware/rate-limit.middleware.js';
 import { validateBody } from '../../../middleware/validate.middleware.js';
 import * as TasksController from '../../../controllers/tasks.controller.js';
 import * as AllTasksController from '../../../controllers/allTasks.controller.js';
@@ -76,6 +78,8 @@ const taskUpdateSchema = z
     tags: z.array(z.string()).optional(),
     subtasks: z.array(subtaskInputSchema).optional(),
     completionRemark: z.string().trim().max(5000).optional(),
+    reviewRemark: z.string().trim().max(5000).optional(),
+    rating: z.number().min(1).max(5).optional(),
   })
   .strict();
 
@@ -114,7 +118,7 @@ const patchSubtaskSchema = z.object({
 router.get('/overview', AllTasksController.getOverview);
 router.get('/all', AllTasksController.getAllTasks);
 router.get('/requests', TasksController.listTaskRequests);
-router.post('/requests', validateBody(taskCreateSchema), TasksController.createTaskRequest);
+router.post('/requests', mutationRateLimiter, enforceIdempotency(), validateBody(taskCreateSchema), TasksController.createTaskRequest);
 router.post('/requests/:id/review', validateBody(taskRequestReviewSchema), TasksController.reviewTaskRequest);
 
 // Reassign Requests
@@ -130,7 +134,7 @@ router.get('/detail/:id', TasksController.getDetail);
 router.get('/:id/activities', TasksController.getActivities);
 router.get('/:id/time-tracking', TasksController.getTimeTracking);
 router.get('/:id', TasksController.getOne);
-router.post('/', validateBody(taskCreateSchema), TasksController.create);
+router.post('/', mutationRateLimiter, enforceIdempotency(), validateBody(taskCreateSchema), TasksController.create);
 router.put('/:id', validateBody(taskUpdateSchema), TasksController.update);
 router.patch('/:id', validateBody(taskUpdateSchema), TasksController.update);
 router.delete('/:id', TasksController.remove);

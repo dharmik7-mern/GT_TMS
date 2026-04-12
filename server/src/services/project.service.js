@@ -41,6 +41,23 @@ function normalizeSubcategories(input) {
     .filter((subcategory) => subcategory.id && subcategory.name);
 }
 
+function sameIdList(left, right) {
+  const normalizedLeft = Array.from(new Set((left || []).map((value) => String(value)).filter(Boolean))).sort();
+  const normalizedRight = Array.from(new Set((right || []).map((value) => String(value)).filter(Boolean))).sort();
+  if (normalizedLeft.length !== normalizedRight.length) return false;
+  return normalizedLeft.every((value, index) => value === normalizedRight[index]);
+}
+
+function sameDateValue(left, right) {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return new Date(left).getTime() === new Date(right).getTime();
+}
+
+function isTransactionUnsupportedError(error) {
+  return error?.code === 20 || /Transaction numbers are only allowed on a replica set member or mongos/i.test(String(error?.message || ''));
+}
+
 function normalizeUserIdentifier(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -276,51 +293,206 @@ export async function createProject({ companyId, workspaceId, userId, role, data
   const subcategories = normalizeSubcategories(data.subcategories);
   const totalPlannedDurationDays = sdlcPlan.reduce((sum, phase) => sum + phase.durationDays, 0);
   const teamId = data.teamId && mongoose.Types.ObjectId.isValid(data.teamId) ? data.teamId : null;
+  const startDate = data.startDate ? new Date(data.startDate) : null;
+  const endDate = data.endDate ? new Date(data.endDate) : null;
+  const budget = Number.isFinite(data.budget) ? Number(data.budget) : null;
+  const budgetCurrency = String(data.budgetCurrency || 'INR').trim().slice(0, 8) || 'INR';
 
-  const project = await Project.create({
+  const recentProjects = await Project.find({
     tenantId,
     workspaceId,
-    name: data.name,
-    description: data.description,
-    color: data.color,
-    status: data.status || 'active',
-    department: data.department || 'General',
-    teamId,
     ownerId: userId,
-    members,
-    reportingPersonIds,
-    startDate: data.startDate ? new Date(data.startDate) : null,
-    endDate: data.endDate ? new Date(data.endDate) : null,
-    budget: Number.isFinite(data.budget) ? Number(data.budget) : null,
-    budgetCurrency: String(data.budgetCurrency || 'INR').trim().slice(0, 8) || 'INR',
-    sdlcPlan,
-    subcategories,
-    totalPlannedDurationDays,
-    progress: 0,
-    tasksCount: 0,
-    completedTasksCount: 0,
-  });
+    name: String(data.name || '').trim(),
+    createdAt: { $gte: new Date(Date.now() - 15000) },
+  }).sort({ createdAt: -1 }).limit(5);
+
+  const duplicateProject = recentProjects.find((item) =>
+    String(item.description || '') === String(data.description || '') &&
+    String(item.color || '') === String(data.color || '') &&
+    String(item.status || 'active') === String(data.status || 'active') &&
+    String(item.department || 'General') === String(data.department || 'General') &&
+    String(item.teamId || '') === String(teamId || '') &&
+    sameIdList(item.members, members) &&
+    sameIdList(item.reportingPersonIds, reportingPersonIds) &&
+    sameDateValue(item.startDate, startDate) &&
+    sameDateValue(item.endDate, endDate) &&
+    Number(item.budget ?? null) === Number(budget ?? null) &&
+    String(item.budgetCurrency || 'INR') === budgetCurrency
+  );
+
+  if (duplicateProject) {
+    logger.warn('duplicate_project_create_prevented', {
+      tenantId: String(tenantId),
+      workspaceId: String(workspaceId),
+      ownerId: String(userId),
+      projectId: String(duplicateProject._id),
+      name: duplicateProject.name,
+    });
+    return duplicateProject;
+  }
+
+  const { AdminConversation } = await getTenantModels(companyId);
+  let project;
 
   try {
-    const { AdminConversation } = await getTenantModels(companyId);
-    const conversation = await AdminConversation.create({
-      participants: members,
-      isGroup: true,
-      groupName: `${project.name} (Project)`,
-      projectId: project._id,
-      groupType: 'project',
-      department: project.department || 'General',
-    });
+    const session = await Project.db.startSession();
+    try {
+      await session.withTransaction(async () => {
+        project = (await Project.create([{
+          tenantId,
+          workspaceId,
+          name: data.name,
+          description: data.description,
+          color: data.color,
+          status: data.status || 'active',
+          department: data.department || 'General',
+          teamId,
+          ownerId: userId,
+          members,
+          reportingPersonIds,
+          startDate,
+          endDate,
+          budget,
+          budgetCurrency,
+          sdlcPlan,
+          subcategories,
+          totalPlannedDurationDays,
+          progress: 0,
+          tasksCount: 0,
+          completedTasksCount: 0,
+        }], { session }))[0];
 
-    project.chatId = conversation._id;
-    await project.save();
+        const conversation = (await AdminConversation.create([{
+          participants: members,
+          isGroup: true,
+          groupName: `${project.name} (Project)`,
+          projectId: project._id,
+          groupType: 'project',
+          department: project.department || 'General',
+        }], { session }))[0];
+
+        project.chatId = conversation._id;
+        await project.save({ session });
+
+        await ActivityLog.create([{
+          tenantId,
+          workspaceId,
+          userId,
+          type: 'project_created',
+          description: `Created project "${project.name}"`,
+          entityType: 'project',
+          entityId: project._id,
+          metadata: { projectId: project._id },
+        }], { session });
+      });
+    } finally {
+      await session.endSession();
+    }
   } catch (error) {
-    logger.error('project_chat_create_failed', {
-      projectId: String(project._id),
-      userId: String(userId),
+    if (!isTransactionUnsupportedError(error)) {
+      throw error;
+    }
+
+    logger.warn('project_create_transaction_fallback', {
+      tenantId: String(tenantId),
+      workspaceId: String(workspaceId),
+      ownerId: String(userId),
       message: error?.message,
     });
+
+    const retryRecentProjects = await Project.find({
+      tenantId,
+      workspaceId,
+      ownerId: userId,
+      name: String(data.name || '').trim(),
+      createdAt: { $gte: new Date(Date.now() - 15000) },
+    }).sort({ createdAt: -1 }).limit(5);
+
+    const retryDuplicateProject = retryRecentProjects.find((item) =>
+      String(item.description || '') === String(data.description || '') &&
+      String(item.color || '') === String(data.color || '') &&
+      String(item.status || 'active') === String(data.status || 'active') &&
+      String(item.department || 'General') === String(data.department || 'General') &&
+      String(item.teamId || '') === String(teamId || '') &&
+      sameIdList(item.members, members) &&
+      sameIdList(item.reportingPersonIds, reportingPersonIds) &&
+      sameDateValue(item.startDate, startDate) &&
+      sameDateValue(item.endDate, endDate) &&
+      Number(item.budget ?? null) === Number(budget ?? null) &&
+      String(item.budgetCurrency || 'INR') === budgetCurrency
+    );
+
+    if (retryDuplicateProject) {
+      return retryDuplicateProject;
+    }
+
+    project = await Project.create({
+      tenantId,
+      workspaceId,
+      name: data.name,
+      description: data.description,
+      color: data.color,
+      status: data.status || 'active',
+      department: data.department || 'General',
+      teamId,
+      ownerId: userId,
+      members,
+      reportingPersonIds,
+      startDate,
+      endDate,
+      budget,
+      budgetCurrency,
+      sdlcPlan,
+      subcategories,
+      totalPlannedDurationDays,
+      progress: 0,
+      tasksCount: 0,
+      completedTasksCount: 0,
+    });
+
+    try {
+      const conversation = await AdminConversation.create({
+        participants: members,
+        isGroup: true,
+        groupName: `${project.name} (Project)`,
+        projectId: project._id,
+        groupType: 'project',
+        department: project.department || 'General',
+      });
+
+      project.chatId = conversation._id;
+      await project.save();
+    } catch (chatError) {
+      logger.error('project_chat_create_failed', {
+        projectId: String(project._id),
+        userId: String(userId),
+        message: chatError?.message,
+      });
+    }
+
+    try {
+      await ActivityLog.create({
+        tenantId,
+        workspaceId,
+        userId,
+        type: 'project_created',
+        description: `Created project "${project.name}"`,
+        entityType: 'project',
+        entityId: project._id,
+        metadata: { projectId: project._id },
+      });
+    } catch (activityError) {
+      logger.error('project_activity_log_failed', {
+        projectId: String(project._id),
+        userId: String(userId),
+        message: activityError?.message,
+      });
+    }
   }
+
+  // #region agent log
+  fileAgentLog({ sessionId: 'e243b9', runId: 'post-fix', hypothesisId: 'H3', location: 'server/src/services/project.service.js:createProject', message: 'Project create completed', data: { tenantId: String(tenantId), workspaceId: String(workspaceId), ownerId: String(userId), projectId: String(project?._id), membersCount: Array.isArray(project?.members) ? project.members.length : undefined }, timestamp: Date.now() });
+  // #endregion
 
   try {
     await initializeProjectPlanning({
@@ -331,29 +503,6 @@ export async function createProject({ companyId, workspaceId, userId, role, data
     });
   } catch (error) {
     logger.error('project_planning_bootstrap_failed', {
-      projectId: String(project._id),
-      userId: String(userId),
-      message: error?.message,
-    });
-  }
-
-  // #region agent log
-  fileAgentLog({ sessionId: 'e243b9', runId: 'pre-fix', hypothesisId: 'H3', location: 'server/src/services/project.service.js:createProject', message: 'Project created in DB', data: { tenantId: String(tenantId), workspaceId: String(workspaceId), ownerId: String(userId), projectId: String(project?._id), membersCount: Array.isArray(project?.members) ? project.members.length : undefined }, timestamp: Date.now() });
-  // #endregion
-
-  try {
-    await ActivityLog.create({
-      tenantId,
-      workspaceId,
-      userId,
-      type: 'project_created',
-      description: `Created project "${project.name}"`,
-      entityType: 'project',
-      entityId: project._id,
-      metadata: { projectId: project._id },
-    });
-  } catch (error) {
-    logger.error('project_activity_log_failed', {
       projectId: String(project._id),
       userId: String(userId),
       message: error?.message,

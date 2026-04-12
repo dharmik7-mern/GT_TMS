@@ -16,6 +16,9 @@ const activityLogSchema = new mongoose.Schema(
 
 activityLogSchema.index({ workspaceId: 1, createdAt: -1 });
 activityLogSchema.index({ entityType: 1, entityId: 1 });
+activityLogSchema.index({ tenantId: 1, workspaceId: 1, createdAt: -1 });
+activityLogSchema.index({ tenantId: 1, workspaceId: 1, userId: 1, createdAt: -1 });
+activityLogSchema.index({ tenantId: 1, workspaceId: 1, entityType: 1, entityId: 1, createdAt: -1 });
 
 activityLogSchema.set('toJSON', {
   transform: (_doc, ret) => {

@@ -36,7 +36,7 @@ export async function list(req, res, next) {
 export async function getActivities(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { taskId } = req.params;
+    const taskId = req.params.id;
     const result = await TaskService.listTaskActivities({ tenantId: companyId, taskId });
     return res.status(200).json({ success: true, data: result });
   } catch (e) {
@@ -47,7 +47,7 @@ export async function getActivities(req, res, next) {
 export async function getTimeTracking(req, res, next) {
   try {
     const { companyId } = req.auth;
-    const { taskId } = req.params;
+    const taskId = req.params.id;
     const { type } = req.query; // 'project' or 'quick'
     const result = await TaskService.getTaskTimeTracking({ tenantId: companyId, taskId, type });
     return res.status(200).json({ success: true, data: result });
@@ -134,6 +134,11 @@ export async function create(req, res, next) {
     const task = await TaskService.createTask({ companyId, workspaceId, userId, role, data: req.body });
     return res.status(201).json({ success: true, data: task });
   } catch (e) {
+    console.error('[TasksController.create] failed', {
+      code: e?.code,
+      statusCode: e?.statusCode,
+      message: e?.message,
+    });
     return next(e);
   }
 }

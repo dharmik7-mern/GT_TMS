@@ -15,6 +15,7 @@ import { UserAvatar } from '../UserAvatar';
 import { Modal } from '../Modal';
 import { ReassignRequestModal } from '../ReassignRequestModal';
 import { ExtensionRequestModal } from '../ExtensionRequestModal';
+import { TaskCompletionModal } from './TaskCompletionModal';
 import type { Activity, Task, Priority, TaskStatus, Comment, User, Label } from '../../app/types';
 import { tasksService, reassignService, labelsService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
@@ -126,6 +127,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
   const [localTask, setLocalTask] = useState<Partial<Task>>({});
   const [isSavingLocal, setIsSavingLocal] = useState(false);
   const [isEditingDueDate, setIsEditingDueDate] = useState(false);
+  const [completeModalOpen, setCompleteModalOpen] = useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const assigneeRef = React.useRef<HTMLDivElement>(null);
@@ -227,11 +229,38 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
       setLocalTask({});
       emitSuccessToast('Task updated successfully.');
       await bootstrap();
-    } catch (err) {
+    } catch (err: any) {
       console.error('[saveLocalChanges] Error:', err);
-      emitErrorToast('Failed to save changes.');
+      const code = err?.response?.data?.error?.code || err?.response?.data?.code;
+      if (code === 'COMPLETION_REMARK_REQUIRED') {
+        setCompleteModalOpen(true);
+      } else {
+        emitErrorToast(err?.response?.data?.message || 'Failed to save changes.');
+      }
     } finally {
       setIsSavingLocal(false);
+    }
+  };
+
+  const handleCompletionSubmit = async (remark: string, files: File[]) => {
+    try {
+      const response = await tasksService.update(currentTask.id, { 
+        status: 'in_review', 
+        completionRemark: remark 
+      });
+
+      if (files.length > 0) {
+        await tasksService.uploadAttachments(currentTask.id, files);
+      }
+
+      updateTask(currentTask.id, response.data.data ?? response.data);
+      setLocalTask({});
+      setCompleteModalOpen(false);
+      emitSuccessToast('Task submitted for review.');
+      await bootstrap();
+    } catch (err: any) {
+      emitErrorToast(err?.response?.data?.message || 'Submission failed.');
+      throw err;
     }
   };
 
@@ -367,100 +396,81 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
                     placeholder="Add a description..."
                   />
                 </div>
-                {(currentTask.status === 'done' || completionReview?.completedAt) && (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="label mb-0">Completion Remark</label>
-                    </div>
-                    <div className="space-y-2">
-                      {completionChecklist.map((item) => (
-                        <div key={item.id} className="flex items-center gap-2 rounded-xl border border-surface-200 bg-white px-3 py-2 dark:border-surface-700 dark:bg-surface-900">
-                          <input
-                            type="checkbox"
-                            checked={item.done}
-                            disabled={isReadOnly}
-                            onChange={(event) => updateChecklistItem(setCompletionChecklist, item.id, { done: event.target.checked })}
-                            className="rounded"
-                          />
-                          <input
-                            value={item.text}
-                            disabled={isReadOnly}
-                            onChange={(event) => updateChecklistItem(setCompletionChecklist, item.id, { text: event.target.value })}
-                            onBlur={() => {
-                              // No immediate sync anymore
-                            }}
-                            placeholder="Add completion checklist item..."
-                            className="flex-1 bg-transparent text-sm outline-none"
-                          />
-                          <button type="button" disabled={isReadOnly} onClick={() => removeChecklistItem(setCompletionChecklist, item.id)} className="btn-ghost h-8 w-8 text-surface-400">
-                            <Trash2 size={14} />
-                          </button>
+                {(currentTask.status === 'done' || currentTask.status === 'in_review' || completionReview?.completedAt) && (
+                  <div className="rounded-2xl border border-surface-100 bg-surface-50/50 p-4 dark:border-surface-800 dark:bg-surface-950/30">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40">
+                          <CheckCircle2 size={14} />
                         </div>
-                      ))}
-                      <button type="button" disabled={isReadOnly} onClick={() => addChecklistItem(setCompletionChecklist)} className="btn-ghost btn-sm text-xs">
-                        <Plus size={12} />
-                        Add Item
-                      </button>
+                        <label className="text-xs font-bold text-surface-700 dark:text-surface-200 uppercase tracking-tight">Assignee Submission</label>
+                      </div>
+                      {completionReview?.completedAt && (
+                        <span className="text-[10px] text-surface-400 font-medium">
+                          Submitted {formatRelativeTime(completionReview.completedAt)}
+                        </span>
+                      )}
                     </div>
+                    
+                    <div className="text-sm text-surface-600 dark:text-surface-300 bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 rounded-xl p-3 shadow-sm italic">
+                       "{currentTask.completionReview?.completionRemark || 'No completion notes provided.'}"
+                    </div>
+
+                    {(currentTask.attachments || []).length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(currentTask.attachments || []).map((file) => (
+                           <a 
+                             key={file.id} 
+                             href={file.url} 
+                             target="_blank" 
+                             className="flex items-center gap-2 px-2 py-1 rounded-lg bg-surface-100 dark:bg-surface-800 text-[10px] text-surface-500 hover:text-brand-600 transition-colors"
+                           >
+                             <Paperclip size={10} />
+                             {file.name}
+                           </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
-                {(currentTask.status === 'done' || completionReview?.reviewedAt || completionReview?.reviewRemark) && (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="label mb-0">Review</label>
+                {(currentTask.status === 'done' || currentTask.status === 'in_review' || completionReview?.reviewedAt || completionReview?.reviewRemark) && (
+                  <div className="rounded-2xl border border-surface-100 bg-brand-50/20 p-4 dark:border-surface-800 dark:bg-brand-950/10">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40">
+                          <History size={14} />
+                        </div>
+                        <label className="text-xs font-bold text-surface-700 dark:text-surface-200 uppercase tracking-tight">Manager Review</label>
+                      </div>
                       <span
                         className={cn(
-                          'badge text-[10px]',
+                          'badge text-[10px] font-bold uppercase tracking-wider',
                           completionReview?.reviewStatus === 'approved'
-                            ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-300'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
                             : completionReview?.reviewStatus === 'changes_requested'
-                              ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-300'
-                              : 'bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-300'
+                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400'
+                              : 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-400'
                         )}
                       >
                         {(completionReview?.reviewStatus || 'pending').replace('_', ' ')}
                       </span>
                     </div>
-                    <div className="space-y-2">
-                      {reviewChecklist.map((item) => (
-                        <div key={item.id} className="flex items-center gap-2 rounded-xl border border-surface-200 bg-white px-3 py-2 dark:border-surface-700 dark:bg-surface-900">
-                          <input
-                            type="checkbox"
-                            checked={item.done}
-                            onChange={(event) => updateChecklistItem(setReviewChecklist, item.id, { done: event.target.checked })}
-                            className="rounded"
-                          />
-                          <input
-                            value={item.text}
-                            onChange={(event) => updateChecklistItem(setReviewChecklist, item.id, { text: event.target.value })}
-                            placeholder="Add review checklist item..."
-                            className="flex-1 bg-transparent text-sm outline-none"
-                          />
-                          <button type="button" onClick={() => removeChecklistItem(setReviewChecklist, item.id)} className="btn-ghost h-8 w-8 text-surface-400">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                      <button type="button" onClick={() => addChecklistItem(setReviewChecklist)} className="btn-ghost btn-sm text-xs">
-                        <Plus size={12} />
-                        Add Item
-                      </button>
-                    </div>
-                    {canReview && currentTask.status === 'done' && (
-                      <div className="mt-3 space-y-3">
+
+                    {canReview && (currentTask.status === 'in_review') ? (
+                      <div className="space-y-4">
                         <div>
-                          <label className="label">Rating</label>
-                          <div className="flex gap-2">
+                           <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest block mb-2 px-1">Quality Rating</label>
+                           <div className="flex gap-2">
                             {[1, 2, 3, 4, 5].map((value) => (
                               <button
                                 key={value}
                                 type="button"
                                 onClick={() => setRating(value)}
                                 className={cn(
-                                  'flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-medium transition-all',
+                                  'flex flex-1 h-10 items-center justify-center rounded-xl border text-sm font-bold transition-all',
                                   rating >= value
                                     ? 'border-amber-400 bg-amber-50 text-amber-600 dark:border-amber-500 dark:bg-amber-950/30 dark:text-amber-300'
-                                    : 'border-surface-200 text-surface-500 hover:border-surface-300 dark:border-surface-700'
+                                    : 'border-surface-200 bg-white text-surface-500 hover:border-surface-300 dark:border-surface-700 dark:bg-surface-800'
                                 )}
                               >
                                 {value}
@@ -468,17 +478,56 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
                             ))}
                           </div>
                         </div>
-                        {completionReview?.rating ? <p className="text-xs text-surface-400">Current rating: {completionReview.rating}/5</p> : null}
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => { void handleReview('approve'); }} className="btn-primary btn-sm" disabled={rating < 1}>Approve</button>
-                          <button type="button" onClick={() => { void handleReview('changes_requested'); }} className="btn-secondary btn-sm">Request Changes</button>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest block mb-2 px-1">Review Remarks</label>
+                          <textarea
+                            value={serializeChecklist(reviewChecklist)}
+                            onChange={(e) => setReviewChecklist(parseChecklist(e.target.value))}
+                            placeholder="Add your feedback for the team..."
+                            className="input h-24 py-2 px-3 resize-none text-sm"
+                          />
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <button 
+                            type="button" 
+                            onClick={() => { void handleReview('approve'); }} 
+                            className="btn-primary flex-1 h-11 shadow-lg shadow-brand-500/20" 
+                            disabled={rating < 1}
+                          >
+                            <CheckCircle2 size={16} />
+                            Approve & Complete
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => { void handleReview('changes_requested'); }} 
+                            className="btn-secondary flex-1 h-11"
+                          >
+                            <RefreshCw size={16} />
+                            Request Changes
+                          </button>
                         </div>
                       </div>
-                    )}
-                    {!canReview && (
-                      <p className="mt-3 text-xs text-surface-400">
-                        Only admin, manager, team leadership, or a reporting person can submit the review.
-                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {completionReview?.reviewRemark && (
+                          <div className="text-sm text-surface-600 dark:text-surface-300 bg-white/50 dark:bg-surface-900/50 border border-surface-100 dark:border-surface-800 rounded-xl p-3">
+                            {completionReview.reviewRemark}
+                          </div>
+                        )}
+                        {completionReview?.rating ? (
+                           <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 w-fit">
+                              <Flag size={12} className="text-amber-500" />
+                              <span className="text-xs font-bold text-amber-700 dark:text-amber-400">Rating: {completionReview.rating}/5</span>
+                           </div>
+                        ) : null}
+                        {completionReview?.reviewedAt && (
+                          <p className="text-[10px] text-surface-400">
+                             Reviewed {formatRelativeTime(completionReview.reviewedAt)}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -1337,6 +1386,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
           onSubmitted={() => {
             bootstrap();
           }}
+        />
+
+        <TaskCompletionModal 
+          open={completeModalOpen}
+          onClose={() => setCompleteModalOpen(false)}
+          onSubmit={handleCompletionSubmit}
+          taskTitle={currentTask.title}
         />
       </div>
     </Modal>

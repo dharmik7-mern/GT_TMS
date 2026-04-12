@@ -8,6 +8,7 @@ router.use(requireAuth);
 router.use(requireRole(['super_admin', 'admin', 'manager', 'team_leader', 'team_member']));
 
 router.get('/', ActivityController.list);
+router.get('/project/:projectId/timeline', ActivityController.getProjectTimeline);
 router.get('/project/:projectId', ActivityController.getByProject);
 
 export default router;

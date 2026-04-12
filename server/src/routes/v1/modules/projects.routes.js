@@ -2,6 +2,8 @@ import express from 'express';
 import { z } from 'zod';
 
 import { requireAuth } from '../../../middleware/auth.middleware.js';
+import { enforceIdempotency } from '../../../middleware/idempotency.middleware.js';
+import { mutationRateLimiter } from '../../../middleware/rate-limit.middleware.js';
 import { validateBody } from '../../../middleware/validate.middleware.js';
 import * as ProjectsController from '../../../controllers/projects.controller.js';
 
@@ -82,8 +84,8 @@ const importSchema = z.object({
 });
 
 router.get('/', ProjectsController.list);
-router.post('/', validateBody(projectCreateSchema), ProjectsController.create);
-router.post('/import', validateBody(importSchema), ProjectsController.importBulk);
+router.post('/', mutationRateLimiter, enforceIdempotency(), validateBody(projectCreateSchema), ProjectsController.create);
+router.post('/import', mutationRateLimiter, enforceIdempotency(), validateBody(importSchema), ProjectsController.importBulk);
 router.get('/:id', ProjectsController.get);
 router.put('/:id', validateBody(projectUpdateSchema), ProjectsController.update);
 router.put('/:id/subcategories', ProjectsController.upsertSubcategories);
