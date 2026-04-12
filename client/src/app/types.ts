@@ -435,8 +435,16 @@ export interface Task {
   extensionStatus?: 'none' | 'pending' | 'approved' | 'rejected';
   latestExtensionReason?: string;
   latestRequestedDueDate?: string;
+  totalTime?: number;
+  timeByUser?: Array<{ userId: string; time: number }>;
+  timeByStage?: Array<{ stage: string; time: number }>;
   totalTimeSpent?: number;
   inProgressTime?: number;
+  statusHistory?: Array<{
+    status: string;
+    startTime: string;
+    endTime: string | null;
+  }>;
   timeLogs?: Array<{
     status: string;
     startTime: string;
@@ -561,6 +569,80 @@ export interface Activity {
   entityType: string;
   createdAt: string;
   metadata?: Record<string, unknown>;
+}
+
+export type TimelineActivityStatus = 'all' | 'created' | 'assigned' | 'completed' | 'updated';
+export type TimelineDensityMode = 'compact' | 'detailed';
+export type TimelineDateGroup = 'Today' | 'Yesterday' | 'Last Week' | 'Older';
+
+export interface ProjectTimelineActivity {
+  id: string;
+  type: string;
+  status: Exclude<TimelineActivityStatus, 'all'>;
+  description: string;
+  entityType: string;
+  entityId: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    color?: string;
+  } | null;
+}
+
+export interface ProjectTimelineTaskGroup {
+  taskId: string;
+  taskName: string;
+  taskStatus: string;
+  totalTime: number;
+  inProgressTime: number;
+  liveSessionStartedAt?: string | null;
+  liveStatus?: string | null;
+  activitiesCount: number;
+  latestActivityAt: string;
+  assignees: Array<{
+    id: string;
+    name: string;
+    email: string;
+    color?: string;
+    role: string;
+  }>;
+  stages: Array<{
+    status: string;
+    duration: number;
+  }>;
+  activities: ProjectTimelineActivity[];
+}
+
+export interface ProjectTimelineDateBucket {
+  dateGroup: TimelineDateGroup;
+  tasks: ProjectTimelineTaskGroup[];
+}
+
+export interface ProjectTimelineResponse {
+  groups: ProjectTimelineDateBucket[];
+  pagination: {
+    limit: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+    scannedCursor?: string | null;
+  };
+  summary: {
+    activities: number;
+    tasks: number;
+    totalTracked: number;
+    totalInProgress: number;
+  };
+  filters: {
+    appliedUserId: string | null;
+    appliedStatus: TimelineActivityStatus;
+    appliedQuery: string;
+    appliedStartDate: string | null;
+    appliedEndDate: string | null;
+  };
 }
 
 

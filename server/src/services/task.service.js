@@ -315,6 +315,14 @@ function buildCompletionState({ existingReview, existingStatus, nextStatus, upda
     review.completionRemark = updates.completionRemark || '';
   }
 
+  if (updates.reviewRemark !== undefined) {
+    review.reviewRemark = updates.reviewRemark || '';
+  }
+
+  if (updates.rating !== undefined) {
+    review.rating = updates.rating || null;
+  }
+
   const movedToDone = existingStatus !== 'done' && nextStatus === 'done';
   const movedAwayFromDone = existingStatus === 'done' && nextStatus !== 'done';
 
@@ -326,6 +334,15 @@ function buildCompletionState({ existingReview, existingStatus, nextStatus, upda
     review.reviewRemark = '';
     review.reviewedAt = null;
     review.reviewedBy = null;
+  }
+
+  // If moving to in_review specifically with a remark
+  if (nextStatus === 'in_review') {
+    review.reviewStatus = 'pending';
+    if (!review.completedAt) {
+      review.completedAt = new Date();
+      review.completedBy = userId;
+    }
   }
 
   if (movedAwayFromDone) {
@@ -452,10 +469,53 @@ function canReviewProjectTask({ role, userId, task, reviewerIds }) {
 }
 
 function mapTaskWithActivity(task, activityHistory) {
-  const json = typeof task?.toJSON === 'function' ? task.toJSON() : task;
+  const json = typeof task?.toJSON === 'function' ? task.toJSON() : typeof task === 'object' ? task : {};
+  
+  let totalTime = 0;
+  const timeByUserMap = new Map();
+  const timeByStageMap = new Map();
+
+  const timeLogs = Array.isArray(json.timeLogs) ? json.timeLogs : [];
+  const statusHistory = Array.isArray(json.statusHistory) ? json.statusHistory : [];
+
+  // fallback if timeLogs are missing
+  if (timeLogs.length === 0 && statusHistory.length > 0) {
+    const now = new Date().getTime();
+    statusHistory.forEach((entry) => {
+      const start = new Date(entry.startTime).getTime();
+      const end = entry.endTime ? new Date(entry.endTime).getTime() : now;
+      const duration = Math.max(0, Math.floor((end - start) / 1000));
+      totalTime += duration;
+      timeByStageMap.set(entry.status, (timeByStageMap.get(entry.status) || 0) + duration);
+    });
+  } else {
+    const now = new Date().getTime();
+    timeLogs.forEach((log) => {
+      const start = new Date(log.startTime).getTime();
+      const end = log.endTime ? new Date(log.endTime).getTime() : now;
+      const duration = Math.max(0, Math.floor((end - start) / 1000));
+      totalTime += duration;
+      
+      if (log.status) {
+        timeByStageMap.set(log.status, (timeByStageMap.get(log.status) || 0) + duration);
+      }
+      
+      if (log.userId) {
+        const uId = strId(log.userId);
+        timeByUserMap.set(uId, (timeByUserMap.get(uId) || 0) + duration);
+      }
+    });
+  }
+
+  const timeByUser = Array.from(timeByUserMap.entries()).map(([userId, time]) => ({ userId, time }));
+  const timeByStage = Array.from(timeByStageMap.entries()).map(([stage, time]) => ({ stage, time }));
+
   return {
     ...json,
     activityHistory: Array.isArray(activityHistory) ? activityHistory : [],
+    totalTime,
+    timeByUser,
+    timeByStage
   };
 }
 
@@ -1097,11 +1157,27 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     throw err;
   }
 
-  // Status change restriction
+  // Status change restriction & Workflow enforcement
   if (updates.status && updates.status !== existing.status) {
     const uid = strId(userId);
     const isAssignee = (existing.assigneeIds || []).some(id => strId(id) === uid);
-    if (!isAdminRole(role) && !isAssignee) {
+    
+    // User Requirement: 
+    // If an assignee (non-manager) tries to move to 'done', force it to 'in_review'
+    // and they MUST provide a remark.
+    const isManagerOrAdmin = isAdminRole(role) || ['manager', 'team_leader'].includes(role);
+    
+    if (updates.status === 'done' && !isManagerOrAdmin) {
+      updates.status = 'in_review';
+      if (!updates.completionRemark && !existing.completionReview?.completionRemark) {
+        const err = new Error('You must provide completion notes describing what you did.');
+        err.statusCode = 400;
+        err.code = 'COMPLETION_REMARK_REQUIRED';
+        throw err;
+      }
+    }
+
+    if (!isManagerOrAdmin && !isAssignee) {
       const project = await Project.findOne({ _id: existing.projectId, tenantId }).lean();
       const isReportingPerson = (project?.reportingPersonIds || []).some(id => strId(id) === uid);
       if (!isReportingPerson) {
@@ -1113,7 +1189,7 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     }
   }
 
-  const { subtasks, dueDate, startDate, endDate, completionRemark, ...rest } = updates;
+  const { subtasks, dueDate, startDate, endDate, completionRemark, reviewRemark, rating, ...rest } = updates;
   const beforeAssigneeIds = mapIdList(existing.assigneeIds);
   const nextStatus = rest.status ?? existing.status;
   const previousStatus = existing.status;
@@ -1143,12 +1219,12 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     });
   }
 
-  if (completionRemark !== undefined || rest.status !== undefined) {
+  if (completionRemark !== undefined || reviewRemark !== undefined || rating !== undefined || rest.status !== undefined) {
     $set.completionReview = buildCompletionState({
       existingReview: existing.completionReview,
       existingStatus: existing.status,
       nextStatus,
-      updates: { completionRemark },
+      updates: { completionRemark, reviewRemark, rating },
       userId,
     });
   }
@@ -1309,8 +1385,8 @@ export async function reviewTaskCompletion({ companyId, workspaceId, userId, rol
     throw err;
   }
 
-  if (task.status !== 'done') {
-    const err = new Error('Only completed tasks can be reviewed');
+  if (task.status !== 'done' && task.status !== 'in_review') {
+    const err = new Error('Only completed or in-review tasks can be reviewed');
     err.statusCode = 400;
     err.code = 'INVALID_STATE';
     throw err;
@@ -1334,8 +1410,10 @@ export async function reviewTaskCompletion({ companyId, workspaceId, userId, rol
     reviewedBy: userId,
   };
 
-  if (action === 'changes_requested') {
-    task.status = 'in_review';
+  if (action === 'approve') {
+    task.status = 'done';
+  } else if (action === 'changes_requested') {
+    task.status = 'in_progress'; // Send back to in_progress for changes
   }
 
   await task.save();

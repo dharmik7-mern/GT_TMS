@@ -4,7 +4,7 @@ import {
   Search, Filter, List, LayoutGrid, Plus, MoreHorizontal,
   Calendar, Clock, User, ChevronDown, Check, Mail, AlertCircle,
   Hash, Paperclip, MessageSquare, Tag, Repeat, X as XIcon, SlidersHorizontal,
-  Zap, Briefcase, Clock3, Activity, CheckCircle2
+  Zap, Briefcase, Clock3, Activity, CheckCircle2, Star, Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
@@ -152,11 +152,18 @@ export const TasksManagement: React.FC = () => {
   const [projectsPage, setProjectsPage] = useState(1);
   const [quickPage, setQuickPage] = useState(1);
   const [personalPage, setPersonalPage] = useState(1);
+  const [overduePage, setOverduePage] = useState(1);
+  const [completedPage, setCompletedPage] = useState(1);
   const [tasksPerPage] = useState(10);
   const [activeSections, setActiveSections] = useState<string[]>(['active', 'projects', 'quick', 'personal', 'overdue', 'completed']);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const notificationTaskId = searchParams.get('taskId');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'active' | 'project' | 'quick' | 'overdue' | 'done' | null>(null);
+  
+  // Review System State
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewType, setReviewType] = useState<'submit' | 'approve'>('submit');
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   const location = useLocation();
 
@@ -194,6 +201,8 @@ export const TasksManagement: React.FC = () => {
     setCurrentPage(1);
     setProjectsPage(1);
     setQuickPage(1);
+    setOverduePage(1);
+    setCompletedPage(1);
   }, [searchTerm, filterStatus, departmentFilter, personFilter]);
 
   useEffect(() => {
@@ -226,19 +235,61 @@ export const TasksManagement: React.FC = () => {
   const handleUpdateTaskField = async (field: string, value: any) => {
     if (!selectedTask) return;
     try {
+      // Intercept status update to 'done' for team members
+      if (field === 'status' && (value === 'done' || value === 'completed') && user?.role !== 'admin' && user?.role !== 'manager') {
+        setReviewType('submit');
+        setIsReviewModalOpen(true);
+        return;
+      }
+
       const endpoint = selectedTask.type === 'project' ? `/tasks/${selectedTask.id}` :
         selectedTask.type === 'quick' ? `/quick-tasks/${selectedTask.id}` :
           `/personal-tasks/${selectedTask.id}`;
-      // Use put for full update or patch if API supports it
-      if (selectedTask.type === 'personal') {
-        await api.put(endpoint, { [field]: value });
-      } else {
-        await api.put(endpoint, { [field]: value });
-      }
+      
+      await api.put(endpoint, { [field]: value });
       fetchFullTask(selectedTask.id);
-      fetchTasks(); // Refresh list
+      fetchTasks();
     } catch (err) {
       console.error(`Update ${field} failed:`, err);
+    }
+  };
+
+  const handleReviewSubmit = async (data: { remark: string; files: File[]; rating?: number; action?: 'approve' | 'changes_requested' }) => {
+    if (!selectedTask) return;
+    try {
+      setReviewLoading(true);
+      const taskId = selectedTask.id;
+
+      // 1. Upload files if any
+      if (data.files.length > 0) {
+        const formData = new FormData();
+        data.files.forEach(file => formData.append('files', file));
+        await api.post(`/tasks/${taskId}/attachments`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      // 2. Submit Review Request or Approval
+      if (reviewType === 'submit') {
+        await api.put(`/tasks/${taskId}`, {
+          status: 'in_review',
+          completionRemark: data.remark
+        });
+      } else {
+        await api.post(`/tasks/${taskId}/review`, {
+          action: data.action,
+          reviewRemark: data.remark,
+          rating: data.rating
+        });
+      }
+
+      setIsReviewModalOpen(false);
+      fetchFullTask(taskId);
+      fetchTasks();
+    } catch (err) {
+      console.error('Review action failed:', err);
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -356,13 +407,21 @@ export const TasksManagement: React.FC = () => {
   }, [projectTasks, projects]);
 
   const summaryStats = useMemo(() => {
-    // Respect person filter for counts if one is selected (e.g., when coming from 'My Open Tasks' dashboard)
-    const baseProjectTasks = personFilter !== 'all'
-      ? activeProjectTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter))
-      : activeProjectTasks;
-    const baseQuickTasks = personFilter !== 'all'
-      ? quickTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter))
-      : quickTasks;
+    let baseProjectTasks = activeProjectTasks;
+    let baseQuickTasks = quickTasks;
+
+    // Role-based privacy: Only 'admin' and 'manager' can see everything.
+    // Everyone else only sees their own tasks.
+    const isStaff = user?.role === 'admin' || user?.role === 'manager';
+    
+    if (!isStaff && user?.id) {
+      baseProjectTasks = baseProjectTasks.filter(t => t.reporterId === user.id || (t.assigneeIds || []).includes(user.id));
+      baseQuickTasks = baseQuickTasks.filter(t => t.reporterId === user.id || (t.assigneeIds || []).includes(user.id));
+    } else if (personFilter !== 'all') {
+      // Admin/Managers can use the manual person filter
+      baseProjectTasks = baseProjectTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter));
+      baseQuickTasks = baseQuickTasks.filter(t => t.reporterId === personFilter || (t.assigneeIds || []).includes(personFilter));
+    }
 
     const all = [...baseProjectTasks, ...baseQuickTasks];
     const now = new Date();
@@ -375,7 +434,7 @@ export const TasksManagement: React.FC = () => {
       overdue: all.filter(t => isTaskOverdue(t)).length,
       done: all.filter(t => t.status === 'done').length
     };
-  }, [projectTasks, quickTasks, personFilter]);
+  }, [activeProjectTasks, quickTasks, personFilter, user]);
 
   const filteredTasks = (list: TaskRow[]) => {
     const query = searchTerm.trim().toLowerCase();
@@ -399,6 +458,13 @@ export const TasksManagement: React.FC = () => {
         .includes(query);
     });
 
+    // Role-based privacy: Only 'admin' and 'manager' can see everything.
+    if (user?.role !== 'admin' && user?.role !== 'manager' && user?.id) {
+      filtered = filtered.filter(task =>
+        task.reporterId === user.id || (task.assigneeIds || []).includes(user.id)
+      );
+    }
+    
     if (selectedCategory === 'active') {
       filtered = filtered.filter(t => t.status !== 'done');
     } else if (selectedCategory === 'project') {
@@ -430,7 +496,7 @@ export const TasksManagement: React.FC = () => {
       });
     }
 
-    if (personFilter !== 'all') {
+    if (personFilter !== 'all' && (user?.role === 'admin' || user?.role === 'manager')) {
       filtered = filtered.filter((task) => task.reporterId === personFilter || (task.assigneeIds || []).includes(personFilter));
     }
 
@@ -443,15 +509,26 @@ export const TasksManagement: React.FC = () => {
     );
   };
 
-  const filteredProjectTasks = useMemo(() => filteredTasks(activeProjectTasks), [activeProjectTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory]);
-  const filteredQuickTasks = useMemo(() => filteredTasks(quickTasks), [quickTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory]);
+  const filteredProjectTasks = useMemo(() => filteredTasks(activeProjectTasks), [activeProjectTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory, user]);
+  const filteredQuickTasks = useMemo(() => filteredTasks(quickTasks), [quickTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory, user]);
+  const filteredPersonalTasks = useMemo(() => filteredTasks(personalTasks), [personalTasks, searchTerm, filterStatus, departmentFilter, personFilter, userMap, selectedCategory, user]);
   const allFilteredTasks = useMemo(() => [...filteredProjectTasks, ...filteredQuickTasks], [filteredProjectTasks, filteredQuickTasks]);
+  const overdueTasks = useMemo(() => allFilteredTasks.filter(t => isTaskOverdue(t)), [allFilteredTasks]);
+  const completedTasks = useMemo(() => allFilteredTasks.filter(t => t.status === 'done' || t.status === 'completed'), [allFilteredTasks]);
+
   const activeTasksPageCount = Math.max(1, Math.ceil(allFilteredTasks.length / tasksPerPage));
   const projectTasksPageCount = Math.max(1, Math.ceil(filteredProjectTasks.length / tasksPerPage));
   const quickTasksPageCount = Math.max(1, Math.ceil(filteredQuickTasks.length / tasksPerPage));
+  const personalTasksPageCount = Math.max(1, Math.ceil(filteredPersonalTasks.length / tasksPerPage));
+  const overdueTasksPageCount = Math.max(1, Math.ceil(overdueTasks.length / tasksPerPage));
+  const completedTasksPageCount = Math.max(1, Math.ceil(completedTasks.length / tasksPerPage));
+
   const paginatedActiveTasks = allFilteredTasks.slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage);
   const paginatedProjectTasks = filteredProjectTasks.slice((projectsPage - 1) * tasksPerPage, projectsPage * tasksPerPage);
   const paginatedQuickTasks = filteredQuickTasks.slice((quickPage - 1) * tasksPerPage, quickPage * tasksPerPage);
+  const paginatedPersonalTasks = filteredPersonalTasks.slice((personalPage - 1) * tasksPerPage, personalPage * tasksPerPage);
+  const paginatedOverdueTasks = overdueTasks.slice((overduePage - 1) * tasksPerPage, overduePage * tasksPerPage);
+  const paginatedCompletedTasks = completedTasks.slice((completedPage - 1) * tasksPerPage, completedPage * tasksPerPage);
   const activeFilterCount = [filterStatus !== 'all', departmentFilter !== 'all', personFilter !== 'all'].filter(Boolean).length;
 
   useEffect(() => {
@@ -465,6 +542,18 @@ export const TasksManagement: React.FC = () => {
   useEffect(() => {
     if (quickPage > quickTasksPageCount) setQuickPage(quickTasksPageCount);
   }, [quickTasksPageCount, quickPage]);
+
+  useEffect(() => {
+    if (personalPage > personalTasksPageCount) setPersonalPage(personalTasksPageCount);
+  }, [personalTasksPageCount, personalPage]);
+
+  useEffect(() => {
+    if (overduePage > overdueTasksPageCount) setOverduePage(overdueTasksPageCount);
+  }, [overdueTasksPageCount, overduePage]);
+
+  useEffect(() => {
+    if (completedPage > completedTasksPageCount) setCompletedPage(completedTasksPageCount);
+  }, [completedTasksPageCount, completedPage]);
 
   const StatusIcon = ({ status }: { status: string }) => {
     const s = status.toLowerCase().replace('_', '');
@@ -580,8 +669,6 @@ export const TasksManagement: React.FC = () => {
             />
           </div>
 
-
-
           <div className="relative w-full sm:w-auto">
             <div
               onClick={() => setOpenDropdown(openDropdown === 'filter' ? null : 'filter')}
@@ -609,21 +696,23 @@ export const TasksManagement: React.FC = () => {
                   </button>
                 </div>
                 <div className="space-y-4">
-                  <SearchableSelect
-                    label="Person"
-                    value={personFilter}
-                    onChange={setPersonFilter}
-                    placeholder="All people"
-                    searchPlaceholder="Search people..."
-                    options={[
-                      { id: 'all', label: 'All people' },
-                      ...personOptions.map((person) => ({
-                        id: person.id,
-                        label: person.name,
-                        meta: [person.employeeId, person.department].filter(Boolean).join(' • '),
-                      })),
-                    ]}
-                  />
+                  {(user?.role === 'admin' || user?.role === 'manager') && (
+                    <SearchableSelect
+                      label="Person"
+                      value={personFilter}
+                      onChange={setPersonFilter}
+                      placeholder="All people"
+                      searchPlaceholder="Search people..."
+                      options={[
+                        { id: 'all', label: 'All people' },
+                        ...personOptions.map((person) => ({
+                          id: person.id,
+                          label: person.name,
+                          meta: [person.employeeId, person.department].filter(Boolean).join(' • '),
+                        })),
+                      ]}
+                    />
+                  )}
                   <SearchableSelect
                     label="Department"
                     value={departmentFilter}
@@ -655,10 +744,6 @@ export const TasksManagement: React.FC = () => {
                       ))}
                     </div>
                   </div>
-
-
-
-
 
                   <button
                     type="button"
@@ -772,13 +857,15 @@ export const TasksManagement: React.FC = () => {
 
                         {/* Pagination Controls */}
                         {allFilteredTasks.length > tasksPerPage && (
-                          <PaginationControls
-                            currentPage={currentPage}
-                            totalPages={activeTasksPageCount}
-                            totalItems={allFilteredTasks.length}
-                            itemsPerPage={tasksPerPage}
-                            onPageChange={setCurrentPage}
-                          />
+                          <div className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
+                            <PaginationControls
+                              currentPage={currentPage}
+                              totalPages={activeTasksPageCount}
+                              totalItems={allFilteredTasks.length}
+                              itemsPerPage={tasksPerPage}
+                              onPageChange={setCurrentPage}
+                            />
+                          </div>
                         )}
                       </div>
                     )}
@@ -795,7 +882,7 @@ export const TasksManagement: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('projects') && "-rotate-90")} />
                         <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Projects</span>
-                        <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.type === 'project').length}</span>
+                        <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{filteredProjectTasks.length}</span>
                       </div>
                     </div>
 
@@ -812,20 +899,10 @@ export const TasksManagement: React.FC = () => {
                             <col style={{ width: '6%' }} />
                           </colgroup>
                           <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                            {allFilteredTasks.filter(t => t.type === 'project').length === 0 ? (
+                            {filteredProjectTasks.length === 0 ? (
                               <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No project tasks found.</td></tr>
                             ) : (
                               (() => {
-                                const groups: Record<string, TaskRow[]> = {};
-                                allFilteredTasks.filter(t => t.projectName !== '-').forEach(t => {
-                                  if (!groups[t.projectName]) groups[t.projectName] = [];
-                                  groups[t.projectName].push(t);
-                                });
-
-                                const pTasks = allFilteredTasks.filter(t => t.projectName !== '-');
-                                const paginatedPTasks = pTasks.slice((projectsPage - 1) * tasksPerPage, projectsPage * tasksPerPage);
-
-                                // Re-group paginated tasks
                                 const paginatedGroups: Record<string, TaskRow[]> = {};
                                 paginatedProjectTasks.forEach(t => {
                                   if (!paginatedGroups[t.projectName]) paginatedGroups[t.projectName] = [];
@@ -927,7 +1004,63 @@ export const TasksManagement: React.FC = () => {
                   </div>
                 )}
 
-                {/* 4. Overdue Tasks Section */}
+                {/* 4. Personal Tasks Section */}
+                {(activeSections.includes('personal') && !selectedCategory) && (
+                  <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
+                    <div
+                      onClick={() => toggleSection('personal')}
+                      className="px-5 py-3 border-b border-gray-100 dark:border-surface-800 flex items-center justify-between bg-white dark:bg-surface-950/20 sticky top-0 z-10 backdrop-blur-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('personal') && "-rotate-90")} />
+                        <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Personal Tasks</span>
+                        <span className="bg-gray-100 dark:bg-surface-800 text-gray-500 dark:text-surface-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{filteredPersonalTasks.length}</span>
+                      </div>
+                    </div>
+
+                    {activeSections.includes('personal') && (
+                      <div className="overflow-x-auto border-t border-gray-100 dark:border-surface-800">
+                        <table className="min-w-[760px] w-full text-xs text-left border-collapse">
+                          <colgroup>
+                            <col style={{ width: '32%' }} />
+                            <col style={{ width: '12%' }} />
+                            <col style={{ width: '10%' }} />
+                            <col style={{ width: '12%' }} />
+                            <col style={{ width: '10%' }} />
+                            <col style={{ width: '18%' }} />
+                            <col style={{ width: '6%' }} />
+                          </colgroup>
+                          <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
+                            {filteredPersonalTasks.length === 0 ? (
+                              <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No personal tasks found.</td></tr>
+                            ) : (
+                              <>
+                                {paginatedPersonalTasks.map((task, idx) => (
+                                  <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
+                                ))}
+                                {filteredPersonalTasks.length > tasksPerPage && (
+                                  <tr>
+                                    <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
+                                      <PaginationControls
+                                        currentPage={personalPage}
+                                        totalPages={personalTasksPageCount}
+                                        totalItems={filteredPersonalTasks.length}
+                                        itemsPerPage={tasksPerPage}
+                                        onPageChange={setPersonalPage}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 5. Overdue Tasks Section */}
                 {(selectedCategory === 'overdue' || !selectedCategory) && (
                   <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                     <div
@@ -937,7 +1070,7 @@ export const TasksManagement: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('overdue') && "-rotate-90")} />
                         <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Overdue Tasks</span>
-                        <span className="bg-rose-100 dark:bg-rose-950/30 text-rose-500 dark:text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.length}</span>
+                        <span className="bg-rose-100 dark:bg-rose-950/30 text-rose-500 dark:text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
                       </div>
                     </div>
 
@@ -965,12 +1098,27 @@ export const TasksManagement: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                            {allFilteredTasks.length === 0 ? (
+                            {overdueTasks.length === 0 ? (
                               <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No overdue tasks found. Great job!</td></tr>
                             ) : (
-                              allFilteredTasks.map((task, idx) => (
-                                <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
-                              ))
+                              <>
+                                {paginatedOverdueTasks.map((task, idx) => (
+                                  <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
+                                ))}
+                                {overdueTasks.length > tasksPerPage && (
+                                  <tr>
+                                    <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
+                                      <PaginationControls
+                                        currentPage={overduePage}
+                                        totalPages={overdueTasksPageCount}
+                                        totalItems={overdueTasks.length}
+                                        itemsPerPage={tasksPerPage}
+                                        onPageChange={setOverduePage}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
                             )}
                           </tbody>
                         </table>
@@ -978,7 +1126,8 @@ export const TasksManagement: React.FC = () => {
                     )}
                   </div>
                 )}
-                {/* 5. Completed Tasks Section */}
+
+                {/* 6. Completed Tasks Section */}
                 {(selectedCategory === 'done' || !selectedCategory) && (
                   <div className="bg-white dark:bg-surface-900 rounded-xl border border-gray-200 dark:border-surface-800 shadow-sm overflow-hidden flex flex-col shrink-0 ring-1 ring-black/5">
                     <div
@@ -988,7 +1137,7 @@ export const TasksManagement: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <ChevronDown size={14} className={cn("text-gray-400 transition-transform", !activeSections.includes('completed') && "-rotate-90")} />
                         <span className="text-sm font-bold text-gray-700 dark:text-surface-200 uppercase tracking-tight">Completed Tasks</span>
-                        <span className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-500 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{allFilteredTasks.filter(t => t.status === 'done').length}</span>
+                        <span className="bg-emerald-100 dark:bg-emerald-950/30 text-emerald-500 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{completedTasks.length}</span>
                       </div>
                     </div>
 
@@ -1004,24 +1153,28 @@ export const TasksManagement: React.FC = () => {
                             <col style={{ width: '18%' }} />
                             <col style={{ width: '6%' }} />
                           </colgroup>
-                          <thead className="bg-white dark:bg-surface-900 text-gray-400 dark:text-surface-500 font-semibold border-b border-gray-50 dark:border-surface-800">
-                            <tr>
-                              <th className="px-5 py-3 font-semibold min-w-[300px]">Task Name</th>
-                              <th className="px-3 py-3 font-semibold">Status</th>
-                              <th className="px-3 py-3 font-semibold">Type</th>
-                              <th className="px-3 py-3 font-semibold">Due date</th>
-                              <th className="px-3 py-3 font-semibold">Est. time</th>
-                              <th className="px-3 py-3 font-semibold">Responsible</th>
-                              <th className="px-5 py-3 w-10 text-right"><MoreHorizontal size={14} className="text-gray-300 dark:text-surface-700" /></th>
-                            </tr>
-                          </thead>
                           <tbody className="divide-y divide-gray-50 dark:divide-surface-800">
-                            {allFilteredTasks.filter(t => t.status === 'done').length === 0 ? (
+                            {completedTasks.length === 0 ? (
                               <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">No completed tasks yet. Keep up the good work!</td></tr>
                             ) : (
-                              allFilteredTasks.filter(t => t.status === 'done').map((task, idx) => (
-                                <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
-                              ))
+                              <>
+                                {paginatedCompletedTasks.map((task, idx) => (
+                                  <TaskRowComponent key={task.id || idx} task={task} onClick={() => setSelectedTask(task)} />
+                                ))}
+                                {completedTasks.length > tasksPerPage && (
+                                  <tr>
+                                    <td colSpan={7} className="px-5 py-4 border-t border-gray-100 dark:border-surface-800 bg-gray-50/30 dark:bg-surface-950/20">
+                                      <PaginationControls
+                                        currentPage={completedPage}
+                                        totalPages={completedTasksPageCount}
+                                        totalItems={completedTasks.length}
+                                        itemsPerPage={tasksPerPage}
+                                        onPageChange={setCompletedPage}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
                             )}
                           </tbody>
                         </table>
@@ -1039,7 +1192,6 @@ export const TasksManagement: React.FC = () => {
               exit={{ opacity: 0, scale: 0.98 }}
               className="h-full"
             >
-              {/* Fixed KanbanBoard props if they differ */}
               <KanbanBoard
                 tasksOverride={allFilteredTasks as any}
                 projectId=""
@@ -1050,7 +1202,6 @@ export const TasksManagement: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* Create Task Overlay - Bordio Style Full Pop-up */}
       <AnimatePresence>
         {isAddingTask && (
           <CreateTaskOverlay
@@ -1080,6 +1231,18 @@ export const TasksManagement: React.FC = () => {
             onUpdateField={handleUpdateTaskField}
             onPostComment={handlePostComment}
             onAssignSubtask={handleAssignSubtask}
+            onOpenReview={(type) => { setReviewType(type); setIsReviewModalOpen(true); }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isReviewModalOpen && (
+          <ReviewModal
+            type={reviewType}
+            loading={reviewLoading}
+            onClose={() => setIsReviewModalOpen(false)}
+            onSubmit={handleReviewSubmit}
           />
         )}
       </AnimatePresence>
@@ -1118,7 +1281,7 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
   }, [assignableUsers, formData.assignedToId]);
 
   const handleCreate = async () => {
-    if (!formData.title.trim()) return;
+    if (loading || !formData.title.trim()) return;
     try {
       setLoading(true);
       const isQuickTask = !formData.projectId;
@@ -1252,8 +1415,9 @@ const CreateTaskOverlay: React.FC<{ onClose: () => void; onCreated: () => void }
           </div>
 
           <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row sm:items-center sm:justify-end">
-            <button onClick={onClose} className="px-6 py-3 text-sm font-bold text-gray-500 hover:text-gray-700">Discard</button>
+            <button type="button" onClick={onClose} className="px-6 py-3 text-sm font-bold text-gray-500 hover:text-gray-700">Discard</button>
             <button
+              type="button"
               onClick={handleCreate}
               disabled={loading || !formData.title}
               className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-8 py-3 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
@@ -1277,7 +1441,8 @@ const TaskDetailOverlay: React.FC<{
   onAssignSubtask: (id: string, assigneeId: string | null) => void;
   onUpdateField: (field: string, value: any) => void;
   onPostComment: (content: string) => void;
-}> = ({ task, fullData, loading, onClose, onToggleSubtask, onAddSubtask, onAssignSubtask, onUpdateField, onPostComment }) => {
+  onOpenReview: (type: 'submit' | 'approve') => void;
+}> = ({ task, fullData, loading, onClose, onToggleSubtask, onAddSubtask, onAssignSubtask, onUpdateField, onPostComment, onOpenReview }) => {
   const { users, projects } = useAppStore();
   const { user } = useAuthStore();
   const [newSubtask, setNewSubtask] = useState('');
@@ -1307,7 +1472,6 @@ const TaskDetailOverlay: React.FC<{
         className="h-[92vh] w-full max-w-[950px] rounded-t-[1.5rem] bg-white shadow-2xl flex flex-col md:h-full md:rounded-none dark:bg-surface-900"
         onClick={e => e.stopPropagation()}
       >
-        {/* Detail Header */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-surface-200 dark:border-surface-800">
           <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 dark:text-surface-500 uppercase tracking-widest">
             <span className="hover:text-blue-500 cursor-pointer">{project?.name || 'Workspace'}</span>
@@ -1321,7 +1485,6 @@ const TaskDetailOverlay: React.FC<{
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-          {/* Main Content Side */}
           <div className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar sm:p-8 lg:p-10">
             {loading && !fullData ? (
               <div className="flex items-center justify-center h-40 text-gray-400">Loading task details...</div>
@@ -1335,12 +1498,13 @@ const TaskDetailOverlay: React.FC<{
                     <select
                       className="bg-transparent text-[13px] font-bold text-gray-800 dark:text-surface-200 focus:outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800 px-2 py-1 rounded transition-colors"
                       value={data.status}
+                      disabled={user?.role !== 'admin' && user?.role !== 'manager' && data.status === 'in_review'}
                       onChange={(e) => onUpdateField('status', e.target.value)}
                     >
                       <option value="todo" className="dark:bg-surface-900">Todo</option>
                       <option value="in_progress" className="dark:bg-surface-900">In Progress</option>
                       <option value="in_review" className="dark:bg-surface-900">In Review</option>
-                      <option value="done" className="dark:bg-surface-900">Completed</option>
+                      {(user?.role === 'admin' || user?.role === 'manager') && <option value="done" className="dark:bg-surface-900">Completed</option>}
                     </select>
                   </div>
 
@@ -1406,6 +1570,27 @@ const TaskDetailOverlay: React.FC<{
                 </div>
 
                 <div className="flex items-center gap-10 pt-4 px-1">
+                  {/* Submission/Review Buttons */}
+                  {user?.role !== 'admin' && user?.role !== 'manager' && data.status !== 'in_review' && data.status !== 'done' && (
+                    <button
+                      onClick={() => onOpenReview('submit')}
+                      className="bg-[#00a3ff] hover:bg-[#0082cc] text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
+                    >
+                      <CheckCircle2 size={16} />
+                      Submit for Review
+                    </button>
+                  )}
+
+                  {(user?.role === 'admin' || user?.role === 'manager') && data.status === 'in_review' && (
+                    <button
+                      onClick={() => onOpenReview('approve')}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                    >
+                      <CheckCircle2 size={16} />
+                      Review & Approve
+                    </button>
+                  )}
+
                   <div className="relative">
                     <button
                       onClick={() => { setShowTagMenu(!showTagMenu); setShowRepeatMenu(false); }}
@@ -1574,7 +1759,6 @@ const TaskDetailOverlay: React.FC<{
             )}
           </div>
 
-          {/* Activity / Chat Sidebar */}
           <div className="flex w-full flex-col border-t border-gray-100 bg-[#fbfcff] lg:w-[340px] lg:border-l lg:border-t-0 dark:border-surface-800 dark:bg-surface-950/40">
             <div className="border-b border-gray-100 bg-white p-5 sm:p-6 dark:border-surface-800 dark:bg-surface-900">
               <div className="flex items-center justify-between">
@@ -1752,7 +1936,7 @@ const PaginationControls = ({
   );
 };
 
-const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => void }) => {
+const TaskRowComponent = React.memo(({ task, onClick }: { task: TaskRow, onClick: () => void }) => {
   const isOverdue = useMemo(() => isTaskOverdue(task), [task]);
 
   const statusConfig = STATUS_CONFIG[task.status as keyof typeof STATUS_CONFIG];
@@ -1819,16 +2003,23 @@ const TaskRowComponent = ({ task, onClick }: { task: TaskRow, onClick: () => voi
       </td>
     </tr>
   );
-};
+});
 
-const SummaryCard: React.FC<{
+const SummaryCard = React.memo(({
+  title,
+  count,
+  icon: Icon,
+  color,
+  isActive,
+  onClick,
+}: {
   title: string;
   count: number;
   icon: React.ComponentType<{ size?: number | string; className?: string }>;
   color: 'blue' | 'purple' | 'emerald' | 'rose';
   isActive: boolean;
   onClick: () => void;
-}> = ({ title, count, icon: Icon, color, isActive, onClick }) => {
+}) => {
   const colors = {
     blue: { bg: 'bg-blue-500', light: 'bg-blue-50 dark:bg-blue-950/30', text: 'text-blue-500', group: 'group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40' },
     purple: { bg: 'bg-purple-500', light: 'bg-purple-50 dark:bg-purple-950/30', text: 'text-purple-500', group: 'group-hover:bg-purple-100 dark:group-hover:bg-purple-900/40' },
@@ -1869,6 +2060,129 @@ const SummaryCard: React.FC<{
         />
       )}
     </motion.button>
+  );
+});
+
+const ReviewModal: React.FC<{
+  type: 'submit' | 'approve';
+  loading: boolean;
+  onClose: () => void;
+  onSubmit: (data: { remark: string; files: File[]; rating?: number; action?: 'approve' | 'changes_requested' }) => void;
+}> = ({ type, loading, onClose, onSubmit }) => {
+  const [remark, setRemark] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [rating, setRating] = useState(5);
+  const [action, setAction] = useState<'approve' | 'changes_requested'>('approve');
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-white dark:bg-surface-900 w-full max-w-lg rounded-3xl p-8 shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-surface-50">
+            {type === 'submit' ? 'Submit for Review' : 'Task Review & Approval'}
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-surface-800 rounded-full text-gray-400"><XIcon size={20} /></button>
+        </div>
+
+        <div className="space-y-6">
+          {type === 'approve' && (
+            <div className="flex flex-col gap-3">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 ml-1">Action</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAction('approve')}
+                  className={cn(
+                    "flex-1 py-3 rounded-2xl text-[13px] font-bold transition-all border",
+                    action === 'approve' ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-400" : "bg-gray-50 border-gray-100 text-gray-400 dark:bg-surface-800 dark:border-surface-700"
+                  )}
+                >
+                  Approve Task
+                </button>
+                <button
+                  onClick={() => setAction('changes_requested')}
+                  className={cn(
+                    "flex-1 py-3 rounded-2xl text-[13px] font-bold transition-all border",
+                    action === 'changes_requested' ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-800 dark:text-rose-400" : "bg-gray-50 border-gray-100 text-gray-400 dark:bg-surface-800 dark:border-surface-700"
+                  )}
+                >
+                  Request Changes
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 ml-1">
+              {type === 'submit' ? 'Completion Notes' : 'Review Feedback'}
+            </label>
+            <textarea
+              className="w-full bg-gray-50 dark:bg-surface-950 border border-gray-100 dark:border-surface-800 rounded-2xl p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 min-h-[120px] resize-none dark:text-surface-100"
+              placeholder={type === 'submit' ? "Describe what was accomplished..." : "Provide feedback for the team member..."}
+              value={remark}
+              onChange={e => setRemark(e.target.value)}
+            />
+          </div>
+
+          {type === 'approve' && action === 'approve' && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 ml-1">Rating</label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button key={star} onClick={() => setRating(star)} className="p-1">
+                    <Star size={24} className={cn("transition-colors", star <= rating ? "fill-amber-400 text-amber-400" : "text-gray-200 dark:text-surface-800")} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {type === 'submit' && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 ml-1">Attachments</label>
+              <div
+                onClick={() => document.getElementById('review-file-input')?.click()}
+                className="border-2 border-dashed border-gray-100 dark:border-surface-800 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-surface-800/50 transition-colors"
+              >
+                <Upload size={24} className="text-gray-300" />
+                <span className="text-xs font-bold text-gray-400">Click to upload files</span>
+                <input
+                  id="review-file-input"
+                  type="file" multiple className="hidden"
+                  onChange={e => setFiles(Array.from(e.target.files || []))}
+                />
+              </div>
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {files.map((f, i) => <span key={i} className="bg-blue-50 dark:bg-brand-950/40 text-blue-600 dark:text-brand-300 px-3 py-1 rounded-lg text-[10px] font-bold">{f.name}</span>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <button onClick={onClose} className="flex-1 py-4 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors uppercase tracking-widest">Cancel</button>
+            <button
+              disabled={loading || !remark.trim()}
+              onClick={() => onSubmit({ remark, files, rating, action })}
+              className={cn(
+                "flex-[2] py-4 rounded-2xl text-sm font-bold text-white shadow-xl transition-all disabled:opacity-50",
+                type === 'approve' && action === 'changes_requested' ? "bg-rose-500 shadow-rose-500/20" : "bg-blue-500 shadow-blue-500/20"
+              )}
+            >
+              {loading ? 'Processing...' : type === 'submit' ? 'Confirm Submission' : 'Finish Review'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
