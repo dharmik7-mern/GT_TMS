@@ -18,7 +18,7 @@ import ProjectTodoPage from '../pages/projects/ProjectTodoPage';
 import CalendarPage from '../pages/calendar/Calendar';
 import TeamsPage from '../pages/teams/Teams';
 import ReportsPage from '../pages/reports/Reports';
-import ReportManagementPage from '../pages/reports/ReportManagement';
+// import ReportManagementPage from '../pages/reports/ReportManagement';
 import QuickTasksPage from '../pages/quicktasks/QuickTasks';
 import QuickTaskDetailPage from '../pages/quicktasks/QuickTaskDetail';
 import MyTasksPage from '../pages/tasks/MyTasks';
@@ -121,7 +121,7 @@ export const router = createBrowserRouter([
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'teams', element: <TeamsPage /> },
       { path: 'reports', element: <ReportsPage /> },
-      { path: 'reports-management', element: <ReportManagementPage /> },
+      // { path: 'reports-management', element: <ReportManagementPage /> },
       { path: 'mis-entry', element: <MISEntry /> },
       { path: 'mis-manager', element: <RequireRole roles={['super_admin', 'admin', 'manager', 'team_leader']}><MISManager /></RequireRole> },
       { path: 'mis-reports', element: <MISReports /> },

@@ -100,10 +100,23 @@ export const ProjectDetailPage: React.FC = () => {
     if (!project?.id) return;
     const fetchProjectTasks = async () => {
       try {
-        const res = await tasksService.getAll({ projectId: project.id, limit: 1000 });
-        const items = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+        const res = await tasksService.getAll(project.id, undefined, undefined, 1, 1000);
+        const items: any[] = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
         if (items.length > 0) {
-          useAppStore.getState().mergeTasks(items);
+          // Normalize: backend populates assigneeIds & projectId as objects — extract string IDs
+          const normalized = items.map((t: any) => ({
+            ...t,
+            id: t.id || t._id,
+            projectId: typeof t.projectId === 'object' && t.projectId !== null
+              ? String(t.projectId._id || t.projectId.id || t.projectId)
+              : String(t.projectId || project.id),
+            assigneeIds: Array.isArray(t.assigneeIds)
+              ? t.assigneeIds.map((a: any) =>
+                  typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)
+                ).filter(Boolean)
+              : [],
+          }));
+          useAppStore.getState().mergeTasks(normalized);
         }
       } catch (err) {
         console.error('[ProjectDetail] Failed to fetch project tasks:', err);
@@ -130,6 +143,33 @@ export const ProjectDetailPage: React.FC = () => {
       cancelled = true;
     };
   }, [project?.id]);
+
+
+  // Re-fetch this project's tasks and merge into store (call after task creation/approval)
+  const refreshProjectTasks = async () => {
+    if (!project?.id) return;
+    try {
+      const res = await tasksService.getAll(project.id, undefined, undefined, 1, 1000);
+      const items: any[] = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+      if (items.length > 0) {
+        const normalized = items.map((t: any) => ({
+          ...t,
+          id: t.id || t._id,
+          projectId: typeof t.projectId === 'object' && t.projectId !== null
+            ? String(t.projectId._id || t.projectId.id || t.projectId)
+            : String(t.projectId || project.id),
+          assigneeIds: Array.isArray(t.assigneeIds)
+            ? t.assigneeIds.map((a: any) =>
+                typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)
+              ).filter(Boolean)
+            : [],
+        }));
+        useAppStore.getState().mergeTasks(normalized);
+      }
+    } catch (err) {
+      console.error('[ProjectDetail] Failed to refresh project tasks:', err);
+    }
+  };
 
   const handleSdlcUpdate = async () => {
     if (!project) return;
@@ -279,6 +319,22 @@ export const ProjectDetailPage: React.FC = () => {
           request.id === requestId ? result.request : request
         )));
       }
+      // If a task was created from the approved request, add it to the store immediately
+      if (action === 'approve' && result?.createdTask) {
+        const ct: any = result.createdTask;
+        useAppStore.getState().mergeTasks([{
+          ...ct,
+          id: ct.id || ct._id,
+          projectId: project.id,
+          assigneeIds: Array.isArray(ct.assigneeIds)
+            ? ct.assigneeIds.map((a: any) =>
+                typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)
+              ).filter(Boolean)
+            : [],
+        }]);
+      }
+      // Always re-fetch this project's tasks to guarantee board sync
+      await refreshProjectTasks();
       await bootstrap();
       emitSuccessToast(
         action === 'approve' ? 'Task request approved and created.' : 'Task request rejected.',

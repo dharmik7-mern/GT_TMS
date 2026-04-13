@@ -597,8 +597,7 @@ export async function listTasks({
     Task.find(filter)
       .sort({ projectId: 1, status: 1, order: 1 })
       .populate('labels')
-      .populate('assigneeIds', 'name avatar')
-      .populate('projectId', 'name')
+      .populate('assigneeIds', 'name avatar color')
       .skip(skip)
       .limit(limit),
     Task.countDocuments(filter),
@@ -710,6 +709,14 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
   assertAllowedTaskTitle(normalizedTitle);
   const { startDate, dueDate, durationDays } = resolveTaskSchedule(data);
   const normalizedAssigneeIds = Array.isArray(data.assigneeIds) ? data.assigneeIds : [];
+
+  // Enforce: at least one assignee required
+  if (normalizedAssigneeIds.length === 0) {
+    const err = new Error('At least one assignee is required to create a task.');
+    err.statusCode = 400;
+    err.code = 'ASSIGNEE_REQUIRED';
+    throw err;
+  }
 
   const recentMatchingTasks = await Task.find({
     tenantId,

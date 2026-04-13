@@ -153,7 +153,11 @@ function subtaskProgress(subs) {
 taskSchema.set('toJSON', {
   transform: (_doc, ret) => {
     ret.id = String(ret._id);
-    ret.projectId = String(ret.projectId);
+    // Handle both plain ObjectId and populated object {_id, name}
+    ret.projectId = ret.projectId && typeof ret.projectId === 'object' && !Buffer.isBuffer(ret.projectId)
+      ? String(ret.projectId._id || ret.projectId.id || ret.projectId)
+      : String(ret.projectId);
+
     ret.assigneeIds = Array.isArray(ret.assigneeIds)
       ? ret.assigneeIds.map((a) => {
         if (!a) return undefined;

@@ -99,7 +99,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tasks: asArray<Task>(tasksRes.data.data ?? tasksRes.data).map(t => ({
         ...t,
         id: t.id || (t as any)._id,
-        projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
+        projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id || String(t.projectId),
+        assigneeIds: Array.isArray((t as any).assigneeIds)
+          ? (t as any).assigneeIds.map((a: any) =>
+              typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)
+            ).filter(Boolean)
+          : [],
       })),
       teams: asArray<Team>(teamsRes.data.data ?? teamsRes.data).map(tm => ({ ...tm, id: tm.id || (tm as any)._id })),
       quickTasks: asArray<QuickTask>(quickRes.data.data ?? quickRes.data).map(qt => ({ ...qt, id: qt.id || (qt as any)._id })),
@@ -196,14 +201,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     personalTasks: s.personalTasks.filter(t => t.id !== id),
   })),
   mergeTasks: (newTasks) => set(s => {
-    const existingIds = new Set(s.tasks.map(t => t.id));
-    const normalized = newTasks.map(t => ({
-      ...t,
-      id: t.id || (t as any)._id,
-      projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
-    }));
-    const actualNew = normalized.filter(t => !existingIds.has(t.id));
-    if (actualNew.length === 0) return s;
-    return { tasks: [...s.tasks, ...actualNew] };
+    const taskMap = new Map(s.tasks.map(t => [t.id, t]));
+    newTasks.forEach(t => {
+      const normalized = {
+        ...t,
+        id: t.id || (t as any)._id,
+        projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
+      };
+      // Always overwrite — incoming data from server is more up-to-date
+      taskMap.set(normalized.id, normalized);
+    });
+    return { tasks: Array.from(taskMap.values()) };
   }),
 }));

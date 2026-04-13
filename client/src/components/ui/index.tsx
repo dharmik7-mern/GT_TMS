@@ -2,8 +2,14 @@ import React from 'react';
 import * as RadixTabs from '@radix-ui/react-tabs';
 import * as RadixDropdown from '@radix-ui/react-dropdown-menu';
 import * as RadixSelect from '@radix-ui/react-select';
+import * as RadixPopover from '@radix-ui/react-popover';
+import { 
+  format, addMonths, subMonths, startOfMonth, 
+  endOfMonth, startOfWeek, endOfWeek, isSameMonth, 
+  isSameDay, addDays, eachDayOfInterval, parseISO 
+} from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronsUpDown, ChevronDown, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsUpDown, ChevronDown, Check, X, Calendar, Search } from 'lucide-react';
 import { cn } from '../../utils/helpers';
 
 // ─── Tabs ────────────────────────────────────────────────────────────────────
@@ -133,7 +139,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
           <RadixDropdown.Content 
             align="start"
             sideOffset={4}
-            className="z-[9999] min-w-[160px] bg-white dark:bg-surface-900 rounded-xl border border-surface-100 dark:border-surface-800 shadow-xl p-1 animate-in fade-in zoom-in-95 duration-100"
+            className="z-[9999] min-w-[160px] bg-white dark:bg-surface-900 rounded-xl border border-surface-100 dark:border-surface-800 p-1 animate-in fade-in zoom-in-95 duration-100"
           >
             {items.map((item) => (
               <RadixDropdown.Item
@@ -527,16 +533,120 @@ export const Toast: React.FC<ToastProps> = ({ id, title, message, type, onRemove
       <p className="text-sm font-semibold text-surface-800 dark:text-surface-200">{title}</p>
       {message && <p className="text-xs text-surface-500 mt-0.5">{message}</p>}
     </div>
-    <button onClick={() => onRemove(id)} className="text-surface-400 hover:text-surface-600 flex-shrink-0">
-      <X size={14} />
-    </button>
+      <button onClick={() => onRemove(id)} className="text-surface-400 hover:text-surface-600 flex-shrink-0">
+        <X size={14} />
+      </button>
   </motion.div>
 );
 
-// Re-export X to avoid import issues
-const X: React.FC<{ size: number }> = ({ size }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
+// ─── Date Picker ──────────────────────────────────────────────────────────────
+interface DatePickerProps {
+  value?: string; // YYYY-MM-DD
+  onChange: (date: string) => void;
+  label?: string;
+  placeholder?: string;
+  minDate?: string;
+  className?: string;
+}
+
+export const DatePicker: React.FC<DatePickerProps> = ({
+  value, onChange, label, placeholder = 'Select date...', minDate, className
+}) => {
+  const [currentMonth, setCurrentMonth] = React.useState(value ? parseISO(value) : new Date());
+  
+  const selectedDate = value ? parseISO(value) : null;
+  const min = minDate ? parseISO(minDate) : null;
+
+  const days = React.useMemo(() => {
+    const start = startOfWeek(startOfMonth(currentMonth));
+    const end = endOfWeek(endOfMonth(currentMonth));
+    return eachDayOfInterval({ start, end });
+  }, [currentMonth]);
+
+  return (
+    <div className={cn('flex flex-col gap-1', className)}>
+      {label && <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest ml-1">{label}</label>}
+      <RadixPopover.Root>
+        <RadixPopover.Trigger asChild>
+          <button className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border bg-white dark:bg-surface-900 border-surface-100 dark:border-surface-800 hover:border-brand-300 transition-all outline-none text-xs font-semibold">
+            <span className={cn("truncate", !selectedDate && "text-surface-400")}>
+              {selectedDate ? format(selectedDate, 'dd-MM-yyyy') : placeholder}
+            </span>
+            <Calendar size={14} className="text-surface-400 flex-shrink-0" />
+          </button>
+        </RadixPopover.Trigger>
+        <RadixPopover.Portal>
+          <RadixPopover.Content 
+            align="start" 
+            sideOffset={4}
+            className="z-[9999] bg-white dark:bg-surface-900 rounded-2xl border border-surface-100 dark:border-surface-800 p-3 w-[260px] animate-in fade-in zoom-in-95 duration-100"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-bold text-surface-900 dark:text-white uppercase tracking-wider">
+                {format(currentMonth, 'MMMM yyyy')}
+              </span>
+              <div className="flex gap-0.5">
+                <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg transition-colors">
+                  <ChevronLeft size={14} className="text-surface-400" />
+                </button>
+                <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:bg-surface-50 dark:hover:bg-surface-800 rounded-lg transition-colors">
+                  <ChevronRight size={14} className="text-surface-400" />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                <div key={d} className="text-[9px] font-bold text-surface-400 text-center uppercase tracking-tighter py-1">{d}</div>
+              ))}
+              {days.map((day, i) => {
+                const isSelected = selectedDate && isSameDay(day, selectedDate);
+                const isToday = isSameDay(day, new Date());
+                const disabled = min ? (isSameDay(day, min) ? false : day < min) : false;
+
+                return (
+                  <button
+                    key={i}
+                    disabled={disabled}
+                    onClick={() => {
+                      onChange(format(day, 'yyyy-MM-dd'));
+                    }}
+                    className={cn(
+                      "h-7 w-full text-[10px] rounded-lg flex items-center justify-center transition-all",
+                      !isSameMonth(day, currentMonth) && "text-surface-200 dark:text-surface-700",
+                      isSameMonth(day, currentMonth) && "text-surface-700 dark:text-surface-300",
+                      isToday && !isSelected && "bg-surface-50 dark:bg-surface-800 font-bold",
+                      isSelected && "bg-brand-600 text-white font-bold",
+                      !isSelected && !disabled && "hover:bg-brand-50 dark:hover:bg-brand-950/30 hover:text-brand-600",
+                      disabled && "opacity-20 cursor-not-allowed"
+                    )}
+                  >
+                    {format(day, 'd')}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-surface-50 dark:border-surface-800">
+              <button 
+                onClick={() => {
+                  const today = new Date();
+                  setCurrentMonth(today);
+                  onChange(format(today, 'yyyy-MM-dd'));
+                }}
+                className="text-[9px] font-bold text-brand-600 hover:text-brand-700 transition-colors uppercase tracking-wider"
+              >
+                Today
+              </button>
+              <RadixPopover.Close className="text-[9px] font-bold text-surface-400 hover:text-surface-600 transition-colors uppercase tracking-wider">
+                Close
+              </RadixPopover.Close>
+            </div>
+          </RadixPopover.Content>
+        </RadixPopover.Portal>
+      </RadixPopover.Root>
+    </div>
+  );
+};
+
+// Re-export Calendar icon if needed, but it's used internally

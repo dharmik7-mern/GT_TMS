@@ -249,6 +249,8 @@ export const tasksService = {
   move: (id: string, status: string) => api.patch(`/tasks/${id}/status`, { status }),
   review: (id: string, body: { action: 'approve' | 'changes_requested'; rating?: number; reviewRemark?: string }) =>
     api.post(`/tasks/${id}/review`, body),
+  getCompletionReviews: (projectId?: string) =>
+    api.get('/tasks', { params: { status: 'in_review', projectId, limit: 200 } }),
   addSubtask: (taskId: string, body: { title: string; assigneeId?: string }) => api.post(`/tasks/${taskId}/subtasks`, body),
   patchSubtask: (taskId: string, subtaskId: string, body: unknown) =>
     api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, body),

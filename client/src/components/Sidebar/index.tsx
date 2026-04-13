@@ -31,7 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
-  { label: 'Report Management', icon: BarChart3, path: '/reports-management', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
+  // { label: 'Report Management', icon: BarChart3, path: '/reports-management', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
   {
     label: 'MIS',
     icon: BarChart3,
@@ -54,7 +54,7 @@ const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams' },
-  { label: 'Report Management', icon: BarChart3, path: '/reports-management' },
+  // { label: 'Report Management', icon: BarChart3, path: '/reports-management' },
   {
     label: 'MIS',
     icon: BarChart3,
@@ -76,7 +76,7 @@ const PLATFORM_ADMIN_NAV: NavItem[] = [
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Companies', icon: Building2, path: '/companies' },
   { label: 'Users List', icon: UserCircle, path: '/users' },
-  { label: 'Report Management', icon: Activity, path: '/reports-management' },
+  // { label: 'Report Management', icon: Activity, path: '/reports-management' },
   {
     label: 'MIS',
     icon: Zap,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, MessageSquare, Paperclip, Clock, AlertTriangle } from 'lucide-react';
-import { cn, formatDate, isDueDateOverdue, isTaskOverdue } from '../../utils/helpers';
+import { Calendar, MessageSquare, Paperclip, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { cn, formatDate, isTaskOverdue } from '../../utils/helpers';
 import { PRIORITY_CONFIG } from '../../app/constants';
 import { UserAvatar, AvatarGroup } from '../UserAvatar';
 import { SubtaskBar } from '../SubtaskBar';
@@ -19,7 +19,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
   const priority = PRIORITY_CONFIG[task.priority];
   const { users, projects, allLabels } = useAppStore();
   const assignees = users.filter(u => task.assigneeIds.includes(u.id));
-  
+
   // Single source of truth for overdue status (ignores potentially stale DB flags)
   const isOverdue = isTaskOverdue(task);
   const localIsOverdue = isOverdue;
@@ -72,20 +72,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
     >
       {/* Priority, Labels & Categories */}
       <div className="flex flex-wrap items-center gap-2 mb-2.5">
-        <span
-          className={cn('badge text-[10px]', priority.bg, priority.text)}
-        >
+        <span className={cn('badge text-[10px]', priority.bg, priority.text)}>
           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: priority.color }} />
           {priority.label}
         </span>
-        
+
         {/* Structured Labels */}
         {task.labels?.map((label) => {
           const l = typeof label === 'object' ? label : allLabels.find(al => al.id === label);
           if (!l) return null;
           return (
-            <span 
-              key={l.id} 
+            <span
+              key={l.id}
               className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
               style={{ backgroundColor: `${l.color}20`, color: l.color }}
             >
@@ -113,9 +111,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
         {task.isReassignPending && (
           <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-900/40 w-fit">
             <Clock size={10} />
-            {task.reassignRequestedBy && task.requestedAssigneeId 
-               ? `${users.find(u => u.id === task.reassignRequestedBy)?.name?.split(' ')[0]} reassigning`
-               : 'Reassign Pending'}
+            {task.reassignRequestedBy && task.requestedAssigneeId
+              ? `${users.find(u => u.id === task.reassignRequestedBy)?.name?.split(' ')[0]} reassigning`
+              : 'Reassign Pending'}
           </div>
         )}
 
@@ -128,6 +126,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
             )}
           </div>
         )}
+
+        {task.completionReview?.reviewStatus === 'approved' && (
+          <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/40 w-fit">
+            <CheckCircle2 size={10} />
+            APPROVED
+          </div>
+        )}
       </div>
 
       <h4 className="text-sm font-medium text-surface-800 dark:text-surface-200 leading-snug group-hover:text-brand-700 dark:group-hover:text-brand-300 transition-colors">
@@ -135,9 +140,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
       </h4>
 
       {/* Tags */}
-      {task.tags && task.tags.length > 0 && (
+      {(task.tags ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
-          {task.tags.map(tag => (
+          {(task.tags ?? []).map(tag => (
             <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-surface-50 dark:bg-surface-800/50 text-surface-500 dark:text-surface-400 rounded-md border border-surface-100 dark:border-surface-800 flex items-center gap-1">
               #{tag}
             </span>

@@ -83,6 +83,7 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
   const [showNewPhaseInput, setShowNewPhaseInput] = useState(false);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [assigneeError, setAssigneeError] = useState(false);
   const titleError = getReservedTaskTitleError(form.title);
 
   const categories = useMemo<ProjectCategory[]>(() => project.subcategories || [], [project.subcategories]);
@@ -93,6 +94,7 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
     setShowNewPhaseInput(false);
     setNewPhaseName('');
     setSubmitting(false);
+    setAssigneeError(false);
   }, [open, project, defaultStatus]);
 
   useEffect(() => {
@@ -189,6 +191,13 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting || !form.title.trim() || !form.startDate || !form.dueDate || titleError) return;
+    if (form.assigneeIds.length === 0) {
+      setAssigneeError(true);
+      // Scroll assignee section into view
+      document.getElementById('assignees-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    setAssigneeError(false);
     try {
       setSubmitting(true);
       await onSubmit({
@@ -343,13 +352,20 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
           </div>
         ) : null}
 
-        <div>
-          <label className="label">Assignees</label>
-          <div className="border border-surface-100 dark:border-surface-800 rounded-xl p-3 max-h-44 overflow-y-auto space-y-2">
+        <div id="assignees-section">
+          <label className="label">
+            Assignees <span className="text-rose-500">*</span>
+          </label>
+          <div className={cn(
+            'border rounded-xl p-3 max-h-44 overflow-y-auto space-y-2',
+            assigneeError
+              ? 'border-rose-400 bg-rose-50/30 dark:bg-rose-950/10'
+              : 'border-surface-100 dark:border-surface-800'
+          )}>
             {members.filter(m => ['team_leader', 'team_member'].includes(m.role)).length ? members.filter(m => ['team_leader', 'team_member'].includes(m.role)).map((member) => (
               <label key={member.id} className="flex items-center justify-between gap-3 text-sm">
                 <div className="flex items-center gap-2 min-w-0">
-                  <input type="checkbox" checked={form.assigneeIds.includes(member.id)} onChange={() => toggleAssignee(member.id)} />
+                  <input type="checkbox" checked={form.assigneeIds.includes(member.id)} onChange={() => { toggleAssignee(member.id); setAssigneeError(false); }} />
                   <UserAvatar name={member.name} color={member.color} size="xs" />
                   <span className="truncate">{member.name}</span>
                 </div>
@@ -359,6 +375,11 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
               <p className="text-xs text-surface-400">No project members available.</p>
             )}
           </div>
+          {assigneeError && (
+            <p className="mt-1.5 text-xs font-medium text-rose-500 flex items-center gap-1">
+              ⚠ At least one assignee is required before submitting.
+            </p>
+          )}
         </div>
 
         <div>
@@ -501,7 +522,11 @@ export const ProjectTaskCreateModal: React.FC<ProjectTaskCreateModalProps> = ({
 
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary btn-md flex-1">Cancel</button>
-          <button type="submit" disabled={!canSubmit || submitting || !form.title.trim() || Boolean(titleError)} className="btn-primary btn-md flex-1">
+          <button
+            type="submit"
+            disabled={!canSubmit || submitting || !form.title.trim() || Boolean(titleError)}
+            className="btn-primary btn-md flex-1"
+          >
             {submitting ? 'Saving...' : submitLabel}
           </button>
         </div>

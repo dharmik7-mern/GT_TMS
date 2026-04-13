@@ -13,7 +13,7 @@ import { useAuthStore } from '../../context/authStore';
 import { PROJECT_COLORS } from '../../app/constants';
 import { ColorPicker } from '../../components/ColorPicker';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
-import { ProgressBar, EmptyState } from '../../components/ui';
+import { ProgressBar, EmptyState, Dropdown, DatePicker } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type { Project, ProjectStatus } from '../../app/types';
@@ -37,12 +37,12 @@ const PROJECT_STATUS_BADGES: Record<ProjectStatus, { label: string; className: s
 
 const DEPARTMENTS = ['General', 'Development', 'Design', 'Marketing', 'Product'];
 const INITIAL_SDLC = [
-  { name: 'Requirement', durationDays: 5, enabled: true },
-  { name: 'Analysis', durationDays: 5, enabled: true },
-  { name: 'Design', durationDays: 7, enabled: true },
-  { name: 'Development', durationDays: 20, enabled: true },
-  { name: 'Testing', durationDays: 10, enabled: true },
-  { name: 'Deployment', durationDays: 3, enabled: true },
+  { name: 'Requirement', durationDays: 0, enabled: true },
+  { name: 'Analysis', durationDays: 0, enabled: true },
+  { name: 'Design', durationDays: 0, enabled: true },
+  { name: 'Development', durationDays: 0, enabled: true },
+  { name: 'Testing', durationDays: 0, enabled: true },
+  { name: 'Deployment', durationDays: 0, enabled: true },
   { name: 'Maintenance', durationDays: 0, enabled: false }
 ];
 
@@ -199,11 +199,16 @@ export const ProjectsPage: React.FC = () => {
   }, [watchSdlc]);
 
   useEffect(() => {
-    if (watchStart && totalDays > 0) {
-      const start = new Date(watchStart);
-      const end = new Date(start);
-      end.setDate(start.getDate() + totalDays);
-      setValue('endDate', end.toISOString().split('T')[0]);
+    if (watchStart) {
+      if (totalDays > 0) {
+        const start = new Date(watchStart);
+        const end = new Date(start);
+        end.setDate(start.getDate() + totalDays);
+        setValue('endDate', end.toISOString().split('T')[0]);
+      } else {
+        // If no phase days, default end date to start date so they stay in sync
+        setValue('endDate', watchStart);
+      }
     }
   }, [watchStart, totalDays, setValue]);
 
@@ -243,16 +248,18 @@ export const ProjectsPage: React.FC = () => {
       });
       setValue('sdlcPlan', mappedSdlc);
     } else {
+      const today = new Date().toISOString().split('T')[0];
       setEditingProject(null);
       reset({
-        startDate: new Date().toISOString().split('T')[0],
+        startDate: today,
+        endDate: today,
         department: 'General',
         budgetCurrency: 'INR',
         sdlcPlan: INITIAL_SDLC
       });
       setSelectedColor(PROJECT_COLORS[0]);
-      setSelectedMembers(user?.id ? [user.id] : []);
-      setSelectedReporters([]);
+      setSelectedMembers([]);
+      setSelectedReporters(user?.id ? [user.id] : []);
     }
     setShowModal(true);
   };
@@ -379,16 +386,38 @@ export const ProjectsPage: React.FC = () => {
             <div className="space-y-4">
               <div><label className="label">Project Name *</label><input {...register('name', { required: true })} className="input" placeholder="e.g. Website Redesign" /></div>
               <div><label className="label">Description</label><textarea {...register('description')} className="input h-24 resize-none" placeholder="What is this project about?" /></div>
-              <div><label className="label">Department</label><select {...register('department')} className="input">{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+              <div><label className="label">Department</label>
+                <Dropdown 
+                  value={watch('department')} 
+                  onChange={(v) => setValue('department', v)}
+                  items={DEPARTMENTS.map(d => ({ id: d, label: d }))} 
+                />
+              </div>
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="label">Start Date</label><input type="date" {...register('startDate')} className="input text-xs" /></div>
-                <div><label className="label">Due Date</label><input type="date" {...register('endDate')} className="input text-xs" /></div>
+                <DatePicker 
+                  label="Start Date"
+                  value={watch('startDate')}
+                  onChange={(v) => setValue('startDate', v)}
+                  minDate={new Date().toISOString().split('T')[0]}
+                />
+                <DatePicker 
+                  label="Due Date"
+                  value={watch('endDate')}
+                  onChange={(v) => setValue('endDate', v)}
+                  minDate={watch('startDate')}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="label">Budget</label><input type="number" {...register('budget')} className="input" placeholder="0.00" /></div>
-                <div><label className="label">Currency</label><select {...register('budgetCurrency')} className="input">{['INR', 'USD', 'EUR', 'GBP'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                <div><label className="label">Currency</label>
+                  <Dropdown 
+                    value={watch('budgetCurrency')} 
+                    onChange={(v) => setValue('budgetCurrency', v)}
+                    items={['INR', 'USD', 'EUR', 'GBP'].map(c => ({ id: c, label: c }))} 
+                  />
+                </div>
               </div>
               <div className="space-y-2"><label className="label">Brand Color</label><ColorPicker value={selectedColor} onChange={setSelectedColor} palette={PROJECT_COLORS} /></div>
             </div>

@@ -411,12 +411,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="page-header">
-        <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Manage your account and workspace preferences</p>
-      </div>
-
+    <div className="w-full">
       {message && <div className="mb-4 rounded-xl bg-surface-50 px-4 py-3 text-sm text-surface-600 dark:bg-surface-800/60">{message}</div>}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} items={visibleTabs} variant="underline">
@@ -779,7 +774,7 @@ export const SettingsPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="notifications" className="pt-6">
-          <div className="card max-w-2xl p-5">
+          <div className="card p-5">
             <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Notification Preferences</h3>
             <div>
               <p className="section-title mb-3">In-App Notifications</p>
@@ -820,7 +815,7 @@ export const SettingsPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="appearance" className="pt-6">
-          <div className="max-w-2xl space-y-6">
+          <div className="space-y-6">
             <div className="card p-5">
               <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Theme</h3>
               <div className="grid grid-cols-3 gap-3">
