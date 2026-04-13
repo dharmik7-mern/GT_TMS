@@ -15,6 +15,7 @@ import { UserAvatar } from '../UserAvatar';
 import { Modal } from '../Modal';
 import { ReassignRequestModal } from '../ReassignRequestModal';
 import { ExtensionRequestModal } from '../ExtensionRequestModal';
+import { TaskTimer } from '../TaskTimer';
 import { TaskCompletionModal } from './TaskCompletionModal';
 import type { Activity, Task, Priority, TaskStatus, Comment, User, Label } from '../../app/types';
 import { tasksService, reassignService, labelsService } from '../../services/api';
@@ -1126,34 +1127,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
             )}
 
             <div className="pt-2 border-t border-surface-100 dark:border-surface-800">
-              <div className="flex items-center justify-between text-[11px] mb-2">
-                <div className="flex items-center gap-1.5 text-surface-400 font-medium">
-                  <Clock size={12} />
-                  <span>Total Time</span>
-                </div>
-                <span className="font-bold text-surface-700 dark:text-surface-200">
-                  {(() => {
-                    const total = currentTask.totalTimeSpent || 0;
-                    const h = Math.floor(total / 3600);
-                    const m = Math.floor((total % 3600) / 60);
-                    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-                  })()}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5 text-surface-400 font-medium">
-                  <History size={12} />
-                  <span>In Progress</span>
-                </div>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                  {(() => {
-                    const ip = currentTask.inProgressTime || 0;
-                    const h = Math.floor(ip / 3600);
-                    const m = Math.floor((ip % 3600) / 60);
-                    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-                  })()}
-                </span>
-              </div>
+              <TaskTimer task={currentTask} isReadOnly={isReadOnly} />
             </div>
 
 

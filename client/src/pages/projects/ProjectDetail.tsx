@@ -50,7 +50,10 @@ export const ProjectDetailPage: React.FC = () => {
   const project = projects.find(p => p.id === id);
   const workspacePermissions = workspaces[0]?.settings?.permissions || {};
   const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
-  const projectTasks = tasks.filter(t => t.projectId === id);
+  const projectTasks = tasks.filter(t => {
+    const pid = typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id;
+    return String(pid) === String(id);
+  });
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const members = users.filter(u => project?.members.includes(u.id) && !['super_admin', 'admin'].includes(u.role));
   const canCreateTask = user?.role !== 'team_member' || (project?.reportingPersonIds || []).includes(user?.id);
@@ -92,6 +95,22 @@ export const ProjectDetailPage: React.FC = () => {
     if ((project?.subcategories || []).some((category) => category.id === selectedCategoryId)) return;
     setSelectedCategoryId('all');
   }, [project?.subcategories, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    const fetchProjectTasks = async () => {
+      try {
+        const res = await tasksService.getAll({ projectId: project.id, limit: 1000 });
+        const items = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+        if (items.length > 0) {
+          useAppStore.getState().mergeTasks(items);
+        }
+      } catch (err) {
+        console.error('[ProjectDetail] Failed to fetch project tasks:', err);
+      }
+    };
+    void fetchProjectTasks();
+  }, [project?.id]);
 
   useEffect(() => {
     if (!project?.id) return;

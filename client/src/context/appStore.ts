@@ -57,6 +57,7 @@ interface AppStore {
   addPersonalTask: (task: PersonalTask) => void;
   updatePersonalTask: (id: string, updates: Partial<PersonalTask>) => void;
   deletePersonalTask: (id: string) => void;
+  mergeTasks: (tasks: Task[]) => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -92,15 +93,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
       labelsService.getAll(),
     ]);
     set({
-      users: asArray<User>(usersRes.data.data ?? usersRes.data),
-      workspaces: asArray<Workspace>(workspacesRes.data.data ?? workspacesRes.data),
-      projects: asArray<Project>(projectsRes.data.data ?? projectsRes.data),
-      tasks: asArray<Task>(tasksRes.data.data ?? tasksRes.data),
-      teams: asArray<Team>(teamsRes.data.data ?? teamsRes.data),
-      quickTasks: asArray<QuickTask>(quickRes.data.data ?? quickRes.data),
-      notifications: asArray<Notification>(notifRes.data.data ?? notifRes.data),
-      personalTasks: asArray<PersonalTask>(personalRes.data.data ?? personalRes.data),
-      allLabels: asArray<Label>(labelsRes.data.data ?? labelsRes.data),
+      users: asArray<User>(usersRes.data.data ?? usersRes.data).map(u => ({ ...u, id: u.id || (u as any)._id })),
+      workspaces: asArray<Workspace>(workspacesRes.data.data ?? workspacesRes.data).map(w => ({ ...w, id: w.id || (w as any)._id })),
+      projects: asArray<Project>(projectsRes.data.data ?? projectsRes.data).map(p => ({ ...p, id: p.id || (p as any)._id })),
+      tasks: asArray<Task>(tasksRes.data.data ?? tasksRes.data).map(t => ({
+        ...t,
+        id: t.id || (t as any)._id,
+        projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
+      })),
+      teams: asArray<Team>(teamsRes.data.data ?? teamsRes.data).map(tm => ({ ...tm, id: tm.id || (tm as any)._id })),
+      quickTasks: asArray<QuickTask>(quickRes.data.data ?? quickRes.data).map(qt => ({ ...qt, id: qt.id || (qt as any)._id })),
+      notifications: asArray<Notification>(notifRes.data.data ?? notifRes.data).map(n => ({ ...n, id: n.id || (n as any)._id })),
+      personalTasks: asArray<PersonalTask>(personalRes.data.data ?? personalRes.data).map(pt => ({ ...pt, id: pt.id || (pt as any)._id })),
+      allLabels: asArray<Label>(labelsRes.data.data ?? labelsRes.data).map(l => ({ ...l, id: l.id || (l as any)._id })),
     });
   },
 
@@ -120,7 +125,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  addProject: (project) => set(s => ({ projects: [...s.projects, project] })),
+  addProject: (project) => set(s => ({ projects: [...s.projects, { ...project, id: project.id || (project as any)._id }] })),
   updateProject: (id, updates) => set(s => ({
     projects: s.projects.map(p => p.id === id ? { ...p, ...updates } : p),
   })),
@@ -129,17 +134,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
     tasks: s.tasks.filter(t => t.projectId !== id),
   })),
 
-  addTask: (task) => set(s => ({ tasks: [...s.tasks, task] })),
+  addTask: (task) => set(s => ({
+    tasks: [...s.tasks.filter(t => (t.id || (t as any)._id) !== (task.id || (task as any)._id)), {
+      ...task,
+      id: task.id || (task as any)._id,
+      projectId: typeof task.projectId === 'string' ? task.projectId : (task.projectId as any)?._id || (task.projectId as any)?.id
+    }]
+  })),
   updateTask: (id, updates) => set(s => ({
-    tasks: s.tasks.map(t => t.id === id ? { ...t, ...updates } : t),
+    tasks: s.tasks.map(t => t.id === id ? {
+      ...t,
+      ...updates,
+      projectId: updates.projectId
+        ? (typeof updates.projectId === 'string' ? updates.projectId : (updates.projectId as any)?._id || (updates.projectId as any)?.id)
+        : t.projectId
+    } : t),
   })),
   deleteTask: (id) => set(s => ({ tasks: s.tasks.filter(t => t.id !== id) })),
   moveTask: (taskId, newStatus) => set(s => ({
     tasks: s.tasks.map(t => t.id === taskId ? { ...t, status: newStatus, updatedAt: new Date().toISOString() } : t),
   })),
   reorderTasks: (projectId, status, tasks) => set(s => {
+    const normalizedTasks = tasks.map(t => ({
+      ...t,
+      id: t.id || (t as any)._id,
+      projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
+    }));
     const otherTasks = s.tasks.filter(t => !(t.projectId === projectId && t.status === status));
-    return { tasks: [...otherTasks, ...tasks] };
+    return { tasks: [...otherTasks, ...normalizedTasks] };
   }),
 
   addQuickTask: (task) => set(s => ({ quickTasks: [...s.quickTasks, task] })),
@@ -173,4 +195,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deletePersonalTask: (id) => set(s => ({
     personalTasks: s.personalTasks.filter(t => t.id !== id),
   })),
+  mergeTasks: (newTasks) => set(s => {
+    const existingIds = new Set(s.tasks.map(t => t.id));
+    const normalized = newTasks.map(t => ({
+      ...t,
+      id: t.id || (t as any)._id,
+      projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
+    }));
+    const actualNew = normalized.filter(t => !existingIds.has(t.id));
+    if (actualNew.length === 0) return s;
+    return { tasks: [...s.tasks, ...actualNew] };
+  }),
 }));

@@ -23,7 +23,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, c
   // Single source of truth for overdue status (ignores potentially stale DB flags)
   const isOverdue = isTaskOverdue(task);
   const localIsOverdue = isOverdue;
-  const project = projects.find((item) => item.id === task.projectId);
+  const pid = typeof task.projectId === 'string' ? task.projectId : (task.projectId as any)?._id || (task.projectId as any)?.id;
+  const project = projects.find((item) => item.id === String(pid));
   const category = project?.subcategories?.find((item) => item.id === task.subcategoryId);
 
   if (compact) {

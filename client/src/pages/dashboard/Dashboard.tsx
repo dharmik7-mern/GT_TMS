@@ -149,7 +149,8 @@ export const DashboardPage: React.FC = () => {
 
   const activeProjectTasks = useMemo(() => {
     return tasks.filter(t => {
-      const p = projects.find(proj => proj.id === t.projectId);
+      const pid = typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id;
+      const p = projects.find(proj => proj.id === String(pid));
       return p ? p.status !== 'archived' : true;
     });
   }, [tasks, projects]);
@@ -507,7 +508,10 @@ export const DashboardPage: React.FC = () => {
               ) : (
                 activeProjects.slice(0, 5).map((project, i) => {
                   const assignees = users.filter(u => project.members.includes(u.id));
-                  const projectTasks = tasks.filter(t => t.projectId === project.id);
+                  const projectTasks = tasks.filter(t => {
+                    const pid = typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id;
+                    return String(pid) === project.id;
+                  });
                   const projectOverdueCount = projectTasks.filter(t => isDueDateOverdue(t.dueDate, t.status)).length;
 
                   return (
@@ -575,31 +579,36 @@ export const DashboardPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-hide">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-surface-50 dark:bg-surface-900 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px] sticky top-0 border-b border-surface-100 dark:border-surface-800">
+            <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-thin">
+              <table className="w-full text-xs text-left min-w-[500px]">
+                <thead className="bg-surface-50 dark:bg-surface-900 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px] sticky top-0 border-b border-surface-100 dark:border-surface-800 z-10">
                   <tr>
-                    <th className="px-3 py-2 font-semibold">Employee</th>
-                    <th className="px-3 py-2 font-semibold">Task</th>
-                    <th className="px-3 py-2 font-semibold hidden sm:table-cell">Project</th>
-                    <th className="px-3 py-2 font-semibold hidden md:table-cell">Type</th>
-                    <th className="px-3 py-2 font-semibold text-center">Status</th>
-                    <th className="px-3 py-2 font-semibold text-right hidden lg:table-cell">Due Date</th>
+                    <th className="px-4 py-2.5 font-semibold">Employee</th>
+                    <th className="px-4 py-2.5 font-semibold">Task</th>
+                    <th className="px-4 py-2.5 font-semibold hidden sm:table-cell">Project</th>
+                    <th className="px-4 py-2.5 font-semibold hidden md:table-cell">Type</th>
+                    <th className="px-4 py-2.5 font-semibold text-center">Status</th>
+                    <th className="px-4 py-2.5 font-semibold text-right hidden lg:table-cell">Due Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-50 dark:divide-surface-800">
                   {overviewLoading ? (
-                    <tr><td colSpan={6} className="px-3 py-6 text-center text-surface-400">Loading tasks...</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-surface-400">Loading tasks...</td></tr>
                   ) : overviewTasks.length > 0 ? (
                     overviewTasks.map((task) => (
                       <tr key={task.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
-                        <td className="px-3 py-2.5 font-medium text-surface-800 dark:text-surface-200 whitespace-nowrap">{task.assignedTo}</td>
-                        <td className="px-3 py-2.5 text-surface-800 dark:text-surface-200 font-medium truncate max-w-[120px] sm:max-w-[150px]">{task.title}</td>
-                        <td className="px-3 py-2.5 text-surface-500 dark:text-surface-400 truncate max-w-[100px] hidden sm:table-cell">{task.projectName}</td>
-                        <td className="px-3 py-2.5 text-surface-500 dark:text-surface-400 capitalize hidden md:table-cell">{task.type}</td>
-                        <td className="px-3 py-2.5 text-center">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                             <UserAvatar name={task.assignedTo || 'U'} avatar={task.assigneeAvatar} size="xs" />
+                             <span className="font-medium text-surface-800 dark:text-surface-200">{task.assignedTo}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-surface-800 dark:text-surface-200 font-medium truncate max-w-[150px]">{task.title}</td>
+                        <td className="px-4 py-3 text-surface-500 dark:text-surface-400 truncate max-w-[110px] hidden sm:table-cell">{task.projectName}</td>
+                        <td className="px-4 py-3 text-surface-500 dark:text-surface-400 capitalize hidden md:table-cell">{task.type}</td>
+                        <td className="px-4 py-3 text-center">
                           <span className={cn(
-                            'px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wide border',
+                            'px-2.5 py-1 rounded-[6px] text-[10px] font-bold uppercase tracking-wide border',
                             (task.status === 'in_progress') && 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50',
                             (task.status === 'done' || task.status === 'completed') && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
                             (task.status === 'todo' || task.status === 'pending') && 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50'
@@ -607,13 +616,13 @@ export const DashboardPage: React.FC = () => {
                             {task.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right text-surface-500 dark:text-surface-400 whitespace-nowrap hidden lg:table-cell">
+                        <td className="px-4 py-3 text-right text-surface-500 dark:text-surface-400 whitespace-nowrap hidden lg:table-cell">
                           {task.dueDate ? formatDate(task.dueDate) : '—'}
                         </td>
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan={6} className="px-3 py-6 text-center text-surface-400">No in-progress tasks found.</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-surface-400">No in-progress tasks found.</td></tr>
                   )}
                 </tbody>
               </table>

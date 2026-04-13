@@ -11,39 +11,33 @@ export async function getOverview(req, res, next) {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    const { items } = await listTasks({
-      companyId,
-      workspaceId,
-      projectId: undefined,
-      assigneeId: undefined,
-      status: 'in_progress',
-      priority: undefined,
-      page: 1,
-      limit: 200,
-      userId,
-      role,
-      labels: undefined,
-      tags: undefined,
-    });
+    const { Task } = await getTenantModels(companyId);
 
-    const merged = items.map((t) => ({
+    // Fetch tasks that are in progress across all projects
+    const tasks = await Task.find({
+      tenantId: companyId,
+      workspaceId,
+      status: 'in_progress',
+      $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }]
+    })
+    .sort({ createdAt: -1 })
+    .populate('assigneeIds', 'name avatar')
+    .populate('projectId', 'name')
+    .limit(10)
+    .lean();
+
+    const merged = tasks.map((t) => ({
       id: t._id,
       title: t.title,
       assignedTo: t.assigneeIds?.[0]?.name || 'Unassigned',
       assigneeAvatar: t.assigneeIds?.[0]?.avatar || '',
-      projectId: t.projectId ? (t.projectId._id || t.projectId) : null,
+      projectId: t.projectId?._id || t.projectId || null,
       projectName: t.projectId?.name || '-',
       type: 'project',
       status: t.status,
       priority: t.priority,
       dueDate: t.dueDate,
     }));
-
-    merged.sort((a, b) => {
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate) - new Date(b.dueDate);
-    });
 
     return res.status(200).json({ success: true, data: merged.slice(0, 7) });
   } catch (err) {

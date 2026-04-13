@@ -9,7 +9,11 @@ import { uploadIncomingFiles } from './storage.service.js';
 import { isTaskOverdue, getOverdueQueryFilter } from '../utils/task.utils.js';
 
 function strId(x) {
-  return x ? String(x) : '';
+  if (!x) return '';
+  if (typeof x === 'object') {
+    return String(x._id || x.id || x);
+  }
+  return String(x);
 }
 
 async function logTaskActivity({ tenantId, taskId, userId, action, oldValue, newValue, message }) {
@@ -590,7 +594,13 @@ export async function listTasks({
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Task.find(filter).sort({ projectId: 1, status: 1, order: 1 }).populate('labels').skip(skip).limit(limit),
+    Task.find(filter)
+      .sort({ projectId: 1, status: 1, order: 1 })
+      .populate('labels')
+      .populate('assigneeIds', 'name avatar')
+      .populate('projectId', 'name')
+      .skip(skip)
+      .limit(limit),
     Task.countDocuments(filter),
   ]);
   return { items: await attachTaskActivity({ companyId, workspaceId, tasks: items }), total, page, limit };

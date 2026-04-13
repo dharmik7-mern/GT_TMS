@@ -327,7 +327,10 @@ export const KanbanBoard = forwardRef<KanbanBoardHandle, KanbanBoardProps>(({
     }
   }));
 
-  const projectTasks = tasksOverride ?? (projectId ? storeTasks.filter((task) => task.projectId === projectId) : storeTasks);
+  const projectTasks = tasksOverride ?? (projectId ? storeTasks.filter((task) => {
+    const pid = typeof task.projectId === 'string' ? task.projectId : (task.projectId as any)?._id || (task.projectId as any)?.id;
+    return String(pid) === String(projectId);
+  }) : storeTasks);
 
   const allColumns = useMemo<BoardColumn[]>(
     () => [
