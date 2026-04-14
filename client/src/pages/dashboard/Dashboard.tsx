@@ -596,8 +596,8 @@ export const DashboardPage: React.FC = () => {
                       <tr key={task.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
                         <td className="px-4 py-3 overflow-hidden">
                           <div className="flex items-center gap-2">
-                             <UserAvatar name={task.assignedTo || 'U'} avatar={task.assigneeAvatar} size="xs" />
-                             <span className="font-medium text-surface-800 dark:text-surface-200 truncate">{task.assignedTo}</span>
+                            <UserAvatar name={task.assignedTo || 'U'} avatar={task.assigneeAvatar} size="xs" />
+                            <span className="font-medium text-surface-800 dark:text-surface-200 truncate">{task.assignedTo}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-surface-800 dark:text-surface-200 font-medium truncate">{task.title}</td>
