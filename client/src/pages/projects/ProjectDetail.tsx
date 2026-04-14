@@ -504,7 +504,7 @@ export const ProjectDetailPage: React.FC = () => {
               key === 'done' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50'
             )}>
               <span className="w-1 h-1 rounded-full" style={{ backgroundColor: cfg.color }} />
-              {cfg.label.split(' ')[0]}
+              {cfg.label}
               <span className="ml-0.5 opacity-60">{statusCounts[key]}</span>
             </div>
           ))}

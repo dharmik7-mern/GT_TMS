@@ -7,7 +7,10 @@ import { emitSuccessToast } from '../context/toastBus';
 import { formatRelativeTime, formatDate } from '../utils/helpers';
 import type { ExtensionRequest } from '../app/types';
 
+import { useNavigate } from 'react-router-dom';
+
 export const ExtensionRequestsPanel: React.FC = () => {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState<ExtensionRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const { users, bootstrap } = useAppStore();
@@ -51,14 +54,17 @@ export const ExtensionRequestsPanel: React.FC = () => {
     }
   };
 
-  if (loading && requests.length === 0) return <div className="p-8 text-center text-surface-400 font-medium">Loading requests...</div>;
+  if (loading && requests.length === 0) return null;
   if (requests.length === 0) return null;
 
   return (
-    <div className="card overflow-hidden h-full flex flex-col">
-      <div className="bg-brand-50 dark:bg-brand-950/20 px-5 py-3 border-b border-brand-100 dark:border-brand-900/40 flex items-center justify-between flex-shrink-0">
+    <div className="card overflow-hidden flex flex-col">
+      <div 
+        onClick={() => navigate('/task-requests?type=extension')}
+        className="bg-brand-50 dark:bg-brand-950/20 px-5 py-3 border-b border-brand-100 dark:border-brand-900/40 flex items-center justify-between flex-shrink-0 cursor-pointer hover:bg-brand-100/50 dark:hover:bg-brand-900/10 transition-colors group"
+      >
         <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-brand-600" />
+          <Calendar size={16} className="text-brand-600 transition-transform group-hover:scale-110" />
           <h3 className="text-xs font-bold text-brand-800 dark:text-brand-400 uppercase tracking-widest">
             Due Date Extensions
           </h3>
@@ -74,44 +80,77 @@ export const ExtensionRequestsPanel: React.FC = () => {
           const firstTaskName = req.tasks && req.tasks[0] ? req.tasks[0].title : 'Tasks';
 
           return (
-            <div key={req._id || req.id} className="p-4 bg-white dark:bg-surface-900 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
-              <div className="flex items-start justify-between gap-4">
+            <div key={req._id || req.id} className="p-4 bg-white dark:bg-surface-900 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors border-b border-surface-50 dark:border-surface-800 last:border-0">
+              <div className="flex gap-3">
+                {/* Requester Avatar */}
+                <div className="flex-shrink-0 pt-0.5">
+                  <UserAvatar 
+                    name={requester?.name || 'U'} 
+                    avatar={requester?.avatar} 
+                    size="sm" 
+                    color={requester?.color}
+                  />
+                </div>
+
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-bold text-surface-400 uppercase tracking-tight">{requester?.name || 'Someone'} requested</span>
-                    <span className="text-[10px] text-surface-400">• {formatRelativeTime(req.createdAt)}</span>
+                  {/* Header Row: Name & Actions */}
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-surface-900 dark:text-surface-100 uppercase tracking-wide truncate">
+                        {requester?.name || 'Someone'}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-medium text-surface-400 bg-surface-100 dark:bg-surface-800 px-1.5 py-0.5 rounded leading-none uppercase tracking-tighter">Request</span>
+                        <span className="text-[10px] text-surface-400">{formatRelativeTime(req.createdAt)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button 
+                        onClick={() => handleAction(req._id || req.id, true)}
+                        className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all active:scale-90"
+                        title="Approve Extension"
+                      >
+                        <Check size={14} strokeWidth={2.5} />
+                      </button>
+                      <button 
+                        onClick={() => handleAction(req._id || req.id, false)}
+                        className="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-500 dark:text-rose-400 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all active:scale-90"
+                        title="Reject Request"
+                      >
+                        <X size={14} strokeWidth={2.5} />
+                      </button>
+                    </div>
                   </div>
-                  <h4 className="text-sm font-semibold text-surface-900 dark:text-white truncate mb-2" title={firstTaskName}>
+
+                  {/* Task Info */}
+                  <h4 className="text-xs font-bold text-surface-800 dark:text-surface-200 mb-2 leading-tight">
                     {taskCount > 1 ? `${firstTaskName} + ${taskCount - 1} more` : firstTaskName}
                   </h4>
-                  <div className="flex items-center gap-3 bg-rose-50 dark:bg-rose-950/20 p-2 rounded-lg border border-rose-100 dark:border-rose-900/30">
-                     <div className="flex items-center gap-1.5 min-w-0">
-                        <AlertTriangle size={12} className="text-rose-500" />
-                        <span className="text-[10px] font-bold text-rose-600 dark:text-rose-300">Requested Due Date:</span>
-                        <span className="text-[11px] font-bold text-rose-700 dark:text-rose-200">{formatDate(req.requestedDueDate, 'MMM d, yyyy')}</span>
-                     </div>
+
+                  {/* Extension Detail Badge */}
+                  <div className="bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100/50 dark:border-rose-900/20 rounded-lg p-2 mb-2">
+                    <div className="flex items-center gap-2">
+                       <div className="w-5 h-5 rounded-md bg-rose-500 flex items-center justify-center flex-shrink-0">
+                         <Calendar size={10} className="text-white" />
+                       </div>
+                       <div className="min-w-0">
+                         <p className="text-[9px] uppercase font-bold text-rose-500/80 leading-none mb-0.5">Extension To</p>
+                         <p className="text-xs font-bold text-rose-700 dark:text-rose-300 leading-none">
+                           {formatDate(req.requestedDueDate, 'MMM d, yyyy')}
+                         </p>
+                       </div>
+                    </div>
                   </div>
+
+                  {/* Reason Quote */}
                   {req.reason && (
-                    <div className="mt-2 text-[11px] text-surface-500 bg-surface-50 dark:bg-surface-800/30 p-2 rounded leading-relaxed border-l-2 border-surface-200 dark:border-surface-700">
-                      "{req.reason}"
+                    <div className="relative pl-3 py-1 bg-surface-50/50 dark:bg-surface-800/20 rounded-r-md border-l-2 border-brand-500/30">
+                      <p className="text-[11px] italic text-surface-500 dark:text-surface-400 line-clamp-3 leading-relaxed">
+                        "{req.reason}"
+                      </p>
                     </div>
                   )}
-                </div>
-                <div className="flex flex-col gap-2">
-                  <button 
-                    onClick={() => handleAction(req._id || req.id, true)}
-                    className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 shadow-sm shadow-emerald-500/20 transition-all hover:scale-110 active:scale-95"
-                    title="Approve Extension"
-                  >
-                    <Check size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleAction(req._id || req.id, false)}
-                    className="w-8 h-8 rounded-full bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all hover:scale-110 active:scale-95"
-                    title="Reject Request"
-                  >
-                    <X size={14} />
-                  </button>
                 </div>
               </div>
             </div>

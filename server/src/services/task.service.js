@@ -597,7 +597,7 @@ export async function listTasks({
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
     Task.find(filter)
-      .sort({ projectId: 1, status: 1, order: 1 })
+      .sort({ updatedAt: -1, projectId: 1, status: 1, order: 1 })
       .populate('labels')
       .populate('assigneeIds', 'name avatar color')
       .skip(skip)
@@ -622,9 +622,15 @@ export async function buildTaskVisibilityFilter({
 }) {
   const base = {
     tenantId,
-    workspaceId,
-    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
   };
+
+  if (workspaceId && (projectId || !isAdminRole(role))) {
+    base.workspaceId = workspaceId;
+  }
+
+  Object.assign(base, {
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+  });
 
   if (labels && Array.isArray(labels)) {
     const validLabels = labels.filter((l) => l && typeof l === 'string' && l.trim().length > 0);
@@ -673,7 +679,7 @@ export async function buildTaskVisibilityFilter({
   if (priority) base.priority = priority;
 
   if (reviewStatus) {
-    base['completionReview.status'] = reviewStatus;
+    base['completionReview.reviewStatus'] = reviewStatus;
   }
 
   // GLOBAL ARCHIVE FILTER: Exclude tasks from archived projects unless a specific projectId is requested
@@ -1902,12 +1908,12 @@ export async function addTaskComment({ companyId, workspaceId, userId, role, tas
 }
 
 export async function getOverdueTasks({ tenantId, workspaceId, userId, role }) {
-  const { Task } = await getTenantModels(tenantId);
+  const { Task, QuickTask, Project } = await getTenantModels(tenantId);
   const now = new Date();
 
   const allowedProjects = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
 
-  // Use centralized filter logic
+  // 1. Project Tasks Filter
   const taskFilter = {
     tenantId,
     workspaceId,
@@ -1916,7 +1922,6 @@ export async function getOverdueTasks({ tenantId, workspaceId, userId, role }) {
   };
 
   // Exclude tasks from archived projects
-  const { Project } = await getTenantModels(tenantId);
   const archivedProjects = await Project.find({ tenantId, workspaceId, status: 'archived' }).select('_id').lean();
   if (archivedProjects.length > 0) {
     const archivedIds = archivedProjects.map(p => p._id);
@@ -1928,19 +1933,54 @@ export async function getOverdueTasks({ tenantId, workspaceId, userId, role }) {
   }
 
   if (allowedProjects !== null) {
-    taskFilter.$and = [
-      {
-        $or: [
-          ...(allowedProjects.length ? [{ projectId: { $in: allowedProjects } }] : []),
-          buildDirectTaskAccessFilter(userId),
-        ],
-      },
-    ];
+    const projectAccessFilter = {
+      $or: [
+        ...(allowedProjects.length ? [{ projectId: { $in: allowedProjects } }] : []),
+        buildDirectTaskAccessFilter(userId),
+      ],
+    };
+    if (taskFilter.$and) {
+      taskFilter.$and.push(projectAccessFilter);
+    } else {
+      taskFilter.$and = [projectAccessFilter];
+    }
   }
 
-  const tasks = await Task.find(taskFilter).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean();
+  // 2. Quick Tasks Filter
+  const quickTaskFilter = {
+    tenantId,
+    workspaceId,
+    ...getOverdueQueryFilter(now),
+  };
 
-  const formattedTasks = tasks
+  if (!isAdminRole(role)) {
+    if (['manager', 'team_leader'].includes(role)) {
+      // Managers see all public, and their own private
+      quickTaskFilter.$or = [
+        { isPrivate: false },
+        { reporterId: userId },
+        { createdBy: userId },
+        { assigneeIds: userId }
+      ];
+    } else {
+      // Others only see where they are involved
+      quickTaskFilter.$or = [
+        { reporterId: userId },
+        { createdBy: userId },
+        { assigneeIds: userId }
+      ];
+    }
+  }
+
+  // Fetch both types of tasks
+  const [tasks, qTasks] = await Promise.all([
+    Task.find(taskFilter).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean(),
+    QuickTask.find(quickTaskFilter).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean()
+  ]);
+
+  const allFilteredTasks = [...tasks, ...qTasks];
+
+  const formattedTasks = allFilteredTasks
     .map((t) => ({
       id: String(t._id),
       title: t.title,
@@ -1949,6 +1989,7 @@ export async function getOverdueTasks({ tenantId, workspaceId, userId, role }) {
         t.assigneeIds && t.assigneeIds.length > 0
           ? t.assigneeIds.map((u) => u.name).join(', ')
           : 'Unassigned',
+      type: tasks.some(pt => String(pt._id) === String(t._id)) ? 'project' : 'quick'
     }))
     .sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
 

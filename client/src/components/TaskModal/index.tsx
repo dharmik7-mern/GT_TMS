@@ -18,7 +18,7 @@ import { ExtensionRequestModal } from '../ExtensionRequestModal';
 import { TaskTimer } from '../TaskTimer';
 import { TaskCompletionModal } from './TaskCompletionModal';
 import type { Activity, Task, Priority, TaskStatus, Comment, User, Label } from '../../app/types';
-import { tasksService, reassignService, labelsService } from '../../services/api';
+import { tasksService, quickTasksService, reassignService, labelsService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 
 interface TaskModalProps {
@@ -225,7 +225,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
         reviewRemark: serializeChecklist(reviewChecklist),
       };
 
-      const response = await tasksService.update(currentTask.id, updates);
+      const tasksServiceUsed = currentTask.type === 'quick' ? quickTasksService : tasksService;
+      const response = await tasksServiceUsed.update(currentTask.id, updates);
       updateTask(currentTask.id, response.data.data ?? response.data);
       setLocalTask({});
       emitSuccessToast('Task updated successfully.');
@@ -245,13 +246,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
 
   const handleCompletionSubmit = async (remark: string, files: File[]) => {
     try {
-      const response = await tasksService.update(currentTask.id, {
+      const tasksServiceUsed = currentTask.type === 'quick' ? quickTasksService : tasksService;
+      const response = await tasksServiceUsed.update(currentTask.id, {
         status: 'in_review',
         completionRemark: remark
       });
 
       if (files.length > 0) {
-        await tasksService.uploadAttachments(currentTask.id, files);
+        await tasksServiceUsed.uploadAttachments(currentTask.id, files);
       }
 
       updateTask(currentTask.id, response.data.data ?? response.data);
@@ -308,9 +310,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
   const reviewRemark = serializeChecklist(reviewChecklist);
 
   const handleReview = async (action: 'approve' | 'changes_requested') => {
+    const tasksServiceUsed = currentTask.type === 'quick' ? quickTasksService : tasksService;
     await syncTask(
       () =>
-        tasksService.review(currentTask.id, {
+        tasksServiceUsed.review(currentTask.id, {
           action,
           rating: action === 'approve' ? rating : undefined,
           reviewRemark: reviewRemark.trim() || undefined,
@@ -797,7 +800,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, open, onClose, initi
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <label className="label mb-0">Attachments</label>
-                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { const files = event.target.files; if (!files?.length) return; setIsUploading(true); void syncTask(() => tasksService.uploadAttachments(currentTask.id, Array.from(files)), 'Upload failed', 'Files uploaded successfully.').finally(() => { setIsUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }); }} />
+                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { const files = event.target.files; if (!files?.length) return; setIsUploading(true); const tasksServiceUsed = currentTask.type === 'quick' ? quickTasksService : tasksService; void syncTask(() => tasksServiceUsed.uploadAttachments(currentTask.id, Array.from(files)), 'Upload failed', 'Files uploaded successfully.').finally(() => { setIsUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }); }} />
                     <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isReadOnly} className="btn-ghost btn-sm text-xs"><Paperclip size={12} />{isUploading ? 'Uploading...' : 'Upload'}</button>
                   </div>
                   {(currentTask.attachments || []).length > 0 && <div className="mb-4 space-y-2">{(currentTask.attachments || []).map((attachment) => <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-xl border border-surface-100 bg-white p-2 text-xs dark:border-surface-700 dark:bg-surface-800"><span className="truncate">{attachment.name}</span><span className="text-[10px] text-surface-400">View</span></a>)}</div>}

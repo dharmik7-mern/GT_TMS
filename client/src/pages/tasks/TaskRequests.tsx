@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Check, CheckCircle2, Clock3, ExternalLink, Eye, FileText, FolderKanban, ListFilter, MoreHorizontal, Plus, RotateCcw, Star, User, X, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmptyState } from '../../components/ui';
@@ -9,7 +9,7 @@ import { useAuthStore } from '../../context/authStore';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 import type { Task, TaskCreationRequest } from '../../app/types';
 import { cn, formatDate, formatFileSize } from '../../utils/helpers';
-import { tasksService } from '../../services/api';
+import { tasksService, quickTasksService } from '../../services/api';
 import api from '../../services/api';
 
 type RequestStatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
@@ -297,15 +297,15 @@ const CompletionReviewTab: React.FC<{ projectId?: string }> = ({ projectId }) =>
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await tasksService.getCompletionReviews(projectId, 1, 500); // Fetch a larger set for frontend filtering
+      const res = await tasksService.getCompletionReviews(projectId, 1, 500);
       const items: any[] = res.data?.data ?? [];
-      // Normalize
       setTasks(items.map((t: any) => ({
         ...t,
         id: t.id || t._id,
         projectId: typeof t.projectId === 'object' && t.projectId !== null
           ? String(t.projectId._id || t.projectId.id || t.projectId)
           : String(t.projectId || ''),
+        completionReview: t.completionReview || { reviewStatus: 'pending' },
         assigneeIds: Array.isArray(t.assigneeIds)
           ? t.assigneeIds.map((a: any) => typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)).filter(Boolean)
           : [],
@@ -323,7 +323,9 @@ const CompletionReviewTab: React.FC<{ projectId?: string }> = ({ projectId }) =>
   const handleReview = async (taskId: string, action: 'approve' | 'changes_requested', rating: number, remark: string) => {
     try {
       setProcessingId(taskId);
-      await tasksService.review(taskId, {
+      const task = tasks.find(t => t.id === taskId);
+      const service = (task as any)?.type === 'quick' ? quickTasksService : tasksService;
+      await service.review(taskId, {
         action,
         ...(rating > 0 ? { rating } : {}),
         ...(remark.trim() ? { reviewRemark: remark.trim() } : {}),
@@ -344,9 +346,7 @@ const CompletionReviewTab: React.FC<{ projectId?: string }> = ({ projectId }) =>
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return tasks.filter(t => {
-      const crStatus = (t as any).completionReview?.reviewStatus;
-      if (!crStatus && t.status !== 'in_review') return false; // Only show if it has a review status or is in review status
-      
+      const crStatus = (t as any).completionReview?.reviewStatus || 'pending';
       if (!projectId && projectFilter !== 'all' && t.projectId !== projectFilter) return false;
       if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
       
@@ -364,6 +364,10 @@ const CompletionReviewTab: React.FC<{ projectId?: string }> = ({ projectId }) =>
   const paginated = useMemo(() => {
     return filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   }, [filtered, currentPage]);
+
+  const activeCompletionCount = useMemo(() => {
+    return tasks.filter(t => (t as any).completionReview?.reviewStatus === 'pending' || t.status === 'in_review').length;
+  }, [tasks]);
 
   if (loading) {
     return <div className="card p-10 text-center text-sm text-surface-400">Loading completion reviews...</div>;
@@ -417,8 +421,8 @@ const CompletionReviewTab: React.FC<{ projectId?: string }> = ({ projectId }) =>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {(['all', 'pending', 'approved', 'rejected'] as const).map((key) => {
           const summary = {
-            all: tasks.filter(t => (t as any).completionReview?.reviewStatus || t.status === 'in_review').length,
-            pending: tasks.filter(t => (t as any).completionReview?.reviewStatus === 'pending').length,
+            all: tasks.length,
+            pending: activeCompletionCount,
             approved: tasks.filter(t => (t as any).completionReview?.reviewStatus === 'approved').length,
             rejected: tasks.filter(t => (t as any).completionReview?.reviewStatus === 'rejected' || (t as any).completionReview?.reviewStatus === 'changes_requested').length,
           };
@@ -647,7 +651,25 @@ const TaskRequestsPage: React.FC = () => {
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequest, setSelectedRequest] = useState<TaskCreationRequest | null>(null);
-  const [requestType, setRequestType] = useState<RequestType>('creation');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('type') as RequestType;
+  
+  const [requestType, setRequestType] = useState<RequestType>(
+    (tabFromUrl && ['creation', 'extension', 'completion'].includes(tabFromUrl)) 
+      ? tabFromUrl 
+      : 'creation'
+  );
+
+  useEffect(() => {
+    if (tabFromUrl && ['creation', 'extension', 'completion'].includes(tabFromUrl) && tabFromUrl !== requestType) {
+      setRequestType(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
+  const handleTabChange = (type: RequestType) => {
+    setRequestType(type);
+    setSearchParams({ type });
+  };
   const [extensionRequests, setExtensionRequests] = useState<any[]>([]);
   const [allExtensionRequests, setAllExtensionRequests] = useState<any[]>([]);
   const itemsPerPage = 10;
@@ -811,7 +833,7 @@ const TaskRequestsPage: React.FC = () => {
         ].map(tab => (
           <button
             key={tab.value}
-            onClick={() => setRequestType(tab.value)}
+            onClick={() => handleTabChange(tab.value)}
             className={cn(
               "px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
               requestType === tab.value

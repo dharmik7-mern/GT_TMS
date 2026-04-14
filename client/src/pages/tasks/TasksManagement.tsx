@@ -731,7 +731,7 @@ export const TasksManagement: React.FC = () => {
                               : 'border-gray-100 bg-[#f8f9fc] text-gray-600 hover:bg-gray-50 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-300 dark:hover:bg-surface-700'
                           )}
                         >
-                          {f.replace('_', ' ')}
+                          {STATUS_CONFIG[f as keyof typeof STATUS_CONFIG]?.label || (f === 'all' ? 'All status' : f.replace('_', ' '))}
                         </button>
                       ))}
                     </div>

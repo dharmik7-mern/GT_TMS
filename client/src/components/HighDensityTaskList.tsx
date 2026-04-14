@@ -96,7 +96,7 @@ const TaskRow = memo(({ task, users, isDetailed, onClick }: TaskRowProps) => {
                       key={stage.stage}
                       className="h-full transition-all"
                       style={{ width: `${percent}%`, backgroundColor: stageMeta.color }}
-                      title={`${stageMeta.label.split(' ')[0]} ${formatDuration(stage.time)}`}
+                      title={`${stageMeta.label} ${formatDuration(stage.time)}`}
                     />
                   );
                 })}
@@ -132,7 +132,7 @@ const TaskRow = memo(({ task, users, isDetailed, onClick }: TaskRowProps) => {
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="flex items-center gap-1.5 font-bold text-surface-600 dark:text-surface-400">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg?.color || '#ccc' }} />
-                            {cfg?.label.split(' ')[0] || s.stage}
+                            {cfg?.label || s.stage}
                           </span>
                           <span className="font-black text-surface-900 dark:text-surface-100">{formatDuration(s.time)}</span>
                         </div>
