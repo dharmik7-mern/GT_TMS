@@ -84,14 +84,9 @@ const importSchema = z.object({
 });
 
 router.get('/', ProjectsController.list);
-<<<<<<< HEAD
 router.get('/all-with-tasks', ProjectsController.listWithTasks);
 router.post('/', validateBody(projectCreateSchema), ProjectsController.create);
 router.post('/import', validateBody(importSchema), ProjectsController.importBulk);
-=======
-router.post('/', mutationRateLimiter, enforceIdempotency(), validateBody(projectCreateSchema), ProjectsController.create);
-router.post('/import', mutationRateLimiter, enforceIdempotency(), validateBody(importSchema), ProjectsController.importBulk);
->>>>>>> main
 router.get('/:id', ProjectsController.get);
 router.put('/:id', validateBody(projectUpdateSchema), ProjectsController.update);
 router.put('/:id/subcategories', ProjectsController.upsertSubcategories);

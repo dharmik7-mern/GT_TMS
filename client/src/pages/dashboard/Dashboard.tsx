@@ -9,23 +9,10 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { cn, formatDate, formatRelativeTime, getProgressColor, isDueDateOverdue, isTaskOverdue } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
-<<<<<<< HEAD
 import { companiesService, activityService } from '../../services/api';
 
 import { AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar } from '../../components/ui';
-=======
-import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
-import { companiesService, activityService, tasksService } from '../../services/api';
-import api from '../../services/api';
-import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
-import { ProgressBar } from '../../components/ui';
-import { TaskCard } from '../../components/TaskCard';
-import { ReassignRequestsPanel } from '../../components/ReassignRequestsPanel';
-import { ExtensionRequestsPanel } from '../../components/ExtensionRequestsPanel';
-import { OverdueTasksPopup } from '../../components/dashboard/OverdueTasksPopup';
-import { ExtensionRequestsPopup } from '../../components/dashboard/ExtensionRequestsPopup';
->>>>>>> main
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -139,14 +126,7 @@ export const DashboardPage: React.FC = () => {
   const [platformActivity, setPlatformActivity] = useState<ActivityRow[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
-<<<<<<< HEAD
   const [selectedDailyProjectId, setSelectedDailyProjectId] = useState<string>('');
-=======
-  const [overviewTasks, setOverviewTasks] = useState<any[]>([]);
-  const [overviewLoading, setOverviewLoading] = useState(false);
-  const [overdueApi, setOverdueApi] = useState<{ count: number; tasks: any[] }>({ count: 0, tasks: [] });
-  const [overdueLoading, setOverdueLoading] = useState(false);
->>>>>>> main
 
   const isSuperAdmin = user?.role === 'super_admin';
 
@@ -181,39 +161,10 @@ export const DashboardPage: React.FC = () => {
     }
   }, [isSuperAdmin, user?.role]);
 
-<<<<<<< HEAD
   // Only include tasks from non-archived projects in dashboard stats.
   const activeProjectTasks = useMemo(() => {
     return tasks.filter((t) => {
       const p = projects.find((proj) => proj.id === t.projectId);
-=======
-    if (!isSuperAdmin) {
-      setOverviewLoading(true);
-      api.get('/tasks/overview')
-        .then(res => setOverviewTasks(res.data?.data || []))
-        .catch(console.error)
-        .finally(() => setOverviewLoading(false));
-
-      // Keep overdue card in sync with backend (same as popup)
-      setOverdueLoading(true);
-      tasksService.getOverdue()
-        .then(res => {
-          const data = res.data || {};
-          setOverdueApi({
-            count: Number(data.count) || 0,
-            tasks: Array.isArray(data.tasks) ? data.tasks : [],
-          });
-        })
-        .catch(() => setOverdueApi({ count: 0, tasks: [] }))
-        .finally(() => setOverdueLoading(false));
-    }
-  }, []);
-
-  const activeProjectTasks = useMemo(() => {
-    return tasks.filter(t => {
-      const pid = typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id;
-      const p = projects.find(proj => proj.id === String(pid));
->>>>>>> main
       return p ? p.status !== 'archived' : true;
     });
   }, [tasks, projects]);
@@ -230,33 +181,12 @@ export const DashboardPage: React.FC = () => {
     return [...filteredTasks.filter((t) => t.status !== 'done'), ...filteredQuickTasks.filter((t) => t.status !== 'done')];
   }, [activeProjectTasks, quickTasks, user?.id]);
 
-<<<<<<< HEAD
   const overdueTasks = isManagerOrAdmin
     ? [...activeProjectTasks.filter((t) => isDueDateOverdue(t.dueDate, t.status)), ...quickTasks.filter((t) => isDueDateOverdue(t.dueDate, t.status))]
     : [
         ...activeProjectTasks.filter((t) => t.assigneeIds?.includes(user?.id || '') && isDueDateOverdue(t.dueDate, t.status)),
         ...quickTasks.filter((t) => (t.assigneeIds || []).includes(user?.id || '') && isDueDateOverdue(t.dueDate, t.status)),
       ];
-=======
-  // Prefer backend-sourced overdue count to avoid drift with UI popup
-  const overdueTasks = useMemo(() => {
-    if (!isManagerOrAdmin) {
-      const uid = user?.id || '';
-      return [
-        ...activeProjectTasks.filter(t => (t.assigneeIds || []).includes(uid) && isTaskOverdue(t)),
-        ...quickTasks.filter(t => (t.assigneeIds || []).includes(uid) && isTaskOverdue(t))
-      ];
-    }
-    // Managers/Admins: trust API count when available
-    if (overdueApi.count > 0 && overdueApi.tasks.length > 0) {
-      return overdueApi.tasks;
-    }
-    return [
-      ...activeProjectTasks.filter(t => isTaskOverdue(t)),
-      ...quickTasks.filter(t => isTaskOverdue(t))
-    ];
-  }, [isManagerOrAdmin, activeProjectTasks, quickTasks, user?.id, overdueApi]);
->>>>>>> main
 
   const completedThisWeek = isManagerOrAdmin
     ? [...activeProjectTasks.filter((t) => t.status === 'done'), ...quickTasks.filter((t) => t.status === 'done')]
@@ -365,163 +295,6 @@ export const DashboardPage: React.FC = () => {
     });
   }, [platformActivity]);
 
-<<<<<<< HEAD
-=======
-  const greeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
-
-  if (isSuperAdmin) {
-    return (
-      <div className="max-w-full mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-            <h1 className="page-title text-2xl sm:text-3xl">
-              Platform Overview, {user?.name.split(' ')[0]} 👋
-            </h1>
-            <p className="page-subtitle text-xs sm:text-sm">
-              Monitor systems, companies, and platform-wide metrics.
-            </p>
-          </motion.div>
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            onClick={() => navigate('/companies')}
-            className="btn-primary btn-md w-full sm:w-auto"
-          >
-            <Plus size={16} />
-            Add Company
-          </motion.button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={<Building2 size={20} />} label="Total Companies" value={companiesLoading ? '…' : companies.length} sub="active on platform" color="#3366ff" delay={0} onClick={() => navigate('/companies')} />
-          <StatCard icon={<Users size={20} />} label="Total Users" value={companiesLoading ? '…' : companies.reduce((n, c) => n + (c.usersCount ?? 0), 0)} sub="across all companies" color="#10b981" delay={0.05} onClick={() => navigate('/users')} />
-          <StatCard icon={<Activity size={20} />} label="System Uptime" value="99.9%" sub="all regions healthy" color="#f59e0b" trend={0} delay={0.1} onClick={() => navigate('/logs?type=info')} />
-          <StatCard icon={<Zap size={20} />} label="Active Modules" value="12/12" sub="no reported incidents" color="#7c3aed" trend={0} delay={0.15} onClick={() => navigate('/logs')} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="card p-5"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-display font-semibold text-surface-900 dark:text-white">User Growth</h3>
-                  <p className="text-xs text-surface-400">New registration activity</p>
-                </div>
-                <div className="flex items-center gap-4 text-xs font-medium">
-                  <span className="flex items-center gap-1.5 text-surface-500">
-                    <span className="w-3 h-1 bg-brand-500 rounded-full inline-block" />
-                    New Users
-                  </span>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -30, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3366ff" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#3366ff" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#8896b8' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#8896b8' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--tw-bg-opacity, #fff)',
-                      border: '1px solid #e4e8f2',
-                      borderRadius: '12px',
-                      fontSize: '12px'
-                    }}
-                  />
-                  <Area type="monotone" dataKey="added" stroke="#3366ff" strokeWidth={2} fill="url(#colorGrowth)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-display font-semibold text-surface-900 dark:text-white">Recent Companies</h3>
-                <button onClick={() => navigate('/companies')} className="btn-ghost btn-sm text-xs text-brand-600">View all <ArrowRight size={12} /></button>
-              </div>
-              <div className="space-y-4">
-                {(companies.slice(0, 5)).map((c) => (
-                  <div key={c.id} className="flex items-center justify-between p-3 rounded-xl bg-surface-50 dark:bg-surface-800/50">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white dark:bg-surface-700 flex items-center justify-center font-bold text-xs text-brand-600 shadow-sm">{(c.name || '')[0]}</div>
-                      <div>
-                        <p className="text-sm font-semibold text-surface-900 dark:text-white">{c.name}</p>
-                        <p className="text-[10px] text-surface-400">{c.createdAt ? formatDate(c.createdAt) : '—'}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs font-bold text-surface-700 dark:text-surface-300">—</p>
-                      <p className="text-[10px] text-emerald-600 font-medium">{c.status || 'Active'}</p>
-                    </div>
-                  </div>
-                ))}
-                {companies.length === 0 && !companiesLoading && <p className="text-sm text-surface-400 py-2">No companies yet</p>}
-              </div>
-            </motion.div>
-          </div>
-
-          <div className="space-y-6">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
-              <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Support Queue</h3>
-              <div className="space-y-3">
-                {[
-                  { user: 'Bhavin Patel', msg: 'Billing issue with Enterprise plan', time: '12m ago', priority: 'high' },
-                  { user: 'Krupali Shah', msg: 'Unable to invite new members', time: '45m ago', priority: 'medium' },
-                  { user: 'Meet Soni', msg: 'API integration documentation query', time: '2h ago', priority: 'low' },
-                ].map((ticket, i) => (
-                  <div key={i} className="p-3 rounded-xl border border-surface-100 dark:border-surface-800 hover:border-brand-500/30 transition-colors cursor-pointer">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] uppercase font-bold text-surface-400">{ticket.user}</span>
-                      <span className="text-[10px] font-medium text-surface-400">{ticket.time}</span>
-                    </div>
-                    <p className="text-xs font-medium text-surface-800 dark:text-surface-200 line-clamp-1">{ticket.msg}</p>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => navigate('/support')} className="btn-secondary w-full mt-4 text-xs">Go to Support Desk</button>
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
-              <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">System Alerts</h3>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 text-rose-600">
-                  <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-bold">API Latency High</p>
-                    <p className="text-[10px] opacity-80">Region us-east-1 experiencing spikes</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600">
-                  <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-bold">Backup Completed</p>
-                    <p className="text-[10px] opacity-80">Full database backup successful</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-        <OverdueTasksPopup />
-      </div>
-    );
-  }
-
->>>>>>> main
   return (
     <div className="mx-auto max-w-full space-y-6">
       <div className="pt-2" />
@@ -602,65 +375,14 @@ export const DashboardPage: React.FC = () => {
                     </div>
                     <AvatarGroup users={assignees} max={3} size="xs" />
                   </motion.div>
-<<<<<<< HEAD
                 );
               })}
               {activeProjects.length === 0 && <div className="px-5 py-6 text-sm text-surface-400">No active projects found.</div>}
-=======
-                ))
-              ) : (
-                activeProjects.slice(0, 5).map((project, i) => {
-                  const assignees = users.filter(u => project.members.includes(u.id));
-                  const projectTasks = tasks.filter(t => {
-                    const pid = typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id;
-                    return String(pid) === project.id;
-                  });
-                  const projectOverdueCount = projectTasks.filter(t => isDueDateOverdue(t.dueDate, t.status)).length;
-
-                  return (
-                    <motion.div
-                      key={project.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + i * 0.05 }}
-                      onClick={() => navigate(`/projects/${project.id}`)}
-                      className="flex items-center gap-4 px-5 py-3.5 hover:bg-surface-50 dark:hover:bg-surface-800/50 cursor-pointer transition-colors"
-                    >
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                        style={{ backgroundColor: project.color }}>
-                        {project.name[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-surface-800 dark:text-surface-200 truncate">{project.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <ProgressBar value={project.progress} size="sm" color={getProgressColor(project.progress)} className="w-20 sm:w-24" />
-                          <span className="text-xs text-surface-400">{project.progress}%</span>
-                          {isManagerOrAdmin && projectOverdueCount > 0 && (
-                            <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded ml-1">
-                              <AlertTriangle size={10} />
-                              {projectOverdueCount} Overdue
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <div className="text-right hidden sm:block">
-                          <p className="text-xs text-surface-500">{project.completedTasksCount}/{project.tasksCount}</p>
-                          <p className="text-[11px] text-surface-400">tasks</p>
-                        </div>
-                        <AvatarGroup users={assignees} max={3} size="xs" />
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
->>>>>>> main
             </div>
           </motion.div>
         </div>
 
         <div className="space-y-6">
-<<<<<<< HEAD
           {/* Daily tasks panel: pick project first, then inspect tasks */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="card overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-surface-100 bg-surface-50 px-4 py-3 dark:border-surface-800 dark:bg-surface-950/50">
@@ -668,63 +390,6 @@ export const DashboardPage: React.FC = () => {
                 <h3 className="text-xs font-bold uppercase tracking-widest text-surface-700 dark:text-surface-300">Daily Tasks</h3>
                 <p className="text-[11px] text-surface-400">Select a project to see its tasks below.</p>
               </div>
-=======
-          {['admin', 'manager', 'team_leader'].includes(user?.role || '') && (
-            <>
-              <ReassignRequestsPanel />
-              <ExtensionRequestsPanel />
-            </>
-          )}
-          {/* Team Tasks Overview */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="card overflow-hidden flex flex-col"
-          >
-            <div className="bg-surface-50 dark:bg-surface-950/50 px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-surface-700 dark:text-surface-300 uppercase tracking-widest">
-                Team Tasks Overview
-              </h3>
-              <span className="text-[10px] text-brand-600 dark:text-brand-400 font-semibold bg-brand-50 dark:bg-brand-950/30 px-2 py-0.5 rounded-full">
-                In-Progress
-              </span>
-            </div>
-
-            <div className="max-h-[300px] overflow-y-auto custom-scrollbar overflow-x-hidden">
-              <table className="w-full text-xs text-left table-fixed">
-                <thead className="bg-surface-50 dark:bg-surface-900 text-surface-500 dark:text-surface-400 font-semibold tracking-wide uppercase text-[10px] sticky top-0 border-b border-surface-100 dark:border-surface-800 z-10">
-                  <tr>
-                    <th className="px-4 py-2.5 font-semibold w-[40%]">Employee</th>
-                    <th className="px-4 py-2.5 font-semibold w-[40%]">Task</th>
-                    <th className="px-4 py-2.5 font-semibold w-[20%]">Project</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-50 dark:divide-surface-800">
-                  {overviewLoading ? (
-                    <tr><td colSpan={3} className="px-4 py-8 text-center text-surface-400">Loading tasks...</td></tr>
-                  ) : overviewTasks.length > 0 ? (
-                    overviewTasks.map((task) => (
-                      <tr key={task.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
-                        <td className="px-4 py-3 overflow-hidden">
-                          <div className="flex items-center gap-2">
-                             <UserAvatar name={task.assignedTo || 'U'} avatar={task.assigneeAvatar} size="xs" />
-                             <span className="font-medium text-surface-800 dark:text-surface-200 truncate">{task.assignedTo}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-surface-800 dark:text-surface-200 font-medium truncate">{task.title}</td>
-                        <td className="px-4 py-3 text-surface-500 dark:text-surface-400 truncate">{task.projectName}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr><td colSpan={3} className="px-4 py-8 text-center text-surface-400">No in-progress tasks found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="p-3 border-t border-surface-100 dark:border-surface-800 flex justify-end bg-surface-50 dark:bg-surface-950/50">
->>>>>>> main
               <button
                 type="button"
                 onClick={() => selectedDailyProject && navigate(`/projects/${selectedDailyProject.id}`)}
@@ -873,7 +538,6 @@ export const DashboardPage: React.FC = () => {
           </motion.div>
         </div>
       </div>
-<<<<<<< HEAD
 
       {isSuperAdmin && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -882,10 +546,6 @@ export const DashboardPage: React.FC = () => {
           <StatCard icon={<FolderKanban size={18} />} label="Projects" value={companies.reduce((sum, c) => sum + (c.projectsCount || 0), 0)} color="#f59e0b" />
         </div>
       )}
-=======
-      <OverdueTasksPopup />
-      <ExtensionRequestsPopup />
->>>>>>> main
     </div>
   );
 };

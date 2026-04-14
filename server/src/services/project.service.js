@@ -544,7 +544,6 @@ export async function createProject({ companyId, workspaceId, userId, role, data
     });
   }
 
-<<<<<<< HEAD
   // #region agent log
   fileAgentLog({ sessionId: 'e243b9', runId: 'pre-fix', hypothesisId: 'H3', location: 'server/src/services/project.service.js:createProject', message: 'Project created in DB', data: { tenantId: String(tenantId), workspaceId: String(workspaceId), ownerId: String(userId), projectId: String(project?._id), membersCount: Array.isArray(project?.members) ? project.members.length : undefined }, timestamp: Date.now() });
   // #endregion
@@ -569,8 +568,6 @@ export async function createProject({ companyId, workspaceId, userId, role, data
     // Activity logging is best-effort only. Project creation should still succeed.
   }
 
-=======
->>>>>>> main
   return project;
 }
 
