@@ -26,6 +26,7 @@ export const TASK_TYPE_CONFIG = {
 
 export const ROLE_CONFIG = {
   super_admin: { label: 'Super Admin', color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/30' },
+  company_admin: { label: 'Company Admin', color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/30' },
   admin: { label: 'Admin', color: 'text-violet-600', bg: 'bg-violet-50 dark:bg-violet-950/30' },
   manager: { label: 'Manager', color: 'text-brand-600', bg: 'bg-brand-50 dark:bg-brand-950/30' },
   team_leader: { label: 'Team Leader', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/30' },

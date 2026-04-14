@@ -1,9 +1,9 @@
-const PMS_ROLES = new Set(['super_admin', 'admin', 'manager', 'team_leader', 'team_member']);
+const PMS_ROLES = new Set(['super_admin', 'admin', 'company_admin', 'manager', 'team_leader', 'team_member']);
 
 const ROLE_ALIASES = new Map([
   ['super_admin', 'super_admin'],
   ['admin', 'admin'],
-  ['company_admin', 'admin'],
+  ['company_admin', 'company_admin'],
   ['workspace_admin', 'admin'],
   ['manager', 'manager'],
   ['team_lead', 'team_leader'],

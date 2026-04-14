@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import AuthLookup from '../models/AuthLookup.js';
+import { getUserModel } from '../models/User.js';
 import { getTenantModels } from '../config/tenantDb.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { assertPasswordAllowed } from './settings.service.js';
@@ -42,28 +44,113 @@ export async function getMe({ companyId, userId }) {
 }
 
 export async function listUsers({ companyId, actorRole }) {
-  const { User } = await getTenantModels(companyId);
-  let filter = { tenantId: companyId };
+  const tenantId = companyId;
+  const { User: TenantUser } = await getTenantModels(companyId);
+  const BaseUser = getUserModel(mongoose.connection);
+  
+  // Connect to HRMS Tenant DB
+  const hrmsConn = mongoose.connection.useDb(`company_${companyId}`);
+  const hrmsEmployeeColl = hrmsConn.db.collection('employees');
 
+  let filter = { tenantId: companyId };
   if (actorRole === 'super_admin') {
     filter = {}; // super_admin can see everyone
   }
 
-  const users = await User.find(filter).sort({ createdAt: -1 });
-  return users;
+  // Fetch from all sources
+  const [tenantUsers, hrmsGlobalUsers, hrmsTenantEmployees] = await Promise.all([
+    TenantUser.find(filter).lean(),
+    BaseUser.find(filter).lean(),
+    hrmsEmployeeColl.find({}).toArray().catch(() => []), // Might not exist
+  ]);
+
+  // Merge and deduplicate by email
+  const userMap = new Map();
+
+  // 1. HRMS Global Users
+  hrmsGlobalUsers.forEach((u) => {
+    userMap.set(u.email.toLowerCase(), { ...u, id: String(u._id) });
+  });
+
+  // 2. HRMS Tenant Employees (often have richer profile info like names, IDs)
+  hrmsTenantEmployees.forEach((e) => {
+    const email = (e.email || '').toLowerCase();
+    if (!email) return;
+    const existing = userMap.get(email);
+    userMap.set(email, {
+      ...(existing || {}),
+      id: String(e._id),
+      name: e.name || `${e.firstName || ''} ${e.lastName || ''}`.trim() || email,
+      email,
+      employeeId: e.employeeId,
+      department: e.department,
+      role: (e.role === 'Employee' ? 'team_member' : existing?.role) || 'team_member',
+      isActive: e.isActive !== undefined ? e.isActive : true,
+      createdAt: e.createdAt,
+    });
+  });
+
+  // 3. TMS Tenant Users (Source of truth for TMS-specific settings)
+  tenantUsers.forEach((u) => {
+    const email = u.email.toLowerCase();
+    const existing = userMap.get(email);
+    userMap.set(email, {
+      ...(existing || {}),
+      ...u,
+      id: String(u._id),
+    });
+  });
+
+  return Array.from(userMap.values()).sort((a, b) => {
+    const dateA = new Date(a.createdAt || 0);
+    const dateB = new Date(b.createdAt || 0);
+    return dateB - dateA;
+  });
 }
 
 export async function getUser({ companyId, id }) {
   const tenantId = companyId;
-  const { User } = await getTenantModels(companyId);
-  const user = await User.findOne({ _id: id, tenantId });
-  return user;
+  const { User: TenantUser } = await getTenantModels(companyId);
+  const BaseUser = getUserModel(mongoose.connection);
+  const hrmsConn = mongoose.connection.useDb(`company_${companyId}`);
+  const hrmsEmployeeColl = hrmsConn.db.collection('employees');
+
+  // Try tenant first
+  let user = await TenantUser.findOne({ _id: id, tenantId }).lean();
+  if (user) return { ...user, id: String(user._id) };
+
+  // Try HRMS Global
+  user = await BaseUser.findOne({ _id: id, tenantId }).lean();
+  if (user) return { ...user, id: String(user._id) };
+
+  // Try HRMS Tenant Employee
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    const emp = await hrmsEmployeeColl.findOne({ _id: new mongoose.Types.ObjectId(id) });
+    if (emp) {
+      return {
+        ...emp,
+        id: String(emp._id),
+        name: emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email,
+        role: emp.role === 'Employee' ? 'team_member' : 'team_member', // Default mapping
+      };
+    }
+  }
+
+  return null;
 }
 
 export async function getUserPerformance({ companyId, workspaceId, targetUserId }) {
   const tenantId = companyId;
-  const { User, Task, QuickTask, Project } = await getTenantModels(companyId);
-  const user = await User.findOne({ _id: targetUserId, tenantId }).lean();
+  const { User: TenantUser, Task, QuickTask, Project } = await getTenantModels(companyId);
+  const BaseUser = getUserModel(mongoose.connection);
+
+  // Try tenant first
+  let user = await TenantUser.findOne({ _id: targetUserId, tenantId }).lean();
+  if (!user) {
+    // Fallback to HRMS
+    user = await BaseUser.findOne({ _id: targetUserId, tenantId }).lean();
+  }
+
   if (!user) return null;
 
   const [projectTasks, quickTasks, projects] = await Promise.all([
@@ -253,7 +340,7 @@ export async function createUser({ companyId, workspaceId, actorRole, input }) {
   let tenantId = companyId;
   let targetWorkspaceId = workspaceId;
   const { User, Membership, Workspace } = await getTenantModels(companyId);
-  if (!['super_admin', 'admin'].includes(actorRole)) {
+  if (!['super_admin', 'admin', 'company_admin'].includes(actorRole)) {
     const err = new Error('Only company admins can create users');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
@@ -273,8 +360,8 @@ export async function createUser({ companyId, workspaceId, actorRole, input }) {
     targetWorkspaceId = workspace._id;
   }
 
-  const allowedRoles = actorRole === 'super_admin'
-    ? ['super_admin', 'admin', 'manager', 'team_leader', 'team_member']
+  const allowedRoles = (actorRole === 'super_admin' || actorRole === 'admin' || actorRole === 'company_admin')
+    ? ['super_admin', 'admin', 'company_admin', 'manager', 'team_leader', 'team_member']
     : ['admin', 'manager', 'team_leader', 'team_member'];
 
   if (!allowedRoles.includes(input.role)) {
@@ -372,7 +459,7 @@ export async function createUser({ companyId, workspaceId, actorRole, input }) {
 }
 
 export async function importUsersBulk({ companyId, workspaceId, actorRole, rows }) {
-  if (!['super_admin', 'admin'].includes(actorRole)) {
+  if (!['super_admin', 'admin', 'company_admin'].includes(actorRole)) {
     const err = new Error('Only company admins can import users');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
@@ -436,7 +523,16 @@ export async function importUsersBulk({ companyId, workspaceId, actorRole, rows 
 export async function updateUser({ companyId, workspaceId, actorRole, userId, targetUserId, updates }) {
   const tenantId = companyId;
   const { User, Membership } = await getTenantModels(companyId);
-  if (!['super_admin', 'admin'].includes(actorRole)) {
+
+  console.log('[UserService.updateUser] Attempting update:', {
+    actorRole,
+    userId,
+    targetUserId,
+    updates: JSON.stringify(updates)
+  });
+
+  if (!['super_admin', 'admin', 'company_admin'].includes(actorRole)) {
+    console.warn('[UserService.updateUser] Access denied for role:', actorRole);
     const err = new Error('Only company admins can update users');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
@@ -453,8 +549,9 @@ export async function updateUser({ companyId, workspaceId, actorRole, userId, ta
     throw err;
   }
 
-  const allowedRoles = actorRole === 'super_admin'
-    ? ['super_admin', 'admin', 'manager', 'team_leader', 'team_member']
+  const isAdmin = ['super_admin', 'admin', 'company_admin'].includes(actorRole);
+  const allowedRoles = isAdmin
+    ? ['super_admin', 'admin', 'company_admin', 'manager', 'team_leader', 'team_member']
     : ['admin', 'manager', 'team_leader', 'team_member'];
 
   if (updates.role && !allowedRoles.includes(updates.role)) {
@@ -511,7 +608,7 @@ export async function updateUser({ companyId, workspaceId, actorRole, userId, ta
 export async function setUserPassword({ companyId, actorRole, actorUserId, targetUserId, newPassword }) {
   const tenantId = companyId;
   const { User } = await getTenantModels(companyId);
-  if (!['super_admin', 'admin'].includes(actorRole)) {
+  if (!['super_admin', 'admin', 'company_admin'].includes(actorRole)) {
     const err = new Error('Only company admins can update user passwords');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
@@ -558,8 +655,8 @@ export async function reassignAndDisable({ companyId, actorRole, userId, targetU
   const { User, Membership, Task } = await getTenantModels(companyId);
   const TaskActivity = getTaskActivityModel(tenantId);
 
-  if (!['super_admin', 'admin'].includes(actorRole)) {
-    const err = new Error('Only company admins can disable users');
+  if (!['super_admin', 'admin', 'company_admin'].includes(actorRole)) {
+    const err = new Error('Only company admins can deactivate users');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
     throw err;

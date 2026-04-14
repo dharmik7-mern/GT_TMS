@@ -207,15 +207,15 @@ export const AdminUserProfilePage: React.FC = () => {
   const trendData = useMemo(() => {
     const buckets = range.mode === 'month'
       ? Array.from({ length: 12 }, (_, index) => {
-          const date = subMonths(range.end, 11 - index);
-          const start = startOfDay(new Date(date.getFullYear(), date.getMonth(), 1));
-          const end = endOfDay(new Date(date.getFullYear(), date.getMonth() + 1, 0));
-          return { label: format(date, 'MMM'), start, end };
-        })
+        const date = subMonths(range.end, 11 - index);
+        const start = startOfDay(new Date(date.getFullYear(), date.getMonth(), 1));
+        const end = endOfDay(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+        return { label: format(date, 'MMM'), start, end };
+      })
       : Array.from({ length: range.steps }, (_, index) => {
-          const date = addDays(range.start, index);
-          return { label: format(date, 'MMM d'), start: startOfDay(date), end: endOfDay(date) };
-        });
+        const date = addDays(range.start, index);
+        return { label: format(date, 'MMM d'), start: startOfDay(date), end: endOfDay(date) };
+      });
 
     return buckets.map((bucket) => ({
       label: bucket.label,

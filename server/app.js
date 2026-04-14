@@ -42,29 +42,32 @@ const clientIndexFile = path.join(clientBuildDir, 'index.html');
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-// ─── HELMET ───────────────────────────────────────────────────────────────
-app.use(
-  helmet({
-    crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: {
-      useDefaults: true,
-      directives: {
-        defaultSrc: ["'self'"],
-        connectSrc: [
-          "'self'",
-          "https://www.google-analytics.com",
-          // Allow HRMS and other SSO consumers to call this API
-          ...parseCorsOrigins(),
-        ],
-        scriptSrc: ["'self'", "'unsafe-inline'", "blob:"],
-        scriptSrcAttr: ["'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "blob:", "http:", "https:", "http://localhost:5000"],
+const isProd = process.env.NODE_ENV === 'production';
+
+if (isProd) {
+  app.use(
+    helmet({
+      crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          defaultSrc: ["'self'"],
+          connectSrc: [
+            "'self'",
+            "https://www.google-analytics.com",
+            // Allow HRMS and other SSO consumers to call this API
+            ...parseCorsOrigins(),
+          ],
+          scriptSrc: ["'self'", "'unsafe-inline'", "blob:"],
+          scriptSrcAttr: ["'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:", "blob:", "http:", "https:", "http://localhost:5000"],
+        },
       },
-    },
-  })
-);
+    })
+  );
+}
 
 app.use(hpp());
 app.use(compression());
@@ -80,10 +83,11 @@ app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (curl, Postman, same-domain)
-      if (!origin) return callback(null, true);
+      if (!origin || process.env.NODE_ENV !== 'production') return callback(null, true);
       if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
+      console.warn('CORS Blocked:', origin, 'Allowed:', allowedOrigins);
       const err = new Error(`CORS: origin ${origin} not allowed`);
       err.code = 'CORS_NOT_ALLOWED';
       err.statusCode = 403;
@@ -206,20 +210,16 @@ function parseCorsOrigins() {
   const raw = process.env.CORS_ORIGIN || '';
   if (!raw.trim()) {
     if (process.env.NODE_ENV === 'production') return [];
-    return [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:5174',
-      'http://127.0.0.1:3000',
-    ];
+    return ['*']; // Allow all in dev for debugging CORS
   }
   const parsed = raw
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
   const expanded = new Set(parsed);
+  if (process.env.NODE_ENV !== 'production') {
+    expanded.add('*');
+  }
   for (const origin of parsed) {
     expanded.add(origin.replace('http://localhost:', 'http://127.0.0.1:'));
     expanded.add(origin.replace('http://127.0.0.1:', 'http://localhost:'));

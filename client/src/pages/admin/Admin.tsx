@@ -220,12 +220,10 @@ export const AdminUsersPage: React.FC = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [editForm, setEditForm] = useState({
+    name: '',
     role: 'team_member' as Role,
     email: '',
-    jobTitle: '',
-    department: '',
     isActive: true,
-    canUsePrivateQuickTasks: false,
   });
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -240,8 +238,6 @@ export const AdminUsersPage: React.FC = () => {
   const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
-  const [isLoadingOverview, setIsLoadingOverview] = useState(false);
-  const [userOverview, setUserOverview] = useState<UserPerformance | null>(null);
   const [passwordForm, setPasswordForm] = useState({ newPassword: '', showPassword: false });
   const [isSettingPassword, setIsSettingPassword] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -262,13 +258,14 @@ export const AdminUsersPage: React.FC = () => {
   const ROLES: { value: Role | 'all'; label: string }[] = [
     { value: 'all', label: 'All' },
     // { value: 'super_admin', label: 'Super Admin' },
+    { value: 'company_admin', label: 'Company Admin' },
     { value: 'admin', label: 'Admin' },
     { value: 'manager', label: 'Manager' },
     { value: 'team_leader', label: 'Team Leader' },
     { value: 'team_member', label: 'Member' },
   ];
 
-  const CREATE_ROLE_OPTIONS: Role[] = ['admin', 'manager', 'team_leader', 'team_member'];
+  const CREATE_ROLE_OPTIONS: Role[] = ['company_admin', 'admin', 'manager', 'team_leader', 'team_member'];
 
   const handleCreateChange = (
     field: Exclude<keyof typeof createForm, 'sendCredentialsEmail'>,
@@ -303,36 +300,12 @@ export const AdminUsersPage: React.FC = () => {
   useEffect(() => {
     if (!selectedUser) return;
     setEditForm({
+      name: selectedUser.name || '',
       role: selectedUser.role,
       email: selectedUser.email || '',
-      jobTitle: selectedUser.jobTitle || '',
-      department: selectedUser.department || '',
       isActive: selectedUser.isActive,
-      canUsePrivateQuickTasks: Boolean(selectedUser.canUsePrivateQuickTasks),
     });
     setPasswordForm({ newPassword: '', showPassword: false });
-  }, [selectedUser]);
-
-  useEffect(() => {
-    if (!selectedUser) {
-      setUserOverview(null);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        setIsLoadingOverview(true);
-        const res = await usersService.getPerformance(selectedUser.id);
-        if (!cancelled) setUserOverview(res.data?.data ?? res.data);
-      } catch {
-        if (!cancelled) setUserOverview(null);
-      } finally {
-        if (!cancelled) setIsLoadingOverview(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [selectedUser]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -522,195 +495,103 @@ export const AdminUsersPage: React.FC = () => {
               key: 'actions', header: '', align: 'right',
               render: (u) => (
                 <div className="flex items-center gap-1 justify-end">
-                  <button onClick={(e) => { e.stopPropagation(); navigate(`/admin/users/${u.id}`); }} className="btn-ghost btn w-8 h-8 rounded-lg"><Edit3 size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setSelectedUser(u); }} className="btn-ghost btn w-8 h-8 rounded-lg"><Edit3 size={14} /></button>
                 </div>
               )
             },
           ]}
           data={filtered}
           keyExtractor={u => u.id}
-          onRowClick={(u) => navigate(`/admin/users/${u.id}`)}
+          onRowClick={(u) => setSelectedUser(u)}
         />
       </div>
 
       {/* User Edit Modal */}
       <Modal open={!!selectedUser} onClose={() => setSelectedUser(null)} title="Edit User" size="md">
         {selectedUser && (
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-surface-50 dark:bg-surface-800 rounded-xl">
-              <UserAvatar name={selectedUser.name} color={selectedUser.color} size="md" />
+          <div className="p-6 space-y-6">
+            {/* Header info */}
+            <div className="flex items-center gap-4 p-4 bg-surface-50 dark:bg-surface-800 rounded-2xl">
+              <UserAvatar name={selectedUser.name} color={selectedUser.color} size="lg" />
               <div>
-                <p className="font-medium text-surface-800 dark:text-surface-200">{selectedUser.name}</p>
-                <p className="text-xs text-surface-400">{selectedUser.email}</p>
+                <p className="font-display font-bold text-lg text-surface-900 dark:text-white">{selectedUser.name}</p>
+                <p className="text-sm text-surface-500">{selectedUser.email}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-surface-400">Employee ID</p>
-                <p className="mt-1 text-sm font-medium text-surface-800 dark:text-surface-200">{selectedUser.employeeId || 'Not assigned'}</p>
-              </div>
-              <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-surface-400">Joined</p>
-                <p className="mt-1 text-sm font-medium text-surface-800 dark:text-surface-200">{formatDate(selectedUser.createdAt)}</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-surface-100 dark:border-surface-800 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">Profile Overview</p>
-                  <p className="text-xs text-surface-400">Admin summary of this user’s current workload and delivery metrics.</p>
-                </div>
-                {isLoadingOverview && <p className="text-xs text-surface-400">Loading...</p>}
-              </div>
-              {userOverview ? (
-                <div className="mt-3 space-y-3">
-                  <div className="rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:bg-brand-950/20 dark:text-brand-200">
-                    {userOverview.insight?.headline || 'Overview loaded successfully.'}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Assigned</p>
-                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.assignedTasks}</p>
-                    </div>
-                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Completed</p>
-                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.completedTasks}</p>
-                    </div>
-                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Overdue Open</p>
-                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.overdueOpenTasks}</p>
-                    </div>
-                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Performance</p>
-                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.performanceScore}%</p>
-                    </div>
-                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Due Today</p>
-                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.dueTodayTasks}</p>
-                    </div>
-                    <div className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Completed Today</p>
-                      <p className="mt-1 text-lg font-semibold text-surface-900 dark:text-surface-100">{userOverview.summary.todayCompletedTasks}</p>
-                    </div>
-                  </div>
-                  {userOverview.currentWorkload?.length ? (
-                    <div className="rounded-xl border border-surface-100 dark:border-surface-800 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-surface-400">Current Focus</p>
-                      <div className="mt-3 space-y-2">
-                        {userOverview.currentWorkload.slice(0, 4).map((item) => (
-                          <div key={item.id} className="rounded-xl bg-surface-50 dark:bg-surface-800 px-3 py-2">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-medium text-surface-900 dark:text-surface-100">{item.title}</p>
-                                <p className="text-xs text-surface-400">
-                                  {item.type === 'project_task' ? (item.projectName || 'Project task') : 'Quick task'}
-                                  {item.dueDate ? ` • Due ${formatDate(item.dueDate)}` : ''}
-                                </p>
-                              </div>
-                              <span className="text-[11px] uppercase tracking-wide text-surface-500">{item.status.replace(/_/g, ' ')}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {userOverview.insight?.focusAreas?.length ? (
-                    <div className="rounded-xl border border-surface-100 dark:border-surface-800 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-surface-400">Focus Areas</p>
-                      <div className="mt-2 space-y-2">
-                        {userOverview.insight.focusAreas.map((item) => (
-                          <p key={item} className="text-sm text-surface-600 dark:text-surface-300">{item}</p>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                !isLoadingOverview ? <p className="mt-3 text-sm text-surface-400">Overview is not available for this user yet.</p> : null
-              )}
-            </div>
-            <div>
-              <label className="label">Role</label>
-              <select value={editForm.role} onChange={e => setEditForm(prev => ({ ...prev, role: e.target.value as Role }))} className="input">
-                {Object.entries(ROLE_CONFIG).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Email</label>
-              <input value={editForm.email} onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))} className="input" type="email" />
-            </div>
-            <div>
-              <label className="label">Job Title</label>
-              <input value={editForm.jobTitle} onChange={e => setEditForm(prev => ({ ...prev, jobTitle: e.target.value }))} className="input" />
-            </div>
-            <div>
-              <label className="label">Department</label>
-              <input value={editForm.department} onChange={e => setEditForm(prev => ({ ...prev, department: e.target.value }))} className="input" />
-            </div>
-            <div className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-800 rounded-xl">
+
+            <div className="space-y-4">
               <div>
-                <p className="text-sm font-medium text-surface-700 dark:text-surface-300">Account Status</p>
-                <p className="text-xs text-surface-400">{editForm.isActive ? 'Currently active' : 'Account disabled'}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditForm(prev => ({ ...prev, isActive: !prev.isActive }))}
-                className={cn('relative w-10 h-6 rounded-full transition-colors', editForm.isActive ? 'bg-brand-600' : 'bg-surface-200')}
-              >
-                <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform', editForm.isActive ? 'left-5' : 'left-1')} />
-              </button>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-800 rounded-xl">
-              <div>
-                <p className="text-sm font-medium text-surface-700 dark:text-surface-300">Private Quick Tasks</p>
-                <p className="text-xs text-surface-400">
-                  Allow this user to assign and manage private quick tasks from their own account.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditForm(prev => ({ ...prev, canUsePrivateQuickTasks: !prev.canUsePrivateQuickTasks }))}
-                className={cn('relative w-10 h-6 rounded-full transition-colors', editForm.canUsePrivateQuickTasks ? 'bg-brand-600' : 'bg-surface-200')}
-              >
-                <span className={cn('absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform', editForm.canUsePrivateQuickTasks ? 'left-5' : 'left-1')} />
-              </button>
-            </div>
-            <div className="rounded-xl border border-surface-100 dark:border-surface-800 p-4 space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">Password</p>
-                <p className="text-xs text-surface-400">Admins can set a new password here. Existing passwords cannot be viewed.</p>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type={passwordForm.showPassword ? 'text' : 'password'}
-                  minLength={8}
-                  value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                  placeholder="Enter new password"
-                  className="input flex-1"
+                <label className="label text-xs font-bold uppercase tracking-wider text-surface-400 mb-1.5">Full Name</label>
+                <input 
+                  value={editForm.name} 
+                  onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))} 
+                  className="input h-11" 
+                  placeholder="Enter user name"
                 />
+              </div>
+
+              <div>
+                <label className="label text-xs font-bold uppercase tracking-wider text-surface-400 mb-1.5">Email Address</label>
+                <input 
+                  value={editForm.email} 
+                  onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))} 
+                  className="input h-11" 
+                  type="email" 
+                  placeholder="name@company.com"
+                />
+              </div>
+
+              <div>
+                <label className="label text-xs font-bold uppercase tracking-wider text-surface-400 mb-1.5">System Role</label>
+                <select 
+                  value={editForm.role} 
+                  onChange={e => setEditForm(prev => ({ ...prev, role: e.target.value as Role }))} 
+                  className="input h-11"
+                >
+                  {Object.entries(ROLE_CONFIG).map(([k, v]) => (
+                    <option key={k} value={k}>{v.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-[11px] text-surface-400">Determines the level of access and permissions for this user.</p>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-800 rounded-2xl border border-surface-100 dark:border-surface-700/50">
+                <div>
+                  <p className="text-sm font-bold text-surface-900 dark:text-white">Account Status</p>
+                  <p className="text-xs text-surface-500">{editForm.isActive ? 'Active - User can log in' : 'Disabled - Access revoked'}</p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setPasswordForm((prev) => ({ ...prev, showPassword: !prev.showPassword }))}
-                  className="btn-secondary btn-md"
+                  onClick={() => setEditForm(prev => ({ ...prev, isActive: !prev.isActive }))}
+                  className={cn(
+                    'relative w-12 h-6.5 rounded-full transition-all duration-300', 
+                    editForm.isActive ? 'bg-brand-600 shadow-sm shadow-brand-500/20' : 'bg-surface-300 dark:bg-surface-700'
+                  )}
                 >
-                  {passwordForm.showPassword ? 'Hide' : 'Show'}
+                  <span className={cn(
+                    'absolute top-1 w-4.5 h-4.5 bg-white rounded-full shadow-md transition-all duration-300 flex items-center justify-center', 
+                    editForm.isActive ? 'left-6.5' : 'left-1'
+                  )}>
+                    {editForm.isActive ? <Check size={10} className="text-brand-600" /> : <X size={10} className="text-surface-400" />}
+                  </span>
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => { void handleSetPassword(); }}
-                disabled={isSettingPassword || passwordForm.newPassword.trim().length < 8}
-                className="btn-secondary btn-md w-full"
-              >
-                {isSettingPassword ? 'Updating Password...' : 'Update Password'}
-              </button>
             </div>
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setSelectedUser(null)} className="btn-secondary btn-md flex-1">Cancel</button>
-              <button onClick={() => { void handleSaveUser(); }} disabled={isSavingUser} className="btn-primary btn-md flex-1">{isSavingUser ? 'Saving...' : 'Save changes'}</button>
+
+            <div className="flex gap-4 pt-4">
+              <button 
+                onClick={() => setSelectedUser(null)} 
+                className="btn-secondary h-11 flex-1 rounded-xl font-bold"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => { void handleSaveUser(); }} 
+                disabled={isSavingUser} 
+                className="btn-primary h-11 flex-1 rounded-xl font-bold shadow-lg shadow-brand-500/25"
+              >
+                {isSavingUser ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
           </div>
         )}

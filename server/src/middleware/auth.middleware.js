@@ -70,6 +70,12 @@ export async function requireAuth(req, res, next) {
         // Non-fatal; leave workspaceId undefined if lookup fails.
       }
     }
+    console.log('[AuthMiddleware.requireAuth] Success:', {
+      userId: decoded.sub,
+      role: req.auth.role,
+      companyId: req.auth.companyId,
+      workspaceId: req.auth.workspaceId
+    });
     return next();
   } catch (error) {
     const reason = classifyJwtFailure(error);
