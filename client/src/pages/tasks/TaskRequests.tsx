@@ -205,7 +205,7 @@ const CompletionReviewModal: React.FC<{
                     type="button"
                     onMouseEnter={() => !isApproved && setHoveredStar(star)}
                     onMouseLeave={() => !isApproved && setHoveredStar(0)}
-                    onClick={() => !isApproved && setRating(prev => prev === star ? 0 : star)}
+                    onClick={() => !isApproved && setRating((prev: number) => prev === star ? 0 : star)}
                     className={cn(
                       "flex-1 h-10 rounded-xl border border-surface-200 dark:border-surface-700 flex items-center justify-center transition-all",
                       !isApproved && "hover:border-brand-400",
