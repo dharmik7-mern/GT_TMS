@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from 'axios';
 
 function resolveApiOrigin() {
   const configured = String(import.meta.env.VITE_PMS_API_ROOT || '').trim().replace(/\/+$/, '');
@@ -52,21 +52,8 @@ export const tasksService = {
   getCompletionReviews: (projectId?: string, page: number = 1, limit: number = 500) =>
     api.get('/tasks', { params: { projectId, page, limit, status: 'in_review' } }),
   getOverdue: (config?: unknown) => api.get('/tasks/overdue', config as any),
+  getRequests: (params?: unknown) => api.get('/tasks/requests', { params }),
   reviewRequest: (id: string, data: unknown) => api.post(`/tasks/requests/${id}/review`, data),
-  uploadAttachments: (id: string, files: File[]) => {
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
-    return api.post(`/tasks/${id}/attachments`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-  review: (id: string, data: unknown) => api.post(`/tasks/${id}/review`, data),
-  addComment: (id: string, data: unknown) => api.post(`/tasks/${id}/comments`, data),
-  addSubtask: (id: string, data: unknown) => api.post(`/tasks/${id}/subtasks`, data),
-  patchSubtask: (taskId: string, subtaskId: string, data: unknown) =>
-    api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, data),
-  deleteSubtask: (taskId: string, subtaskId: string) =>
-    api.delete(`/tasks/${taskId}/subtasks/${subtaskId}`),
 };
 
 export const teamsService = {
@@ -186,6 +173,12 @@ export const extensionRequestsService = {
   create: (data: unknown) => api.post('/extension-requests', data),
   approve: (id: string, note?: string) => api.put(`/extension-requests/${id}/approve`, { note }),
   reject: (id: string, note?: string) => api.put(`/extension-requests/${id}/reject`, { note }),
+};
+
+export const extensionRequestsService = {
+  getAll: () => api.get('/tasks/extension-requests'),
+  create: (data: unknown) => api.post('/tasks/extension-requests', data),
+  review: (id: string, data: unknown) => api.post(`/tasks/extension-requests/${id}/review`, data),
 };
 
 export const authService = {
