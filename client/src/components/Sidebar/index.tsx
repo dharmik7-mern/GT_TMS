@@ -119,7 +119,7 @@ export const Sidebar: React.FC = () => {
   const [misExpanded, setMisExpanded] = useState(pathname.startsWith('/mis'));
 
   const unread = unreadNotificationsCount();
-  const workspace = workspaces[0];
+  const workspace = workspaces[0] || (user ? ({ id: "fallback", name: "Main Workspace" } as any) : null);
 
   const activeProjects = projects.filter(p => p.status === 'active');
   const recentProjects = activeProjects.slice(0, 5);
@@ -135,29 +135,14 @@ export const Sidebar: React.FC = () => {
     setOpenDepartments(prev => ({ ...prev, [dept]: !prev[dept] }));
   };
 
-  const canSeeAdminNav = user?.role === 'super_admin' || user?.role === 'admin';
+  const canSeeAdminNav = user?.role === 'super_admin' || user?.role === 'company_admin' || user?.role === 'admin';
   const isCollapsed = sidebarCollapsed;
 
   const filteredNav = user?.role === 'super_admin'
     ? PLATFORM_ADMIN_NAV
-    : (user?.role === 'admin')
+    : (user?.role === 'company_admin' || user?.role === 'admin')
       ? SUPER_ADMIN_NAV
       : NAV_ITEMS.filter(item => !item.roles || (user && item.roles.includes(user.role)));
-
-  if (!workspace) {
-    return (
-      <motion.aside
-        animate={window.innerWidth >= 768 ? { width: isCollapsed ? 64 : 260 } : { width: 0 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="fixed left-0 top-0 h-full bg-white dark:bg-surface-900 border-r border-surface-100 dark:border-surface-800 z-30 hidden md:flex flex-col shadow-sidebar overflow-hidden"
-      >
-        <div className="p-4 border-b border-surface-100 dark:border-surface-800">
-          <div className="h-4 w-32 bg-surface-100 dark:bg-surface-800 rounded" />
-          <div className="h-3 w-20 bg-surface-100 dark:bg-surface-800 rounded mt-2" />
-        </div>
-      </motion.aside>
-    );
-  }
 
   return (
     <motion.aside
@@ -589,7 +574,7 @@ export const Sidebar: React.FC = () => {
         })}
 
         {/* Administration Section for Workspace Admins */}
-        {user?.role === 'admin' && (
+        {(user?.role === 'admin' || user?.role === 'company_admin') && (
           <div className={cn("pt-3", isCollapsed && "pt-2")}>
             {!isCollapsed && <p className="section-title px-3 py-1 mb-1">Administration</p>}
             {ADMIN_NAV.filter(item => !item.roles || (user && item.roles.includes(user.role))).map((item) => {
@@ -675,3 +660,5 @@ export const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
+
+

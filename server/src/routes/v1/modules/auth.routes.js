@@ -10,6 +10,7 @@ router.post('/register', validateBody(registerSchema), AuthController.register);
 router.post('/login', validateBody(loginSchema), AuthController.login);
 router.post('/refresh', validateBody(refreshSchema), AuthController.refresh);
 router.post('/logout', validateBody(logoutSchema), AuthController.logout);
+router.post('/sso-logout', AuthController.ssoLogout);
 
 export default router;
 

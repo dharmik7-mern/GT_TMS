@@ -3,25 +3,16 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './routes';
 import { AnimatePresence } from 'framer-motion';
 import { ToastProvider } from './context/ToastProvider';
-import { useSSO } from './hooks/useSSO';
-
-/**
- * SSOBoot — thin wrapper that calls useSSO() once at startup.
- * Must be a child of ToastProvider so it can use context if needed.
- */
-const SSOBoot: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  useSSO(); // silently checks /api/auth/me on mount
-  return <>{children}</>;
-};
+import { AuthProvider } from './context/AuthContext';
 
 const App: React.FC = () => {
   return (
     <ToastProvider>
-      <SSOBoot>
+      <AuthProvider>
         <AnimatePresence mode="wait">
           <RouterProvider router={router} />
         </AnimatePresence>
-      </SSOBoot>
+      </AuthProvider>
     </ToastProvider>
   );
 };

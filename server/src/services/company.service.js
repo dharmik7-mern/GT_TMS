@@ -4,6 +4,7 @@ import SystemSetting from '../models/SystemSetting.js';
 import { buildTenantDatabaseName, getTenantModels } from '../config/tenantDb.js';
 import { hashPassword } from '../utils/password.js';
 import { assertPasswordAllowed, formatGeneratedId, getCompanyIdConfig } from './settings.service.js';
+import { resolveOrganizationId } from '../utils/organizationId.js';
 
 async function reserveOrganizationId() {
   const config = await getCompanyIdConfig();
@@ -109,7 +110,16 @@ export async function listCompanies() {
   }));
 }
 
-export async function createCompanyWithAdmin({ name, adminName, adminEmail, adminPassword, initialUserLimit, status }) {
+export async function createCompanyWithAdmin({
+  name,
+  adminName,
+  adminEmail,
+  adminPassword,
+  initialUserLimit,
+  status,
+  organizationId: payloadOrganizationId,
+  authContext,
+}) {
   const existing = await Company.findOne({ email: adminEmail.toLowerCase() });
   if (existing) {
     const err = new Error('Company admin email already exists');
@@ -120,7 +130,21 @@ export async function createCompanyWithAdmin({ name, adminName, adminEmail, admi
 
   await assertPasswordAllowed(adminPassword);
 
-  const { organizationId, nextSequenceUsed } = await reserveOrganizationId();
+  let generatedReservation = null;
+  const resolved = await resolveOrganizationId({
+    payloadOrganizationId,
+    authContext,
+    contextLabel: 'createCompanyWithAdmin',
+    forCreate: true,
+    contactEmail: adminEmail,
+    // Keep generated fallback for backward compatibility.
+    getGeneratedOrganizationId: async () => {
+      generatedReservation = await reserveOrganizationId();
+      return generatedReservation.organizationId;
+    },
+  });
+  const organizationId = resolved.organizationId;
+
   const company = await Company.create({
     organizationId,
     name,
@@ -177,10 +201,12 @@ export async function createCompanyWithAdmin({ name, adminName, adminEmail, admi
     status: 'active',
   });
 
-  await SystemSetting.updateOne(
-    { key: 'system' },
-    { $set: { 'idGeneration.company.nextSequence': nextSequenceUsed + 1 } }
-  );
+  if (generatedReservation?.organizationId === organizationId) {
+    await SystemSetting.updateOne(
+      { key: 'system' },
+      { $set: { 'idGeneration.company.nextSequence': generatedReservation.nextSequenceUsed + 1 } }
+    );
+  }
 
   return {
     id: company.id,

@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User } from '../app/types';
 import { authService } from '../services/api';
+import { applyAuthHeader, clearPersistedAuthSession, publishLogoutSyncEvent } from '../auth/authSession';
+import { resolveGtOneBase } from '../utils/apiBase';
 
 interface LoginPayload {
   email?: string;
@@ -20,6 +22,8 @@ interface AuthStore {
   refresh: () => Promise<boolean>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
+  setUser: (user: User | null) => void;
+  setIsAuthenticated: (isAuthenticated: boolean) => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -37,21 +41,16 @@ export const useAuthStore = create<AuthStore>()(
           const res = await authService.login(payload);
           const { token, refreshToken, user } = res.data.data;
 
-          // The backend now also sets the SSO cookie (httpOnly) automatically.
-          // We still persist token + user in localStorage for offline-resilience.
+          applyAuthHeader(token || null);
           set({ user, token, refreshToken, isAuthenticated: true, isLoading: false });
 
-          // ── SSO redirect support ─────────────────────────────────────────
-          // If the user was sent here from another app (e.g. HRMS), redirect back.
           const params = new URLSearchParams(window.location.search);
           const redirectTo = params.get('redirect');
           if (redirectTo) {
-            // Brief timeout lets the store persist before navigating away
             setTimeout(() => {
               window.location.href = decodeURIComponent(redirectTo);
             }, 100);
           }
-          // ─────────────────────────────────────────────────────────────────
 
           return { success: true };
         } catch (e: any) {
@@ -70,10 +69,11 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const res = await authService.refresh(rt);
           const { token, refreshToken, user } = res.data.data;
-          // The backend also rotates the SSO cookie on refresh
+          applyAuthHeader(token || null);
           set({ token, refreshToken, user, isAuthenticated: true });
           return true;
         } catch {
+          applyAuthHeader(null);
           set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
           return false;
         }
@@ -81,10 +81,12 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: () => {
         const rt = get().refreshToken;
-        // Fire-and-forget: server clears refresh token record AND SSO cookie
-        authService.logout(rt).catch(() => { });
-        sessionStorage.removeItem('overdue_popup_shown');
+        Promise.resolve(authService.logout(rt)).catch(() => {});
+        clearPersistedAuthSession();
+        publishLogoutSyncEvent();
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
+        const gtOneBase = resolveGtOneBase();
+        window.location.href = `${gtOneBase}/logout?redirect=${encodeURIComponent(`${gtOneBase}/login`)}`;
       },
 
       updateUser: (updates) => {
@@ -93,9 +95,13 @@ export const useAuthStore = create<AuthStore>()(
           set({ user: { ...current, ...updates } });
         }
       },
+
+      setUser: (user) => set({ user }),
+      setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
     }),
     {
       name: 'flowboard-auth',
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         user: state.user,
         token: state.token,

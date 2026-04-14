@@ -7,7 +7,7 @@ export async function register(req, res, next) {
     const result = await AuthService.register({ name, email, password, workspaceName: workspace });
 
     // Set SSO cookie so the new user is immediately SSO-authenticated
-    setSSOCookie(res, result.accessToken);
+    setSSOCookie(res, result.ssoAccessToken || result.accessToken);
 
     return res.status(201).json({
       success: true,
@@ -28,7 +28,7 @@ export async function login(req, res, next) {
     const result = await AuthService.login({ email, companyCode, employeeCode, password });
 
     // ─── SSO: set the cross-domain HTTP-only cookie ───────────────────────────
-    setSSOCookie(res, result.accessToken);
+    setSSOCookie(res, result.ssoAccessToken || result.accessToken);
     // ──────────────────────────────────────────────────────────────────────────
 
     // Existing response shape is preserved — no breaking change for current frontend
@@ -55,7 +55,7 @@ export async function refresh(req, res, next) {
     });
 
     // Rotate the SSO cookie with the new access token
-    setSSOCookie(res, result.accessToken);
+    setSSOCookie(res, result.ssoAccessToken || result.accessToken);
 
     return res.status(200).json({
       success: true,
@@ -82,4 +82,9 @@ export async function logout(req, res, next) {
   } catch (e) {
     return next(e);
   }
+}
+
+export async function ssoLogout(_req, res) {
+  clearSSOCookie(res);
+  return res.status(200).json({ success: true, data: { ok: true } });
 }

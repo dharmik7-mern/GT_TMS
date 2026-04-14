@@ -5,8 +5,8 @@ export const DEFAULT_WORKSPACE_PERMISSIONS = {
     super_admin: true,
     admin: true,
     manager: true,
-    team_leader: false,
-    team_member: false,
+    team_leader: true,
+    team_member: true,
   },
   editOtherProjects: {
     super_admin: true,

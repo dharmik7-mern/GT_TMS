@@ -13,6 +13,22 @@ const AUTOMATION_STATE = {
   isRunning: false,
 };
 
+function safeConsoleLog(...args) {
+  try {
+    console.log(...args);
+  } catch {
+    // Ignore detached stdout pipe failures.
+  }
+}
+
+function safeConsoleError(...args) {
+  try {
+    console.error(...args);
+  } catch {
+    // Ignore detached stderr pipe failures.
+  }
+}
+
 function asObjectId(value) {
   if (!value) return null;
   try {
@@ -624,7 +640,7 @@ export async function runAutomationSweep(date = new Date()) {
 
 export function startReportAutomationScheduler() {
   if (String(process.env.REPORT_AUTOMATION_DISABLED || '').trim() === 'true') {
-    console.log('Report automation scheduler disabled by environment.');
+    safeConsoleLog('Report automation scheduler disabled by environment.');
     return;
   }
   if (AUTOMATION_STATE.timer) {
@@ -635,16 +651,16 @@ export function startReportAutomationScheduler() {
     try {
       const result = await runAutomationSweep(new Date());
       if (!result.skipped) {
-        console.log('Report automation sweep complete.', result.results?.length || 0);
+        safeConsoleLog('Report automation sweep complete.', result.results?.length || 0);
       }
     } catch (error) {
-      console.error('Report automation sweep failed:', error?.message || error);
+      safeConsoleError('Report automation sweep failed:', error?.message || error);
     }
   };
 
   AUTOMATION_STATE.timer = setInterval(run, AUTOMATION_INTERVAL_MS);
   void run();
-  console.log(`Report automation scheduler started. Interval: ${AUTOMATION_INTERVAL_MS}ms`);
+  safeConsoleLog(`Report automation scheduler started. Interval: ${AUTOMATION_INTERVAL_MS}ms`);
 }
 
 export function stopReportAutomationScheduler() {

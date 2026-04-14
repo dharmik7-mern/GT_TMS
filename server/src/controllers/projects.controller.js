@@ -1,6 +1,7 @@
 import * as ProjectService from '../services/project.service.js';
 import fs from 'fs';
 import path from 'path';
+import { getTenantModels } from '../config/tenantDb.js';
 
 const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-e243b9.log');
 function fileAgentLog(payload) {
@@ -32,6 +33,21 @@ export async function list(req, res, next) {
   }
 }
 
+export async function listWithTasks(req, res, next) {
+  try {
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const projects = await ProjectService.listProjectsWithTasks({
+      companyId,
+      workspaceId,
+      userId,
+      role
+    });
+    return res.status(200).json({ success: true, data: projects });
+  } catch (e) {
+    return next(e);
+  }
+}
+
 export async function get(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
@@ -46,12 +62,43 @@ export async function get(req, res, next) {
 export async function create(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
+    let resolvedWorkspaceId = workspaceId;
+    let resolvedWorkspace = null;
+
+    if (!resolvedWorkspaceId) {
+      const { Membership, Workspace } = await getTenantModels(companyId);
+      const membership = await Membership.findOne({ tenantId: companyId, userId, status: 'active' }).sort({ createdAt: 1 }).select('workspaceId').lean();
+      resolvedWorkspaceId = membership ? String(membership.workspaceId) : null;
+
+      if (!resolvedWorkspaceId) {
+        resolvedWorkspace = await Workspace.findOne({ tenantId: companyId }).sort({ createdAt: 1 }).select('_id').lean();
+        resolvedWorkspaceId = resolvedWorkspace ? String(resolvedWorkspace._id) : null;
+      }
+
+      if (resolvedWorkspaceId) {
+        await Membership.updateOne(
+          { tenantId: companyId, workspaceId: resolvedWorkspaceId, userId },
+          { $set: { tenantId: companyId, workspaceId: resolvedWorkspaceId, userId, role, status: 'active' } },
+          { upsert: true }
+        );
+      }
+    }
+
+    if (!resolvedWorkspaceId) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'NO_WORKSPACE',
+          message: 'No active workspace found for this user.',
+        },
+      });
+    }
 
     // #region agent log
-    fileAgentLog({ sessionId: 'e243b9', runId: 'pre-fix', hypothesisId: 'H3', location: 'server/src/controllers/projects.controller.js:create', message: 'Project create called', data: { companyId: String(companyId), workspaceId: String(workspaceId), userId: String(userId), name: req.body?.name, hasMembers: Array.isArray(req.body?.members), membersCount: Array.isArray(req.body?.members) ? req.body.members.length : undefined }, timestamp: Date.now() });
+    fileAgentLog({ sessionId: 'e243b9', runId: 'pre-fix', hypothesisId: 'H3', location: 'server/src/controllers/projects.controller.js:create', message: 'Project create called', data: { companyId: String(companyId), workspaceId: String(resolvedWorkspaceId), userId: String(userId), name: req.body?.name, hasMembers: Array.isArray(req.body?.members), membersCount: Array.isArray(req.body?.members) ? req.body.members.length : undefined }, timestamp: Date.now() });
     // #endregion
 
-    const project = await ProjectService.createProject({ companyId, workspaceId, userId, role, data: req.body });
+    const project = await ProjectService.createProject({ companyId, workspaceId: resolvedWorkspaceId, userId, role, data: req.body });
     return res.status(201).json({ success: true, data: project });
   } catch (e) {
     // #region agent log
@@ -126,4 +173,3 @@ export async function upsertSubcategories(req, res, next) {
     return next(e);
   }
 }
-

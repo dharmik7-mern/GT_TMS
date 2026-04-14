@@ -116,12 +116,28 @@ app.use((req, _res, next) => {
 });
 
 // ─── Rate limiting ────────────────────────────────────────────────────────
-app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 10000, // Increased for development
-  })
-);
+const shouldEnableRateLimit =
+  process.env.RATE_LIMIT_ENABLED === 'true' ||
+  (process.env.RATE_LIMIT_ENABLED !== 'false' && process.env.NODE_ENV === 'production');
+
+if (shouldEnableRateLimit) {
+  app.use(
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: process.env.NODE_ENV === 'production' ? 1000 : 10000,
+      skip: (req) => {
+        const path = String(req.path || '');
+        const originalUrl = String(req.originalUrl || '');
+        // SSO/session bootstrap endpoints must never be throttled, otherwise login loop can deadlock.
+        if (path.startsWith('/api/auth/') || originalUrl.startsWith('/api/auth/')) {
+          return true;
+        }
+        if (path === '/me' || path === '/me/permissions') return true;
+        return false;
+      },
+    })
+  );
+}
 
 // ─── Health checks ───────────────────────────────────────────────────────
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
@@ -188,9 +204,25 @@ export default app;
  */
 function parseCorsOrigins() {
   const raw = process.env.CORS_ORIGIN || '';
-  if (!raw.trim()) return ['*'];
-  return raw
+  if (!raw.trim()) {
+    if (process.env.NODE_ENV === 'production') return [];
+    return [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
+      'http://127.0.0.1:3000',
+    ];
+  }
+  const parsed = raw
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
+  const expanded = new Set(parsed);
+  for (const origin of parsed) {
+    expanded.add(origin.replace('http://localhost:', 'http://127.0.0.1:'));
+    expanded.add(origin.replace('http://127.0.0.1:', 'http://localhost:'));
+  }
+  return Array.from(expanded);
 }

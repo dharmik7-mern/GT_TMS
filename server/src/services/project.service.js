@@ -254,6 +254,41 @@ export async function listProjects({ companyId, workspaceId, userId, role, statu
   return { items, total, page, limit };
 }
 
+export async function listProjectsWithTasks({ companyId, workspaceId, userId, role }) {
+  const { Project, Task } = await getTenantModels(companyId);
+  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const filter = { tenantId: companyId, workspaceId, ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })) };
+
+  const projects = await Project.find(filter).sort({ createdAt: -1 }).lean();
+  if (!projects.length) return [];
+
+  const projectIds = projects.map((p) => p._id);
+  const tasks = await Task.find({
+    tenantId: companyId,
+    workspaceId,
+    projectId: { $in: projectIds },
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+  })
+    .populate('assigneeIds', 'name avatar color fontColor')
+    .populate('reporterId', 'name avatar color fontColor')
+    .populate('labels')
+    .sort({ projectId: 1, order: 1 })
+    .lean();
+
+  const tasksByProject = new Map();
+  tasks.forEach((task) => {
+    const pid = String(task.projectId);
+    if (!tasksByProject.has(pid)) tasksByProject.set(pid, []);
+    tasksByProject.get(pid).push(task);
+  });
+
+  return projects.map((project) => ({
+    ...project,
+    id: String(project._id),
+    tasks: tasksByProject.get(String(project._id)) || [],
+  }));
+}
+
 export async function getProject({ companyId, workspaceId, projectId, userId, role }) {
   const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
@@ -507,6 +542,30 @@ export async function createProject({ companyId, workspaceId, userId, role, data
       userId: String(userId),
       message: error?.message,
     });
+  }
+
+  // #region agent log
+  fileAgentLog({ sessionId: 'e243b9', runId: 'pre-fix', hypothesisId: 'H3', location: 'server/src/services/project.service.js:createProject', message: 'Project created in DB', data: { tenantId: String(tenantId), workspaceId: String(workspaceId), ownerId: String(userId), projectId: String(project?._id), membersCount: Array.isArray(project?.members) ? project.members.length : undefined }, timestamp: Date.now() });
+  // #endregion
+
+  try {
+    await ActivityLog.create({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'project_created',
+      description: `Created project "${project.name}"`,
+      entityType: 'project',
+      entityId: project._id,
+      metadata: { projectId: project._id },
+    });
+  } catch (error) {
+    logger.error('project_activity_log_failed', {
+      projectId: String(project._id),
+      userId: String(userId),
+      message: error?.message,
+    });
+    // Activity logging is best-effort only. Project creation should still succeed.
   }
 
   return project;
@@ -807,4 +866,3 @@ export async function importProjectsBulk({ companyId, workspaceId, userId, actor
     failures,
   };
 }
-

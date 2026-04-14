@@ -1,4 +1,4 @@
-export type Role = 'super_admin' | 'admin' | 'manager' | 'team_leader' | 'team_member';
+export type Role = 'super_admin' | 'company_admin' | 'admin' | 'manager' | 'team_leader' | 'team_member';
 
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus =
@@ -183,6 +183,7 @@ export interface TaskCreationRequest {
 
 export interface User {
   id: string;
+  companyId?: string;
   employeeId?: string;
   name: string;
   email: string;

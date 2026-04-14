@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Sidebar } from '../components/Sidebar';
 import { MobileSidebar } from '../components/MobileSidebar';
@@ -7,13 +7,10 @@ import { Topbar } from '../components/Topbar';
 import { useAppStore } from '../context/appStore';
 import { cn } from '../utils/helpers';
 import MobileNav from '../components/MobileNav';
-import { useAuthStore } from '../context/authStore.ts';
-import { AdminChatSidebar } from '../pages/calendar/admin/components/AdminChatSidebar.tsx';
-import { usersService } from '../services/api';
 
 export const AppLayout: React.FC = () => {
+  const location = useLocation();
   const { sidebarCollapsed, darkMode, bootstrap } = useAppStore();
-  const { user, updateUser, logout } = useAuthStore();
 
   useEffect(() => {
     if (darkMode) {
@@ -26,19 +23,6 @@ export const AppLayout: React.FC = () => {
   useEffect(() => {
     bootstrap().catch(() => {});
   }, [bootstrap]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    usersService.me()
-      .then((res) => {
-        const freshUser = res.data?.data ?? res.data;
-        if (freshUser) updateUser(freshUser);
-      })
-      .catch(() => {
-        logout();
-      });
-  }, [user?.id, updateUser, logout]);
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
@@ -62,7 +46,6 @@ export const AppLayout: React.FC = () => {
         </motion.div>
       </main>
       <MobileNav />
-      {user && <AdminChatSidebar />}
     </div>
   );
 };

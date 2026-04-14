@@ -3,15 +3,31 @@ import AuthLookup from '../models/AuthLookup.js';
 import { buildTenantDatabaseName, getTenantModels } from '../config/tenantDb.js';
 import { hashPassword } from '../utils/password.js';
 import { formatGeneratedId, getCompanyIdConfig } from '../services/settings.service.js';
+import { normalizeOrganizationId, resolveOrganizationId } from '../utils/organizationId.js';
 
 async function reserveOrganizationId() {
   const config = await getCompanyIdConfig();
   let nextSequence = config.nextSequence;
   let organizationId = formatGeneratedId(config, nextSequence);
 
+  if (!normalizeOrganizationId(organizationId)) {
+    const err = new Error(
+      '[seed] Failed to generate organizationId from system settings. Configure idGeneration.company settings or set DEFAULT_ORGANIZATION_ID in .env.'
+    );
+    err.code = 'SEED_MISSING_ORGANIZATION_ID';
+    throw err;
+  }
+
   while (await Company.exists({ organizationId })) {
     nextSequence += 1;
     organizationId = formatGeneratedId(config, nextSequence);
+    if (!normalizeOrganizationId(organizationId)) {
+      const err = new Error(
+        '[seed] Failed to generate next organizationId from system settings. Configure idGeneration.company settings or set DEFAULT_ORGANIZATION_ID in .env.'
+      );
+      err.code = 'SEED_MISSING_ORGANIZATION_ID';
+      throw err;
+    }
   }
 
   return organizationId;
@@ -38,7 +54,18 @@ export async function ensureBootstrapSuperAdmin() {
 
   let company = await Company.findOne({ email: superAdminEmail });
   if (!company) {
-    const organizationId = await reserveOrganizationId();
+    const resolved = await resolveOrganizationId({
+      envOrganizationId: process.env.DEFAULT_ORGANIZATION_ID,
+      contextLabel: 'ensureBootstrapSuperAdmin',
+      forCreate: true,
+      contactEmail: superAdminEmail,
+      failOnMissing: false,
+    });
+    const organizationId = resolved.organizationId;
+    if (!organizationId) {
+      return;
+    }
+
     company = await Company.create({
       organizationId,
       name: workspaceName,
@@ -335,7 +362,20 @@ export async function ensureDevSeed() {
 
   let company = await Company.findOne({ email: superAdminEmail });
   if (!company) {
-    const organizationId = await reserveOrganizationId();
+    const resolved = await resolveOrganizationId({
+      envOrganizationId: process.env.DEFAULT_ORGANIZATION_ID,
+      contextLabel: 'ensureDevSeed',
+      forCreate: true,
+      contactEmail: superAdminEmail,
+      failOnMissing: false,
+      // Keep generated fallback for dev seed backward compatibility.
+      getGeneratedOrganizationId: reserveOrganizationId,
+    });
+    const organizationId = resolved.organizationId;
+    if (!organizationId) {
+      return;
+    }
+
     company = await Company.create({
       organizationId,
       name: 'Gitakshmi Technologies',
@@ -345,13 +385,6 @@ export async function ensureDevSeed() {
       color: '#3366ff',
     });
   }
-
-  await dedupeUsersForEmail({
-    User,
-    companyId: company._id,
-    email: superAdminEmail,
-    keepUserId: superAdmin._id,
-  });
 
   await AuthLookup.updateOne(
     { email: superAdminEmail },

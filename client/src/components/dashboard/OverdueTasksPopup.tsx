@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, X, ExternalLink, Calendar } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { tasksService } from '../../services/api';
 import { useAuthStore } from '../../context/authStore';
 
@@ -15,11 +15,15 @@ interface OverdueTask {
 export const OverdueTasksPopup: React.FC = () => {
   const [tasks, setTasks] = useState<OverdueTask[]>([]);
   const [show, setShow] = useState(false);
-  const { user } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
-    if (!user) return;
+    const isPublicPath = ['/login', '/forgot-password', '/reset-password', '/unauthorized', '/access-denied'].some((path) =>
+      location.pathname.startsWith(path)
+    );
+    if (!user || !isAuthenticated || isPublicPath) return;
 
     // Only show once per session for this user
     const sessionKey = `overdue_popup_shown_${user.id}`;
@@ -28,20 +32,24 @@ export const OverdueTasksPopup: React.FC = () => {
 
     const fetchOverdue = async () => {
       try {
+<<<<<<< HEAD
+        const res = await tasksService.getOverdue({ suppressErrorToast: true });
+=======
         const res = await tasksService.getOverdue();
         console.log('[OverduePopup] Fetched tasks:', res.data?.count);
+>>>>>>> main
         if (res.data?.success && res.data.count > 0) {
           setTasks(res.data.tasks || []);
           setShow(true);
           sessionStorage.setItem(sessionKey, 'true');
         }
-      } catch (err) {
-        console.error('Failed to fetch overdue tasks:', err);
+      } catch {
+        setTasks([]);
       }
     };
 
     fetchOverdue();
-  }, [user]);
+  }, [user, isAuthenticated, location.pathname]);
 
   if (!show || tasks.length === 0) return null;
 

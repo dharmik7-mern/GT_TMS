@@ -14,14 +14,9 @@
 
 import { useEffect, useRef } from 'react';
 import { useAuthStore } from '../context/authStore';
+import { resolveSsoMeUrl } from '../utils/apiBase';
 
-const SSO_ME_URL = (() => {
-  // In dev the frontend runs on :5173 and the backend on :5000
-  const apiBase = import.meta.env.VITE_API_URL || '/api/v1';
-  // /api/auth is mounted at root level (not versioned), so derive base
-  const base = apiBase.replace(/\/api\/v1\/?$/, '');
-  return `${base}/api/auth/me`;
-})();
+const SSO_ME_URL = resolveSsoMeUrl();
 
 export function useSSO() {
   const { isAuthenticated, user, token, login: _login, ...store } = useAuthStore();

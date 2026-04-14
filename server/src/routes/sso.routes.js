@@ -10,6 +10,11 @@ const router = express.Router();
  * Returns the logged-in user's identity or { user: null } with 401.
  */
 router.get('/me', SSOController.me);
+router.get('/sso/me', SSOController.me);
+router.get('/me/permissions', SSOController.mePermissions);
+router.get('/callback', SSOController.ssoCallback);
+router.post('/callback', SSOController.ssoCallback);
+router.post('/logout-sync', SSOController.ssoLogoutSync);
 
 /**
  * POST /api/auth/sso-logout

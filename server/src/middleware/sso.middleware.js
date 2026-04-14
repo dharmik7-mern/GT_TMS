@@ -1,18 +1,18 @@
-import { verifyAccessToken } from '../utils/jwt.js';
+import { verifySsoToken } from '../utils/jwt.js';
+import { normalizeRole } from '../utils/roles.js';
+import { authErrorPayload, classifyJwtFailure, logAuthFailure } from '../utils/authFailure.js';
+
+const SHARED_SSO_COOKIE_NAME = 'sso_token';
+const LOCAL_SSO_COOKIE_NAME = 'tms_sso_token';
 
 /**
  * SSO-aware auth middleware.
- * Accepts token from:
- *   1. HTTP-only cookie  `sso_token`  (set by login for cross-domain SSO)
- *   2. Authorization header `Bearer <token>` (existing mobile / API clients)
- *
- * On success: attaches decoded payload to req.auth (same shape as requireAuth)
- * On failure: returns 401
+ * Reads JWT from the local TMS cookie first, then falls back to the shared GT ONE cookie.
  */
 export function requireAuthSSO(req, res, next) {
   // 1. Try cookie first (SSO path)
-  const cookieToken = req.cookies?.sso_token;
-  // 2. Fallback to Authorization header (existing clients)
+  const cookieToken = req.cookies?.[SHARED_SSO_COOKIE_NAME] || req.cookies?.[LOCAL_SSO_COOKIE_NAME] || req.cookies?.token || req.cookies?.access_token;
+  // 2. Fallback to Authorization header
   const headerAuth = req.headers.authorization || '';
   const [scheme, headerToken] = headerAuth.split(' ');
   const bearerToken = scheme === 'Bearer' ? headerToken : null;
@@ -20,31 +20,32 @@ export function requireAuthSSO(req, res, next) {
   const token = cookieToken || bearerToken;
 
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      error: { code: 'UNAUTHORIZED', message: 'Missing access token' },
-    });
+    const reason = 'no_token';
+    const message = 'Missing access token';
+    logAuthFailure(req, { reason, message, statusCode: 401 });
+    return res.status(401).json(authErrorPayload({ statusCode: 401, reason, message }));
   }
 
   try {
-    const decoded = verifyAccessToken(token);
-    req.auth = decoded;
+    const decoded = verifySsoToken(token);
+    req.auth = {
+      ...decoded,
+      role: normalizeRole(decoded.role),
+    };
     return next();
-  } catch {
-    return res.status(401).json({
-      success: false,
-      error: { code: 'UNAUTHORIZED', message: 'Invalid or expired access token' },
-    });
+  } catch (error) {
+    const reason = classifyJwtFailure(error);
+    const message = reason === 'token_expired' ? 'Access token expired' : 'Invalid access token';
+    logAuthFailure(req, { reason, message, statusCode: 401 });
+    return res.status(401).json(authErrorPayload({ statusCode: 401, reason, message }));
   }
 }
 
 /**
  * Optional SSO check — does NOT block the request.
- * Attaches req.auth if a valid token is present, otherwise continues.
- * Use on public routes that benefit from knowing the caller's identity.
  */
 export function optionalAuthSSO(req, _res, next) {
-  const cookieToken = req.cookies?.sso_token;
+  const cookieToken = req.cookies?.[SHARED_SSO_COOKIE_NAME] || req.cookies?.[LOCAL_SSO_COOKIE_NAME] || req.cookies?.token || req.cookies?.access_token;
   const headerAuth = req.headers.authorization || '';
   const [scheme, headerToken] = headerAuth.split(' ');
   const bearerToken = scheme === 'Bearer' ? headerToken : null;
@@ -52,10 +53,17 @@ export function optionalAuthSSO(req, _res, next) {
 
   if (token) {
     try {
-      req.auth = verifyAccessToken(token);
+      const decoded = verifySsoToken(token);
+      req.auth = {
+        ...decoded,
+        role: normalizeRole(decoded.role),
+      };
     } catch {
-      // ignore — req.auth stays undefined
+      // ignore
     }
   }
   return next();
 }
+
+
+

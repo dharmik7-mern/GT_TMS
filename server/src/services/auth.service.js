@@ -3,7 +3,7 @@ import AuthLookup from '../models/AuthLookup.js';
 import { buildTenantDatabaseName, getTenantModels } from '../config/tenantDb.js';
 
 import { hashPassword, verifyPassword } from '../utils/password.js';
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
+import { signAccessToken, signRefreshToken, signSsoToken, verifyRefreshToken } from '../utils/jwt.js';
 import { sha256 } from '../utils/crypto.js';
 import { assertPasswordAllowed, formatGeneratedId, getCompanyIdConfig, getInfrastructureSettings, getSecuritySettings } from './settings.service.js';
 
@@ -47,13 +47,14 @@ function parseTtlToMs(ttl) {
   return value * (multipliers[unit] || (24 * 60 * 60 * 1000));
 }
 
-function toAuthUser(user, workspaceId) {
+function toAuthUser(user, workspaceId, companyId) {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     avatar: user.avatar,
     role: user.role,
+    companyId: companyId ? String(companyId) : '',
     jobTitle: user.jobTitle,
     bio: user.bio,
     department: user.department,
@@ -285,6 +286,16 @@ async function issueTokens({ userId, companyId, workspaceId, rotatedFromHash = n
     workspaceId: String(workspaceId),
     role: user.role,
     name: user.name,
+    email: user.email || null,
+  });
+  const ssoAccessToken = signSsoToken({
+    sub: String(user._id),
+    companyId: String(tenantId),
+    tenantId: String(tenantId),
+    workspaceId: String(workspaceId),
+    role: user.role,
+    name: user.name,
+    email: user.email || null,
   });
 
   const refreshToken = signRefreshToken({
@@ -306,8 +317,9 @@ async function issueTokens({ userId, companyId, workspaceId, rotatedFromHash = n
 
   return {
     accessToken,
+    ssoAccessToken,
     refreshToken,
-    user: toAuthUser(user.toJSON(), workspaceId),
+    user: toAuthUser(user.toJSON(), workspaceId, tenantId),
   };
 }
 

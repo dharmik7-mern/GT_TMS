@@ -35,6 +35,13 @@ function normalizeSegment(value, fallback = 'tenant') {
   return (normalized || fallback).slice(0, 24);
 }
 
+function ensureLegacyOrganizationId(company) {
+  const current = String(company?.organizationId || '').trim();
+  if (current) return current;
+  const legacyFallback = `legacy_${String(company?._id || '').slice(-12) || Date.now()}`;
+  return legacyFallback.slice(0, 80);
+}
+
 export function buildTenantDatabaseName({ companyName, organizationId }) {
   const namePart = normalizeSegment(companyName, 'company');
   const orgPart = normalizeSegment(organizationId, 'org');
@@ -55,12 +62,14 @@ async function resolveTenantDatabaseName(companyId) {
     throw err;
   }
 
+  const ensuredOrganizationId = ensureLegacyOrganizationId(company);
   const databaseName = company.databaseName || buildTenantDatabaseName({
     companyName: company.name,
-    organizationId: company.organizationId,
+    organizationId: ensuredOrganizationId,
   });
 
-  if (company.databaseName !== databaseName) {
+  if (company.organizationId !== ensuredOrganizationId || company.databaseName !== databaseName) {
+    company.organizationId = ensuredOrganizationId;
     company.databaseName = databaseName;
     await company.save();
   }
