@@ -50,6 +50,7 @@ const createSchema = z.object({
   isPrivate: z.boolean().optional(),
   labels: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
+  repeatSchedule: z.string().optional(),
 }).superRefine((data, ctx) => {
   const assigneeCount = Array.isArray(data.assigneeIds)
     ? data.assigneeIds.filter(Boolean).length
@@ -80,6 +81,7 @@ const updateSchema = z.object({
   isPrivate: z.boolean().optional(),
   labels: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
+  repeatSchedule: z.string().optional(),
 }).superRefine((data, ctx) => {
   const touchedAssignees = data.assigneeIds !== undefined || data.assigneeId !== undefined;
   const assigneeCount = Array.isArray(data.assigneeIds)

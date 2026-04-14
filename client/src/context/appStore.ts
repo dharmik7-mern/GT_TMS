@@ -70,6 +70,7 @@ interface AppStore {
   addPersonalTask: (task: PersonalTask) => void;
   updatePersonalTask: (id: string, updates: Partial<PersonalTask>) => void;
   deletePersonalTask: (id: string) => void;
+  mergeTasks: (tasks: Task[]) => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -151,7 +152,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  addProject: (project) => set(s => ({ projects: [...s.projects, project] })),
+  addProject: (project) => set(s => ({ projects: [...s.projects, { ...project, id: project.id || (project as any)._id }] })),
   updateProject: (id, updates) => set(s => ({
     projects: s.projects.map(p => p.id === id ? { ...p, ...updates } : p),
   })),
@@ -160,17 +161,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
     tasks: s.tasks.filter(t => t.projectId !== id),
   })),
 
-  addTask: (task) => set(s => ({ tasks: [...s.tasks, task] })),
+  addTask: (task) => set(s => ({
+    tasks: [...s.tasks.filter(t => (t.id || (t as any)._id) !== (task.id || (task as any)._id)), {
+      ...task,
+      id: task.id || (task as any)._id,
+      projectId: typeof task.projectId === 'string' ? task.projectId : (task.projectId as any)?._id || (task.projectId as any)?.id
+    }]
+  })),
   updateTask: (id, updates) => set(s => ({
-    tasks: s.tasks.map(t => t.id === id ? { ...t, ...updates } : t),
+    tasks: s.tasks.map(t => t.id === id ? {
+      ...t,
+      ...updates,
+      projectId: updates.projectId
+        ? (typeof updates.projectId === 'string' ? updates.projectId : (updates.projectId as any)?._id || (updates.projectId as any)?.id)
+        : t.projectId
+    } : t),
   })),
   deleteTask: (id) => set(s => ({ tasks: s.tasks.filter(t => t.id !== id) })),
   moveTask: (taskId, newStatus) => set(s => ({
     tasks: s.tasks.map(t => t.id === taskId ? { ...t, status: newStatus, updatedAt: new Date().toISOString() } : t),
   })),
   reorderTasks: (projectId, status, tasks) => set(s => {
+    const normalizedTasks = tasks.map(t => ({
+      ...t,
+      id: t.id || (t as any)._id,
+      projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
+    }));
     const otherTasks = s.tasks.filter(t => !(t.projectId === projectId && t.status === status));
-    return { tasks: [...otherTasks, ...tasks] };
+    return { tasks: [...otherTasks, ...normalizedTasks] };
   }),
 
   addQuickTask: (task) => set(s => ({ quickTasks: [...s.quickTasks, task] })),
@@ -204,4 +222,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deletePersonalTask: (id) => set(s => ({
     personalTasks: s.personalTasks.filter(t => t.id !== id),
   })),
+  mergeTasks: (newTasks) => set(s => {
+    const taskMap = new Map(s.tasks.map(t => [t.id, t]));
+    newTasks.forEach(t => {
+      const normalized = {
+        ...t,
+        id: t.id || (t as any)._id,
+        projectId: typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id
+      };
+      // Always overwrite — incoming data from server is more up-to-date
+      taskMap.set(normalized.id, normalized);
+    });
+    return { tasks: Array.from(taskMap.values()) };
+  }),
 }));

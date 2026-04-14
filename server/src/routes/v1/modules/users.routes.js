@@ -85,10 +85,11 @@ router.put(
   ),
   UsersController.setPassword
 );
-router.delete('/:id', UsersController.remove);
-router.get('/', UsersController.list);
+router.get('/:id/pending-tasks', UsersController.pendingTasks);
+router.post('/:id/reassign-and-deactivate', UsersController.reassignAndDeactivate);
 router.get('/:id/performance', UsersController.performance);
 router.get('/:id', UsersController.get);
+router.get('/', UsersController.list);
 
 export default router;
 

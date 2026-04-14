@@ -138,6 +138,7 @@ export async function login({ email, companyCode, employeeCode, password }) {
     const normalizedEmail = email.trim().toLowerCase();
     const lookup = await AuthLookup.findOne({ email: normalizedEmail });
     if (!lookup) {
+      console.log(`[AuthService] Email not found in AuthLookup: ${normalizedEmail}`);
       const err = new Error('Invalid credentials');
       err.statusCode = 401;
       err.code = 'INVALID_CREDENTIALS';
@@ -153,6 +154,7 @@ export async function login({ email, companyCode, employeeCode, password }) {
     const company = await Company.findOne({ organizationId: normalizedCompanyCode }).select('_id');
 
     if (!company || !normalizedEmployeeCode) {
+      console.log(`[AuthService] Company/Employee not found: CC=${normalizedCompanyCode}, EC=${normalizedEmployeeCode}`);
       const err = new Error('Invalid credentials');
       err.statusCode = 401;
       err.code = 'INVALID_CREDENTIALS';
@@ -168,14 +170,20 @@ export async function login({ email, companyCode, employeeCode, password }) {
   }
 
   if (!user || !user.isActive) {
-    const err = new Error('Invalid credentials');
+    if (!user) {
+      console.log(`[AuthService] User not found in Tenant: ${lookup?.tenantId || 'Unknown'}`);
+    } else {
+      console.log(`[AuthService] Account disabled for user: ${user.email || user.employeeId}`);
+    }
+    const err = new Error(user && !user.isActive ? 'Your account is disabled. Contact admin.' : 'Invalid credentials');
     err.statusCode = 401;
-    err.code = 'INVALID_CREDENTIALS';
+    err.code = user && !user.isActive ? 'USER_DISABLED' : 'INVALID_CREDENTIALS';
     throw err;
   }
 
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
+    console.log(`[AuthService] Password mismatch. Received length: ${password?.length}, Hash starts with: ${user.passwordHash?.substring(0, 10)}... (User: ${user.email})`);
     const err = new Error('Invalid credentials');
     err.statusCode = 401;
     err.code = 'INVALID_CREDENTIALS';

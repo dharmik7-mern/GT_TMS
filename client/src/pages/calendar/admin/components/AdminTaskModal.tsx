@@ -27,35 +27,35 @@ const readParticipants = (tags: string[] | undefined) => {
 export const AdminTaskModal = () => {
     const { selectedTask, setSelectedTask, createTask, updateTask, deleteTask, addComment, uploadAttachment } =
         useAdminCalendarStore();
-    const { user }   = useAuthStore();
-    const { users }  = useAppStore();
+    const { user } = useAuthStore();
+    const { users } = useAppStore();
 
-    const isNew  = selectedTask === 'new';
-    const task   = isNew ? null : (selectedTask as AdminTask);
+    const isNew = selectedTask === 'new';
+    const task = isNew ? null : (selectedTask as AdminTask);
     const isOpen = selectedTask !== null;
 
     // ── form state ──────────────────────────────────────────────────────────
-    const [eventName,          setEventName]          = useState('');
-    const [notes,              setNotes]              = useState('');
-    const [priority,           setPriority]           = useState<AdminTask['priority']>('none');
-    const [status,             setStatus]             = useState<AdminTask['status']>('Pending');
-    const [startTime,          setStartTime]          = useState(startOfHour(addHours(new Date(), 1)));
-    const [endTime,            setEndTime]            = useState(addHours(startOfHour(addHours(new Date(), 1)), 1));
-    const [repeatEvent,        setRepeatEvent]        = useState(false);
-    const [createIn,           setCreateIn]           = useState('Marketing campaign');
-    const [eventType,          setEventType]          = useState('Meeting & Interview');
-    const [meetingProvider,    setMeetingProvider]    = useState('Google Meet');
-    const [participants,       setParticipants]       = useState<string[]>([]);
-    const [showParticipants,   setShowParticipants]   = useState(false);
-    const [commentText,        setCommentText]        = useState('');
-    const [pendingFiles,       setPendingFiles]       = useState<File[]>([]);
-    const [taskColor,          setTaskColor]          = useState('#4DA3FF');
+    const [eventName, setEventName] = useState('');
+    const [notes, setNotes] = useState('');
+    const [priority, setPriority] = useState<AdminTask['priority']>('none');
+    const [status, setStatus] = useState<AdminTask['status']>('Pending');
+    const [startTime, setStartTime] = useState(startOfHour(addHours(new Date(), 1)));
+    const [endTime, setEndTime] = useState(addHours(startOfHour(addHours(new Date(), 1)), 1));
+    const [repeatEvent, setRepeatEvent] = useState(false);
+    const [createIn, setCreateIn] = useState('Marketing campaign');
+    const [eventType, setEventType] = useState('Meeting & Interview');
+    const [meetingProvider, setMeetingProvider] = useState('Google Meet');
+    const [participants, setParticipants] = useState<string[]>([]);
+    const [showParticipants, setShowParticipants] = useState(false);
+    const [commentText, setCommentText] = useState('');
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const [taskColor, setTaskColor] = useState('#4DA3FF');
     const [recurrenceFrequency, setRecurrenceFrequency] = useState<any>('weekly');
 
     // ── reminder state ───────────────────────────────────────────────────────
     const [showReminderPicker, setShowReminderPicker] = useState(false);
-    const [reminderDate,       setReminderDate]       = useState('');
-    const [reminderTime,       setReminderTime]       = useState('');
+    const [reminderDate, setReminderDate] = useState('');
+    const [reminderTime, setReminderTime] = useState('');
 
     const reminderAt: Date | null = useMemo(() => {
         if (!reminderDate || !reminderTime) return null;
@@ -74,9 +74,9 @@ export const AdminTaskModal = () => {
     useEffect(() => {
         if (!isOpen) return;
         const defaultStart = task?.startDateTime ? new Date(task.startDateTime as any) : startOfHour(addHours(new Date(), 1));
-        const defaultEnd   = task?.endDateTime   ? new Date(task.endDateTime   as any) : addHours(defaultStart, 1);
-        const stored       = readParticipants(task?.tags);
-        const assigned     = task?.assignedUser  ? [task.assignedUser] : [];
+        const defaultEnd = task?.endDateTime ? new Date(task.endDateTime as any) : addHours(defaultStart, 1);
+        const stored = readParticipants(task?.tags);
+        const assigned = task?.assignedUser ? [task.assignedUser] : [];
 
         setEventName(task?.title || '');
         setNotes(task?.description || '');
@@ -112,15 +112,15 @@ export const AdminTaskModal = () => {
         if (endTime <= startTime) { emitErrorToast('End time must be after start time.', 'Invalid time range'); return; }
 
         const payload: Partial<AdminTask> & { participants?: string[]; reminderAt?: string } = {
-            title:        eventName.trim(),
-            description:  notes.trim(),
+            title: eventName.trim(),
+            description: notes.trim(),
             priority,
             status,
             assignedUser: participants[0] || user?.name || 'Admin',
             startDateTime: startTime.toISOString(),
-            endDateTime:   endTime.toISOString(),
-            color:        taskColor,
-            isRecurring:  repeatEvent,
+            endDateTime: endTime.toISOString(),
+            color: taskColor,
+            isRecurring: repeatEvent,
             recurrenceRule: repeatEvent ? { frequency: recurrenceFrequency, interval: 1 } : undefined,
             participants,                                       // ← stored on task
             reminderAt: reminderAt ? reminderAt.toISOString() : undefined,  // ← reminder
@@ -263,7 +263,7 @@ export const AdminTaskModal = () => {
                                     onChange={(e) => {
                                         const [y, m, d] = e.target.value.split('-').map(Number);
                                         const nextS = new Date(startTime); nextS.setFullYear(y, m - 1, d);
-                                        const nextE = new Date(endTime);   nextE.setFullYear(y, m - 1, d);
+                                        const nextE = new Date(endTime); nextE.setFullYear(y, m - 1, d);
                                         setStartTime(nextS); setEndTime(nextE);
                                     }}
                                     className="bg-transparent text-sm font-bold text-surface-900 dark:text-white outline-none cursor-pointer"
@@ -272,7 +272,7 @@ export const AdminTaskModal = () => {
                             <div className="flex items-center border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-800 p-1 font-bold text-sm text-surface-900 dark:text-white">
                                 <input type="time" value={format(startTime, 'HH:mm')} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); const n = new Date(startTime); n.setHours(h, m); setStartTime(n); }} className="bg-transparent px-2 py-1 outline-none cursor-pointer" />
                                 <span className="px-1 text-surface-300 dark:text-surface-600">-</span>
-                                <input type="time" value={format(endTime,   'HH:mm')} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); const n = new Date(endTime);   n.setHours(h, m); setEndTime(n);   }} className="bg-transparent px-2 py-1 outline-none cursor-pointer" />
+                                <input type="time" value={format(endTime, 'HH:mm')} onChange={(e) => { const [h, m] = e.target.value.split(':').map(Number); const n = new Date(endTime); n.setHours(h, m); setEndTime(n); }} className="bg-transparent px-2 py-1 outline-none cursor-pointer" />
                             </div>
                         </div>
 
@@ -349,8 +349,8 @@ export const AdminTaskModal = () => {
                         {/* Create In */}
                         <div>
                             <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 mb-2 ml-1">Create in</p>
-                            <Dropdown 
-                                value={createIn} 
+                            <Dropdown
+                                value={createIn}
                                 onChange={(val) => setCreateIn(val)}
                                 items={[
                                     { id: 'Marketing campaign', label: 'Marketing campaign' },
@@ -363,8 +363,8 @@ export const AdminTaskModal = () => {
                         {/* Type */}
                         <div>
                             <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 mb-2 ml-1">Type</p>
-                            <Dropdown 
-                                value={eventType} 
+                            <Dropdown
+                                value={eventType}
                                 onChange={(val) => setEventType(val)}
                                 items={[
                                     { id: 'Meeting & Interview', label: 'Meeting & Interview', icon: <div className="h-3 w-3 rounded-full bg-brand-500" /> },
@@ -377,14 +377,14 @@ export const AdminTaskModal = () => {
                         {/* Priority */}
                         <div>
                             <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 mb-2 ml-1">Priority</p>
-                            <Dropdown 
-                                value={priority} 
+                            <Dropdown
+                                value={priority}
                                 onChange={(val) => setPriority(val as any)}
                                 triggerClassName={cn(
-                                    priority === 'high'   ? "border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400" :
-                                    priority === 'medium' ? "border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
-                                    priority === 'low'    ? "border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" :
-                                    ""
+                                    priority === 'high' ? "border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400" :
+                                        priority === 'medium' ? "border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
+                                            priority === 'low' ? "border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" :
+                                                ""
                                 )}
                                 items={[
                                     { id: 'none', label: 'None', icon: <Flag size={14} className="text-surface-300 dark:text-surface-600" /> },

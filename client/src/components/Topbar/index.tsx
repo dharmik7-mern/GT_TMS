@@ -30,6 +30,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   'mis-reports': 'MIS Reports',
   'quick-tasks': 'Quick Tasks',
   'planner': 'Planner',
+  'create': 'Create Project',
 };
 
 export const Topbar: React.FC = () => {
@@ -42,11 +43,24 @@ export const Topbar: React.FC = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-   const { conversations } = useAdminChatStore();
-   const unread = unreadNotificationsCount();
-   const hasUnreadChat = conversations.some(c => (c.unreadCount || 0) > 0);
-   const searchRef = useRef<HTMLDivElement>(null);
-    const profileRef = useRef<HTMLDivElement>(null);
+  const { conversations, fetchConversations } = useAdminChatStore();
+  const unread = unreadNotificationsCount();
+  const hasUnreadChat = conversations.some(c => (c.unreadCount || 0) > 0);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Global unread polling for Chat Messenger
+  useEffect(() => {
+    if (user) {
+      fetchConversations(); // initial load
+      const interval = setInterval(() => {
+        if (!useAdminChatStore.getState().isOpen) {
+          fetchConversations();
+        }
+      }, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [user, fetchConversations]);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -80,9 +94,8 @@ export const Topbar: React.FC = () => {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 z-20 flex h-[60px] items-center gap-3 border-b border-surface-100 bg-white/88 px-4 backdrop-blur-xl transition-all duration-250 dark:border-surface-800 dark:bg-surface-950/88',
-        sidebarCollapsed ? 'md:left-16' : 'md:left-[260px]',
-        'left-0'
+        'fixed top-0 right-0 z-20 flex h-[60px] items-center gap-1 bg-surface-50/80 px-4 backdrop-blur-xl transition-all duration-250 dark:bg-surface-950/80',
+        sidebarCollapsed ? 'md:left-16' : 'md:left-[260px]'
       )}
     >
       {/* Page Title - Always Uppercase */}
@@ -153,40 +166,40 @@ export const Topbar: React.FC = () => {
           </div>
         )}
         {searchOpen && (
-        <div className="absolute left-0 right-0 top-full mt-2 md:hidden">
-          <div className="rounded-2xl border border-surface-200 bg-white p-2 shadow-lg dark:border-surface-700 dark:bg-surface-900">
-            <div className="flex items-center gap-2 rounded-xl bg-surface-50 px-3 py-2 dark:bg-surface-800">
-              <Search size={14} className="text-surface-400" />
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search projects, tasks, people..."
-                className="w-full bg-transparent text-sm text-surface-800 outline-none placeholder:text-surface-400 dark:text-white"
-              />
-            </div>
-            <div className="mt-2 max-h-64 overflow-y-auto">
-              {searchResults.length > 0 ? searchResults.map(result => (
-                <button
-                  key={`mobile-${result.type}-${result.id}`}
-                  onClick={() => { navigate(result.path); setSearchOpen(false); setSearchQuery(''); }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-surface-50 dark:hover:bg-surface-800"
-                >
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: result.color }}>
-                    {result.label[0]}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-surface-800 dark:text-surface-200">{result.label}</div>
-                    <div className="text-[11px] text-surface-500">{result.sub}</div>
-                  </div>
-                </button>
-              )) : searchQuery.length > 0 ? (
-                <div className="px-3 py-2 text-sm text-surface-500">No results for "{searchQuery}"</div>
-              ) : (
-                <div className="px-3 py-2 text-sm text-surface-500">Search your projects, tasks, and users</div>
-              )}
+          <div className="absolute left-0 right-0 top-full mt-2 md:hidden">
+            <div className="rounded-2xl border border-surface-200 bg-white p-2 shadow-lg dark:border-surface-700 dark:bg-surface-900">
+              <div className="flex items-center gap-2 rounded-xl bg-surface-50 px-3 py-2 dark:bg-surface-800">
+                <Search size={14} className="text-surface-400" />
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search projects, tasks, people..."
+                  className="w-full bg-transparent text-sm text-surface-800 outline-none placeholder:text-surface-400 dark:text-white"
+                />
+              </div>
+              <div className="mt-2 max-h-64 overflow-y-auto">
+                {searchResults.length > 0 ? searchResults.map(result => (
+                  <button
+                    key={`mobile-${result.type}-${result.id}`}
+                    onClick={() => { navigate(result.path); setSearchOpen(false); setSearchQuery(''); }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-surface-50 dark:hover:bg-surface-800"
+                  >
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: result.color }}>
+                      {result.label[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm text-surface-800 dark:text-surface-200">{result.label}</div>
+                      <div className="text-[11px] text-surface-500">{result.sub}</div>
+                    </div>
+                  </button>
+                )) : searchQuery.length > 0 ? (
+                  <div className="px-3 py-2 text-sm text-surface-500">No results for "{searchQuery}"</div>
+                ) : (
+                  <div className="px-3 py-2 text-sm text-surface-500">Search your projects, tasks, and users</div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
         )}
       </div>
 
@@ -201,16 +214,16 @@ export const Topbar: React.FC = () => {
 
       {/* Messenger Toggle */}
       {user && (
-         <button
-           onClick={() => useAdminChatStore.getState().toggleSidebar()}
-           className="btn-ghost btn-sm w-9 h-9 rounded-xl flex-shrink-0 relative group"
-           title="Messenger"
-         >
-           <MessageCircle size={17} className="group-hover:text-brand-500 transition-colors" />
-           {hasUnreadChat && (
-             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full ring-2 ring-white dark:ring-surface-900 animate-pulse" />
-           )}
-         </button>
+        <button
+          onClick={() => useAdminChatStore.getState().toggleSidebar()}
+          className="btn-ghost btn-sm w-9 h-9 rounded-xl flex-shrink-0 relative group"
+          title="Messenger"
+        >
+          <MessageCircle size={17} className="group-hover:text-brand-500 transition-colors" />
+          {hasUnreadChat && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent-rose rounded-full ring-2 ring-white dark:ring-surface-900" />
+          )}
+        </button>
       )}
 
       {/* Notifications */}

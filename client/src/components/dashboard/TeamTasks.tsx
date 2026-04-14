@@ -36,7 +36,7 @@ export const TeamTasks: React.FC<Props> = ({ tasks, loading, onRowClick }) => {
               <th className="px-3 py-2 font-semibold">Task</th>
               <th className="hidden px-3 py-2 font-semibold sm:table-cell">Project</th>
               <th className="hidden px-3 py-2 font-semibold md:table-cell">Type</th>
-              <th className="px-3 py-2 text-center font-semibold">Status</th>
+              <th className="px-1.5 py-2 text-center font-semibold">Status</th>
               <th className="hidden px-3 py-2 text-right font-semibold lg:table-cell">Due</th>
             </tr>
           </thead>
@@ -62,16 +62,16 @@ export const TeamTasks: React.FC<Props> = ({ tasks, loading, onRowClick }) => {
                 <td className="hidden px-3 py-2.5 capitalize text-surface-500 dark:text-surface-400 md:table-cell">
                   {task?.type || (task ? 'general' : '-')}
                 </td>
-                <td className="px-3 py-2.5 text-center">
+                <td className="px-1.5 py-2.5 text-center">
                   {task ? (
                     <span
                       className={cn(
-                        'rounded-[4px] border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                        'inline-block whitespace-nowrap rounded-[4px] border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                         task.status === 'in_progress' &&
                           'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-400',
                         (task.status === 'done' || task.status === 'completed') &&
                           'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400',
-                        (task.status === 'todo' || task.status === 'pending' || task.status === 'backlog') &&
+                        (task.status === 'todo' || task.status === 'pending') &&
                           'border-surface-200 bg-surface-100 text-surface-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-300'
                       )}
                     >

@@ -11,7 +11,7 @@ const subtaskSchema = new mongoose.Schema(
   { _id: true, timestamps: true }
 );
 
-const taskStatuses = ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'done'];
+const taskStatuses = ['todo', 'scheduled', 'in_progress', 'in_review', 'done'];
 const taskTypes = ['operational', 'design', 'important'];
 const reviewStatuses = ['pending', 'approved', 'changes_requested'];
 const timelineItemTypes = ['task', 'milestone'];
@@ -47,6 +47,7 @@ const taskSchema = new mongoose.Schema(
     color: { type: String, trim: true, maxlength: 32 },
     isRecurring: { type: Boolean, default: false },
     recurrenceRule: { type: Object, default: null }, // { frequency: 'daily' | 'weekly' | 'monthly', interval: number }
+    repeatSchedule: { type: String, default: "Don't Repeat" },
     estimatedHours: { type: Number, default: null, min: 0 },
     trackedHours: { type: Number, default: null, min: 0 },
     order: { type: Number, default: 0, index: true },
@@ -86,6 +87,31 @@ const taskSchema = new mongoose.Schema(
     isReassignPending: { type: Boolean, default: false, index: true },
     requestedAssigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reassignRequestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    isOverdue: { type: Boolean, default: false, index: true },
+    overdueSince: { type: Date, default: null },
+    extensionStatus: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },
+    latestExtensionReason: { type: String, trim: true, maxlength: 10000 },
+    latestRequestedDueDate: { type: Date, default: null },
+    statusHistory: [
+      {
+        status: { type: String, required: true },
+        startTime: { type: Date, required: true, default: Date.now },
+        endTime: { type: Date, default: null },
+      },
+    ],
+    timeLogs: [
+      {
+        status: { type: String, required: true },
+        startTime: { type: Date, required: true, default: Date.now },
+        endTime: { type: Date, default: null },
+        duration: { type: Number, default: 0 }, // in seconds
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      },
+    ],
+    timeAnalytics: {
+      totalTimeSpent: { type: Number, default: 0 }, // in seconds
+      inProgressTime: { type: Number, default: 0 }, // in seconds
+    },
   },
   { timestamps: true }
 );
@@ -110,7 +136,7 @@ function mapSubtasks(subs) {
       title: s.title,
       isCompleted: Boolean(s.isCompleted),
       order: s.order ?? 0,
-      assigneeId: s.assigneeId ? String(s.assigneeId) : undefined,
+      assigneeId: s.assigneeId ? String(s.assigneeId._id || s.assigneeId.id || s.assigneeId) : undefined,
       assignee,
       createdAt: s.createdAt?.toISOString?.() || undefined,
       updatedAt: s.updatedAt?.toISOString?.() || undefined,
@@ -128,25 +154,29 @@ function subtaskProgress(subs) {
 taskSchema.set('toJSON', {
   transform: (_doc, ret) => {
     ret.id = String(ret._id);
-    ret.projectId = String(ret.projectId);
+    // Handle both plain ObjectId and populated object {_id, name}
+    ret.projectId = ret.projectId && typeof ret.projectId === 'object' && !Buffer.isBuffer(ret.projectId)
+      ? String(ret.projectId._id || ret.projectId.id || ret.projectId)
+      : String(ret.projectId);
+
     ret.assigneeIds = Array.isArray(ret.assigneeIds)
       ? ret.assigneeIds.map((a) => {
-          if (!a) return undefined;
-          const id = typeof a === 'object' && a._id ? a._id : a;
-          return String(id);
-        }).filter(Boolean)
+        if (!a) return undefined;
+        const id = typeof a === 'object' ? (a._id || a.id || a) : a;
+        return String(id);
+      }).filter(Boolean)
       : [];
-    ret.reporterId = ret.reporterId ? String(ret.reporterId._id || ret.reporterId) : undefined;
+    ret.reporterId = ret.reporterId ? String(ret.reporterId._id || ret.reporterId.id || ret.reporterId) : undefined;
     ret.parentTaskId = ret.parentTaskId ? String(ret.parentTaskId) : undefined;
     ret.phaseId = ret.phaseId ? String(ret.phaseId) : undefined;
     ret.subcategoryId = ret.subcategoryId || undefined;
     ret.dependencies = Array.isArray(ret.dependencies) ? ret.dependencies.map((value) => String(value)) : [];
     ret.labels = Array.isArray(ret.labels)
       ? ret.labels.map((v) => {
-          if (!v) return undefined;
-          const id = typeof v === 'object' ? (v._id || v.id || v) : v;
-          return String(id);
-        }).filter(Boolean)
+        if (!v) return undefined;
+        const id = typeof v === 'object' ? (v._id || v.id || v) : v;
+        return String(id);
+      }).filter(Boolean)
       : [];
     const rawSubs = Array.isArray(_doc.subtasks) ? _doc.subtasks : [];
     ret.subtasks = mapSubtasks(rawSubs);
@@ -202,6 +232,30 @@ taskSchema.set('toJSON', {
     ret.isReassignPending = !!ret.isReassignPending;
     ret.requestedAssigneeId = ret.requestedAssigneeId ? String(ret.requestedAssigneeId) : undefined;
     ret.reassignRequestedBy = ret.reassignRequestedBy ? String(ret.reassignRequestedBy) : undefined;
+    ret.isOverdue = !!ret.isOverdue;
+    ret.overdueSince = ret.overdueSince ? new Date(ret.overdueSince).toISOString() : undefined;
+    ret.extensionStatus = ret.extensionStatus || 'none';
+    ret.latestExtensionReason = ret.latestExtensionReason || undefined;
+    ret.latestRequestedDueDate = ret.latestRequestedDueDate ? new Date(ret.latestRequestedDueDate).toISOString().split('T')[0] : undefined;
+    ret.statusHistory = Array.isArray(ret.statusHistory)
+      ? ret.statusHistory.map(h => ({
+          status: h.status,
+          startTime: h.startTime?.toISOString?.() || h.startTime,
+          endTime: h.endTime?.toISOString?.() || h.endTime,
+        }))
+      : [];
+    ret.timeLogs = Array.isArray(ret.timeLogs)
+      ? ret.timeLogs.map(l => ({
+          status: l.status,
+          startTime: l.startTime?.toISOString?.() || l.startTime,
+          endTime: l.endTime?.toISOString?.() || l.endTime,
+          duration: l.duration || 0,
+          userId: l.userId ? String(l.userId) : undefined,
+        }))
+      : [];
+    ret.repeatSchedule = ret.repeatSchedule || "Don't Repeat";
+    ret.totalTimeSpent = ret.timeAnalytics?.totalTimeSpent || 0;
+    ret.inProgressTime = ret.timeAnalytics?.inProgressTime || 0;
     delete ret._id;
     delete ret.__v;
     delete ret.tenantId;

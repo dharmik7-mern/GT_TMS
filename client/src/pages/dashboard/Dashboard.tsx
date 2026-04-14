@@ -6,7 +6,7 @@ import {
   FolderKanban, Building2, Activity
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { cn, formatDate, formatRelativeTime, getProgressColor, isDueDateOverdue } from '../../utils/helpers';
+import { cn, formatDate, formatRelativeTime, getProgressColor, isDueDateOverdue, isTaskOverdue } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
 import { useAppStore } from '../../context/appStore';
 import { companiesService, activityService } from '../../services/api';

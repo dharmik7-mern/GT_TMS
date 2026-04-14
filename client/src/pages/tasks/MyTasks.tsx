@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckSquare, Clock, AlertTriangle, Filter, SortAsc } from 'lucide-react';
+import { CheckSquare, Clock, AlertTriangle, Filter, SortAsc, X } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { ExtensionRequestModal } from '../../components/ExtensionRequestModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn, formatDate, isDueDateOverdue } from '../../utils/helpers';
 import { useAuthStore } from '../../context/authStore';
@@ -24,12 +26,14 @@ export const MyTasksPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
-  const { tasks, quickTasks, projects } = useAppStore();
+  const { tasks, quickTasks, projects, bootstrap } = useAppStore();
   const [filter, setFilter] = useState<typeof FILTERS[0]['value']>(() => {
     const incoming = searchParams.get('filter');
     return FILTERS.some((item) => item.value === incoming) ? incoming as typeof FILTERS[0]['value'] : 'all';
   });
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [isBulkExtensionOpen, setIsBulkExtensionOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const notificationTaskId = searchParams.get('taskId');
   const notificationTab = searchParams.get('tab') === 'activity' ? 'activity' : 'details';
@@ -173,6 +177,44 @@ export const MyTasksPage: React.FC = () => {
         <button className="btn-secondary btn-sm ml-auto text-xs"><SortAsc size={12} /> Sort</button>
       </div>
 
+      <AnimatePresence>
+        {selectedTaskIds.length > 0 && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 min-w-[320px]"
+          >
+            <div className="bg-surface-900 border border-surface-800 text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-6 ring-4 ring-brand-500/10">
+              <div className="flex items-center gap-3 ml-2">
+                 <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center font-bold text-sm">
+                   {selectedTaskIds.length}
+                 </div>
+                 <div>
+                   <p className="text-xs font-bold leading-tight underline decoration-brand-500 underline-offset-4">Tasks Selected</p>
+                   <p className="text-[10px] text-surface-400 font-medium">Ready for bulk action</p>
+                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsBulkExtensionOpen(true)}
+                  className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-2 shadow-lg shadow-brand-500/20"
+                >
+                  <Clock size={14} />
+                  Request Extension
+                </button>
+                <button 
+                  onClick={() => setSelectedTaskIds([])}
+                  className="p-2 hover:bg-surface-800 rounded-xl text-surface-400 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Project Tasks list */}
       {sorted.length === 0 && myQuickTasks.length === 0 ? (
         <EmptyState
@@ -266,7 +308,29 @@ export const MyTasksPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <TaskCard task={task} onClick={() => setSelectedTaskId(task.id)} />
+                    <div className="flex items-center gap-3">
+                      {(filter === 'overdue' || filter === 'all') && (
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTaskIds(prev => 
+                              prev.includes(task.id) ? prev.filter(id => id !== task.id) : [...prev, task.id]
+                            );
+                          }}
+                          className={cn(
+                            "w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center cursor-pointer flex-shrink-0 mt-2",
+                            selectedTaskIds.includes(task.id) 
+                              ? "bg-brand-500 border-brand-500 text-white" 
+                              : "border-surface-200 dark:border-surface-700 hover:border-brand-500/50"
+                          )}
+                        >
+                          {selectedTaskIds.includes(task.id) && <CheckSquare size={12} />}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <TaskCard task={task} onClick={() => setSelectedTaskId(task.id)} />
+                      </div>
+                    </div>
                   </motion.div>
                 );
               })}
@@ -288,6 +352,17 @@ export const MyTasksPage: React.FC = () => {
             nextParams.delete('tab');
             setSearchParams(nextParams, { replace: true });
           }
+        }}
+      />
+
+      <ExtensionRequestModal
+        open={isBulkExtensionOpen}
+        onClose={() => setIsBulkExtensionOpen(false)}
+        taskIds={selectedTaskIds}
+        taskTitles={tasks.filter(t => selectedTaskIds.includes(t.id)).map(t => t.title)}
+        onSubmitted={() => {
+          setSelectedTaskIds([]);
+          bootstrap();
         }}
       />
     </div>

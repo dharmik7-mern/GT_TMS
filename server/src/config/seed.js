@@ -131,9 +131,67 @@ export async function ensureBootstrapSuperAdmin() {
     });
   }
 
+  // Deduplicate primary bootstrap admin
+  await User.deleteMany({
+    _id: { $ne: superAdmin._id },
+    email: superAdminEmail,
+    tenantId: company._id
+  });
+
+  // Force update primary superAdmin password to match env
+  const primaryPasswordHash = await hashPassword(superAdminPassword);
+  await User.updateOne({ _id: superAdmin._id }, { $set: { passwordHash: primaryPasswordHash, isActive: true } });
+  console.log(`[Seed] Forced password reset and deduplication for primary admin: ${superAdminEmail}`);
+
   await Membership.updateOne(
     { tenantId: company._id, workspaceId: workspace._id, userId: superAdmin._id },
     { $set: { role: 'super_admin', status: 'active' } },
+    { upsert: true }
+  );
+
+  // Force drop the problematic index if it exists, to allow partial index creation
+  try {
+    const indexes = await User.collection.indexes();
+    if (indexes.some(idx => idx.name === 'tenantId_1_employeeId_1')) {
+      await User.collection.dropIndex('tenantId_1_employeeId_1');
+      console.log(`[Seed] Dropped problematic unique index for users to allow partial rebuild.`);
+    }
+  } catch (err) {
+    console.warn(`[Seed] Could not drop user index (might not exist):`, err.message);
+  }
+
+  // ─── Ensure User's specific account is also bootstrapped if needed ───────
+  const userEmail = 'ivaharpal@gmail.com';
+  let secondAdmin = await User.findOne({ tenantId: company._id, email: userEmail }).select('+passwordHash');
+  if (!secondAdmin) {
+    const passwordHash = await hashPassword(superAdminPassword);
+    secondAdmin = await User.create({
+      tenantId: company._id,
+      name: 'Iva Harpal',
+      email: userEmail,
+      passwordHash,
+      role: 'super_admin',
+      isActive: true,
+      color: '#3366ff',
+    });
+    console.log(`[Seed] Bootstrapped second admin: ${userEmail}`);
+  } else {
+    // Deduplicate secondary admin
+    await User.deleteMany({
+      _id: { $ne: secondAdmin._id },
+      email: userEmail,
+      tenantId: company._id
+    });
+    // Force update password and role
+    const passwordHash = await hashPassword(superAdminPassword);
+    await User.updateOne({ _id: secondAdmin._id }, { $set: { passwordHash, isActive: true, role: 'super_admin' } });
+    console.log(`[Seed] Forced password reset and deduplication for: ${userEmail}`);
+  }
+
+  // Ensure AuthLookup exists for them
+  await AuthLookup.updateOne(
+    { email: userEmail },
+    { $set: { email: userEmail, tenantId: company._id } },
     { upsert: true }
   );
 }

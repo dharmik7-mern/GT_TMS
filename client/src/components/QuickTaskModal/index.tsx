@@ -464,7 +464,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
               <label className="label mb-0">Files</label>
               <span className="text-xs text-surface-400">Optional</span>
             </div>
-            
+
             {(task?.attachments || []).length > 0 && (
               <div className="mb-4 space-y-2">
                 {task!.attachments!.map((att) => (
@@ -479,7 +479,7 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({ open, onClose, t
               </div>
             )}
 
-            <div 
+            <div
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
               onDrop={(e) => {
                 e.preventDefault();

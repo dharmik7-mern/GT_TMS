@@ -50,7 +50,7 @@ export const tasksService = {
 export const teamsService = {
   getAll: () => api.get('/teams'),
   getById: (id: string) => api.get(`/teams/${id}`),
-  create: (data: unknown) => api.post('/teams', data),
+  create: (data: unknown) => api.post('/teams', data, { idempotencyKey: createIdempotencyKey('team-create') }),
   update: (id: string, data: unknown) => api.put(`/teams/${id}`, data),
   delete: (id: string) => api.delete(`/teams/${id}`),
 };
@@ -119,7 +119,7 @@ export const timelineService = {
 export const personalTasksService = {
   getAll: () => api.get('/personal-tasks'),
   getStats: () => api.get('/personal-tasks/stats'),
-  create: (data: unknown) => api.post('/personal-tasks', data),
+  create: (data: unknown) => api.post('/personal-tasks', data, { idempotencyKey: createIdempotencyKey('personal-task-create') }),
   update: (id: string, data: unknown) => api.put(`/personal-tasks/${id}`, data),
   delete: (id: string) => api.delete(`/personal-tasks/${id}`),
 };

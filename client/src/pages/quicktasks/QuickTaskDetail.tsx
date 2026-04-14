@@ -211,8 +211,8 @@ export const QuickTaskDetailPage: React.FC = () => {
   const priority = PRIORITY_CONFIG[task.priority];
   const statusCfg =
     task.status === 'todo' ? STATUS_CONFIG.todo :
-    task.status === 'in_progress' ? STATUS_CONFIG.in_progress :
-    STATUS_CONFIG.done;
+      task.status === 'in_progress' ? STATUS_CONFIG.in_progress :
+        STATUS_CONFIG.done;
   const isOverdue = isDueDateOverdue(task.dueDate, task.status);
   const canEdit = Boolean(user);
   const isAssignee = Boolean(user && task.assigneeIds.includes(user.id));
@@ -254,13 +254,13 @@ export const QuickTaskDetailPage: React.FC = () => {
       await quickTasksService.addComment(task.id, { content });
       await bootstrap();
       setCommentText('');
-    } catch {}
+    } catch { }
   };
 
   const saveCompletionRemark = async () => {
     try {
       await syncQuickTask({ completionRemark: serializeChecklist(completionChecklist) });
-    } catch {}
+    } catch { }
   };
 
   const handleReview = async (action: 'approve' | 'changes_requested') => {
@@ -271,7 +271,7 @@ export const QuickTaskDetailPage: React.FC = () => {
         reviewRemark: serializeChecklist(reviewChecklist).trim() || undefined,
       });
       await bootstrap();
-    } catch {}
+    } catch { }
   };
 
   const updateChecklistItem = (

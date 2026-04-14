@@ -2,7 +2,6 @@ export type Role = 'super_admin' | 'company_admin' | 'admin' | 'manager' | 'team
 
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus =
-  | 'backlog'
   | 'todo'
   | 'scheduled'
   | 'in_progress'
@@ -413,7 +412,7 @@ export interface Task {
   phaseId?: string;
   subcategoryId?: string;
   dependencies?: string[];
-  type?: 'task' | 'milestone';
+  type?: 'task' | 'milestone' | 'quick' | 'project' | 'personal';
   /** Embedded checklist items (GW-style subtask bar) */
   subtasks?: TaskSubtask[];
   subtaskCompleted?: number;
@@ -432,9 +431,48 @@ export interface Task {
   isReassignPending?: boolean;
   requestedAssigneeId?: string;
   reassignRequestedBy?: string;
+  isOverdue?: boolean;
+  overdueSince?: string;
+  extensionStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  latestExtensionReason?: string;
+  latestRequestedDueDate?: string;
+  totalTime?: number;
+  timeByUser?: Array<{ userId: string; time: number }>;
+  timeByStage?: Array<{ stage: string; time: number }>;
+  totalTimeSpent?: number;
+  inProgressTime?: number;
+  statusHistory?: Array<{
+    status: string;
+    startTime: string;
+    endTime: string | null;
+  }>;
+  timeLogs?: Array<{
+    status: string;
+    startTime: string;
+    endTime: string | null;
+    duration: number;
+    userId?: string;
+  }>;
   order: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExtensionRequest {
+  id: string;
+  _id?: string;
+  userId: string;
+  taskIds: string[];
+  reason: string;
+  requestedDueDate: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewerId?: string;
+  reviewerComment?: string;
+  createdAt: string;
+  updatedAt: string;
+  tasks?: Array<{ id: string; title: string }>;
+  user?: Partial<User>;
+  reviewer?: Partial<User>;
 }
 
 export interface QuickTask {
@@ -533,6 +571,81 @@ export interface Activity {
   createdAt: string;
   metadata?: Record<string, unknown>;
 }
+
+export type TimelineActivityStatus = 'all' | 'created' | 'assigned' | 'completed' | 'updated';
+export type TimelineDensityMode = 'compact' | 'detailed';
+export type TimelineDateGroup = 'Today' | 'Yesterday' | 'Last Week' | 'Older';
+
+export interface ProjectTimelineActivity {
+  id: string;
+  type: string;
+  status: Exclude<TimelineActivityStatus, 'all'>;
+  description: string;
+  entityType: string;
+  entityId: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    color?: string;
+  } | null;
+}
+
+export interface ProjectTimelineTaskGroup {
+  taskId: string;
+  taskName: string;
+  taskStatus: string;
+  totalTime: number;
+  inProgressTime: number;
+  liveSessionStartedAt?: string | null;
+  liveStatus?: string | null;
+  activitiesCount: number;
+  latestActivityAt: string;
+  assignees: Array<{
+    id: string;
+    name: string;
+    email: string;
+    color?: string;
+    role: string;
+  }>;
+  stages: Array<{
+    status: string;
+    duration: number;
+  }>;
+  activities: ProjectTimelineActivity[];
+}
+
+export interface ProjectTimelineDateBucket {
+  dateGroup: TimelineDateGroup;
+  tasks: ProjectTimelineTaskGroup[];
+}
+
+export interface ProjectTimelineResponse {
+  groups: ProjectTimelineDateBucket[];
+  pagination: {
+    limit: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+    scannedCursor?: string | null;
+  };
+  summary: {
+    activities: number;
+    tasks: number;
+    totalTracked: number;
+    totalInProgress: number;
+  };
+  filters: {
+    appliedUserId: string | null;
+    appliedStatus: TimelineActivityStatus;
+    appliedQuery: string;
+    appliedStartDate: string | null;
+    appliedEndDate: string | null;
+  };
+}
+
 
 export interface KanbanColumn {
   id: TaskStatus;

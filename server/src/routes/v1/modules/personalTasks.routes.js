@@ -22,6 +22,7 @@ const personalTaskSchema = z.object({
   isPinned: z.boolean().optional(),
   order: z.number().optional(),
   completedAt: z.string().optional().nullable(),
+  repeatSchedule: z.string().optional(),
 });
 
 router.get('/', PersonalTasksController.list);

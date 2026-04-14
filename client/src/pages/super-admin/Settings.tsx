@@ -90,17 +90,17 @@ const EMAIL_TEMPLATE_ITEMS: Array<{
   label: string;
   description: string;
 }> = [
-  { key: 'welcomeMessage', label: 'Welcome Message', description: 'Sent when a new user should receive a welcome email.' },
-  { key: 'forgotPassword', label: 'Forgot Password', description: 'Used for password reset emails.' },
-  { key: 'loginAlert', label: 'Login Alert', description: 'Used for suspicious or tracked login alerts.' },
-  { key: 'paymentReceipt', label: 'Payment Receipt', description: 'Used for payment and invoice receipts.' },
-  { key: 'taskAssigned', label: 'Task Assigned', description: 'Sent when a project task is assigned to a user.' },
-  { key: 'quickTaskAssigned', label: 'Quick Task Assigned', description: 'Sent when a quick task is assigned to a user.' },
-  { key: 'taskDueToday', label: 'Task Due Today', description: 'Sent on the due date for open project tasks.' },
-  { key: 'quickTaskDueToday', label: 'Quick Task Due Today', description: 'Sent on the due date for open quick tasks.' },
-  { key: 'dailyWorkReport', label: 'Daily Work Report', description: 'Sent when the automated daily workforce report is generated.' },
-  { key: 'userCredentials', label: 'User Credentials', description: 'Sent when admin chooses to email new-user credentials.' },
-];
+    { key: 'welcomeMessage', label: 'Welcome Message', description: 'Sent when a new user should receive a welcome email.' },
+    { key: 'forgotPassword', label: 'Forgot Password', description: 'Used for password reset emails.' },
+    { key: 'loginAlert', label: 'Login Alert', description: 'Used for suspicious or tracked login alerts.' },
+    { key: 'paymentReceipt', label: 'Payment Receipt', description: 'Used for payment and invoice receipts.' },
+    { key: 'taskAssigned', label: 'Task Assigned', description: 'Sent when a project task is assigned to a user.' },
+    { key: 'quickTaskAssigned', label: 'Quick Task Assigned', description: 'Sent when a quick task is assigned to a user.' },
+    { key: 'taskDueToday', label: 'Task Due Today', description: 'Sent on the due date for open project tasks.' },
+    { key: 'quickTaskDueToday', label: 'Quick Task Due Today', description: 'Sent on the due date for open quick tasks.' },
+    { key: 'dailyWorkReport', label: 'Daily Work Report', description: 'Sent when the automated daily workforce report is generated.' },
+    { key: 'userCredentials', label: 'User Credentials', description: 'Sent when admin chooses to email new-user credentials.' },
+  ];
 
 const DEFAULT_SETTINGS: SystemSettingsState = {
   general: {

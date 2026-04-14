@@ -763,44 +763,44 @@ export const QuickTasksPage: React.FC = () => {
             <thead>
               <tr class="table-header">
                 ${[
-                  'Sr No',
-                  'Quick Task',
-                  'Description',
-                  'Priority',
-                  'Status',
-                  'Quick Task Date',
-                  'Created By',
-                  'Creator Employee ID',
-                  'Creator Department',
-                  'Creation Date',
-                  'Creation Time',
-                  'Assigned People',
-                  'Completed Date',
-                  'Completed Time',
-                  'Review Status',
-                  'Rating',
-                  'Reviewed Date',
-                  'Reviewed Time',
-                  'Completion Remark',
-                  'Review Remark',
-                  'Private Task',
-                  'Last Updated Date',
-                  'Last Updated Time',
-                ].map((heading) => `<th>${escapeExcelHtml(heading)}</th>`).join('')}
+        'Sr No',
+        'Quick Task',
+        'Description',
+        'Priority',
+        'Status',
+        'Quick Task Date',
+        'Created By',
+        'Creator Employee ID',
+        'Creator Department',
+        'Creation Date',
+        'Creation Time',
+        'Assigned People',
+        'Completed Date',
+        'Completed Time',
+        'Review Status',
+        'Rating',
+        'Reviewed Date',
+        'Reviewed Time',
+        'Completion Remark',
+        'Review Remark',
+        'Private Task',
+        'Last Updated Date',
+        'Last Updated Time',
+      ].map((heading) => `<th>${escapeExcelHtml(heading)}</th>`).join('')}
               </tr>
             </thead>
             <tbody>
               ${rows.map((row) => `
                 <tr>
                   ${row.map((cell, index) => {
-                    const cellClass = [
-                      index === 0 || index === 3 || index === 4 || index === 5 || index === 9 || index === 10 || index === 12 || index === 13 || index === 14 || index === 15 || index === 16 || index === 17 || index === 20 || index === 21 || index === 22
-                        ? 'center'
-                        : '',
-                      index === 18 || index === 19 ? 'wrap' : '',
-                    ].filter(Boolean).join(' ');
-                    return `<td class="${cellClass}">${escapeExcelHtml(cell)}</td>`;
-                  }).join('')}
+        const cellClass = [
+          index === 0 || index === 3 || index === 4 || index === 5 || index === 9 || index === 10 || index === 12 || index === 13 || index === 14 || index === 15 || index === 16 || index === 17 || index === 20 || index === 21 || index === 22
+            ? 'center'
+            : '',
+          index === 18 || index === 19 ? 'wrap' : '',
+        ].filter(Boolean).join(' ');
+        return `<td class="${cellClass}">${escapeExcelHtml(cell)}</td>`;
+      }).join('')}
                 </tr>
               `).join('')}
             </tbody>

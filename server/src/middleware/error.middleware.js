@@ -19,7 +19,7 @@ export function errorHandler(err, req, res, next) {
     method: req?.method,
   });
 
-  if (err?.message === 'CORS_NOT_ALLOWED') {
+  if (err?.code === 'CORS_NOT_ALLOWED' || err?.message === 'CORS_NOT_ALLOWED') {
     return res.status(403).json({
       success: false,
       error: { code: 'CORS_NOT_ALLOWED', message: 'CORS origin not allowed' },

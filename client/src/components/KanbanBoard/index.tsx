@@ -22,7 +22,6 @@ import { LabelManagementModal } from '../LabelManagementModal';
 import type { Task, TaskStatus } from '../../app/types';
 
 const BASE_COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
-  { id: 'backlog', title: 'Backlog', color: '#8896b8' },
   { id: 'todo', title: 'New task', color: '#5e72a0' },
   { id: 'scheduled', title: 'Scheduled', color: '#0ea5e9' },
   { id: 'in_progress', title: 'In Progress', color: '#3366ff' },
@@ -328,7 +327,10 @@ export const KanbanBoard = forwardRef<KanbanBoardHandle, KanbanBoardProps>(({
     }
   }));
 
-  const projectTasks = tasksOverride ?? (projectId ? storeTasks.filter((task) => task.projectId === projectId) : storeTasks);
+  const projectTasks = tasksOverride ?? (projectId ? storeTasks.filter((task) => {
+    const pid = typeof task.projectId === 'string' ? task.projectId : (task.projectId as any)?._id || (task.projectId as any)?.id;
+    return String(pid) === String(projectId);
+  }) : storeTasks);
 
   const allColumns = useMemo<BoardColumn[]>(
     () => [

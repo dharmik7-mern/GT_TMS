@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Company from '../models/Company.js';
 import { getTenantModels } from '../config/tenantDb.js';
 import { isTestEmailRecipient, sendTemplatedEmailSafe } from './mail.service.js';
+import { runOverdueTaskSweep } from './overdue.service.js';
 
 const AUTOMATION_INTERVAL_MS = Math.max(60_000, Number(process.env.REPORT_AUTOMATION_INTERVAL_MS || 15 * 60 * 1000));
 const REPORT_RECIPIENT_ROLES = new Set(['admin', 'manager', 'team_leader']);
@@ -609,6 +610,7 @@ export async function runAutomationSweep(date = new Date()) {
 
   AUTOMATION_STATE.isRunning = true;
   try {
+    await runOverdueTaskSweep(date);
     const companies = await Company.find({ status: { $ne: 'suspended' } }).select('_id').lean();
     const results = [];
 

@@ -119,17 +119,27 @@ export async function setPassword(req, res, next) {
   }
 }
 
-export async function remove(req, res, next) {
+export async function pendingTasks(req, res, next) {
+  try {
+    const { companyId } = req.auth;
+    const tasks = await UserService.getUserPendingTasks({ companyId, targetUserId: req.params.id });
+    return res.status(200).json({ success: true, data: tasks });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function reassignAndDeactivate(req, res, next) {
   try {
     const { companyId, role, sub: userId } = req.auth;
-    const user = await UserService.deleteUser({
+    const user = await UserService.reassignAndDisable({
       companyId,
       actorRole: role,
       userId,
       targetUserId: req.params.id,
+      mappings: req.body.mappings || [],
     });
-    if (!user) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
-    return res.status(200).json({ success: true, data: { ok: true } });
+    return res.status(200).json({ success: true, data: user });
   } catch (e) {
     return next(e);
   }

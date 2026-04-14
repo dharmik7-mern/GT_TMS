@@ -29,6 +29,7 @@ const personalTaskSchema = new mongoose.Schema(
     ],
     isPinned: { type: Boolean, default: false, index: true },
     completedAt: { type: Date, default: null },
+    repeatSchedule: { type: String, default: "Don't Repeat" },
     order: { type: Number, default: 0 },
   },
   { timestamps: true }
@@ -54,6 +55,7 @@ personalTaskSchema.set('toJSON', {
        order: s.order || 0
     })) : [];
 
+    ret.repeatSchedule = ret.repeatSchedule || "Don't Repeat";
     delete ret._id;
     delete ret.__v;
     return ret;

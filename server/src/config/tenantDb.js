@@ -20,6 +20,7 @@ import { getTaskCreationRequestModel } from '../models/TaskCreationRequest.js';
 import { getDailyWorkReportModel } from '../models/DailyWorkReport.js';
 import { getMISModel } from '../models/MIS.js';
 import { getLabelModel } from '../models/Label.js';
+import { getExtensionRequestModel } from '../models/ExtensionRequest.js';
 
 
 const TENANT_DB_PREFIX = process.env.TENANT_DB_PREFIX || 'GT_PMS';
@@ -119,6 +120,7 @@ export async function getTenantModels(companyId = null) {
     DailyWorkReport: getDailyWorkReportModel(conn),
     MIS: getMISModel(conn),
     Label: getLabelModel(conn),
+    ExtensionRequest: getExtensionRequestModel(conn),
   };
 }
 

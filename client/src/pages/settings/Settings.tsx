@@ -411,12 +411,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="page-header">
-        <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Manage your account and workspace preferences</p>
-      </div>
-
+    <div className="w-full">
       {message && <div className="mb-4 rounded-xl bg-surface-50 px-4 py-3 text-sm text-surface-600 dark:bg-surface-800/60">{message}</div>}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} items={visibleTabs} variant="underline">
@@ -606,83 +601,83 @@ export const SettingsPage: React.FC = () => {
         </TabsContent>
 
         {canManageWorkspaceSettings && (
-        <TabsContent value="workspace" className="pt-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="card p-5">
-              <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Workspace Settings</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="label">Workspace name</label>
-                  <input value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label">Workspace URL</label>
-                  <div className="flex items-center">
-                    <span className="flex h-10 items-center rounded-l-xl border border-r-0 border-surface-200 bg-surface-50 px-3 text-sm text-surface-400 dark:border-surface-700 dark:bg-surface-800">app.flowboard.io/</span>
-                    <input value={workspaceSlug} onChange={(e) => setWorkspaceSlug(e.target.value.toLowerCase())} className="input flex-1 rounded-l-none border-l-0" />
+          <TabsContent value="workspace" className="pt-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="card p-5">
+                <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Workspace Settings</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="label">Workspace name</label>
+                    <input value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} className="input" />
                   </div>
-                </div>
-                <div>
-                  <label className="label">Plan</label>
-                  <div className="flex items-center justify-between rounded-xl border border-surface-100 bg-surface-50 p-3 dark:border-surface-700 dark:bg-surface-800">
-                    <div>
-                      <p className="text-sm font-medium capitalize text-surface-800 dark:text-surface-200">{workspace.plan} Plan</p>
-                      <p className="text-xs text-surface-400">{workspace.membersCount} members</p>
-                    </div>
-                    <button className="btn-primary btn-sm" type="button">Upgrade</button>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-surface-100 bg-surface-50 p-4 dark:border-surface-700 dark:bg-surface-800">
-                  <h4 className="mb-3 text-sm font-semibold text-surface-800 dark:text-surface-200">Employee ID Format</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Prefix</label>
-                      <input value={employeeIdSettings.prefix} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, prefix: e.target.value }))} className="input" />
-                    </div>
-                    <div>
-                      <label className="label">Separator</label>
-                      <input value={employeeIdSettings.separator} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, separator: e.target.value }))} className="input" />
-                    </div>
-                    <div>
-                      <label className="label">Digits</label>
-                      <input type="number" min={1} max={8} value={employeeIdSettings.digits} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, digits: Number(e.target.value) || 4 }))} className="input" />
-                    </div>
-                    <div>
-                      <label className="label">Next Sequence</label>
-                      <input type="number" min={1} value={employeeIdSettings.nextSequence} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, nextSequence: Number(e.target.value) || 1 }))} className="input" />
+                  <div>
+                    <label className="label">Workspace URL</label>
+                    <div className="flex items-center">
+                      <span className="flex h-10 items-center rounded-l-xl border border-r-0 border-surface-200 bg-surface-50 px-3 text-sm text-surface-400 dark:border-surface-700 dark:bg-surface-800">app.flowboard.io/</span>
+                      <input value={workspaceSlug} onChange={(e) => setWorkspaceSlug(e.target.value.toLowerCase())} className="input flex-1 rounded-l-none border-l-0" />
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-surface-400">
-                    Preview: {employeeIdSettings.prefix}{employeeIdSettings.separator}{String(employeeIdSettings.nextSequence).padStart(employeeIdSettings.digits, '0')}
-                  </p>
-                </div>
-                <div className="flex justify-end pt-2">
-                  <button className="btn-primary btn-md" onClick={saveWorkspace} disabled={savingWorkspace}>
-                    {savingWorkspace ? 'Saving...' : <><Save size={15} /> Save</>}
-                  </button>
+                  <div>
+                    <label className="label">Plan</label>
+                    <div className="flex items-center justify-between rounded-xl border border-surface-100 bg-surface-50 p-3 dark:border-surface-700 dark:bg-surface-800">
+                      <div>
+                        <p className="text-sm font-medium capitalize text-surface-800 dark:text-surface-200">{workspace.plan} Plan</p>
+                        <p className="text-xs text-surface-400">{workspace.membersCount} members</p>
+                      </div>
+                      <button className="btn-primary btn-sm" type="button">Upgrade</button>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-surface-100 bg-surface-50 p-4 dark:border-surface-700 dark:bg-surface-800">
+                    <h4 className="mb-3 text-sm font-semibold text-surface-800 dark:text-surface-200">Employee ID Format</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Prefix</label>
+                        <input value={employeeIdSettings.prefix} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, prefix: e.target.value }))} className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Separator</label>
+                        <input value={employeeIdSettings.separator} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, separator: e.target.value }))} className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Digits</label>
+                        <input type="number" min={1} max={8} value={employeeIdSettings.digits} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, digits: Number(e.target.value) || 4 }))} className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Next Sequence</label>
+                        <input type="number" min={1} value={employeeIdSettings.nextSequence} onChange={(e) => setEmployeeIdSettings((prev) => ({ ...prev, nextSequence: Number(e.target.value) || 1 }))} className="input" />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-surface-400">
+                      Preview: {employeeIdSettings.prefix}{employeeIdSettings.separator}{String(employeeIdSettings.nextSequence).padStart(employeeIdSettings.digits, '0')}
+                    </p>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <button className="btn-primary btn-md" onClick={saveWorkspace} disabled={savingWorkspace}>
+                      {savingWorkspace ? 'Saving...' : <><Save size={15} /> Save</>}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="card p-5">
-              <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Danger Zone</h3>
-              <div className="space-y-3">
-                <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Export Data</p>
-                  <p className="mt-1 text-xs text-amber-600/80 dark:text-amber-400/80">Download all workspace data as a JSON export.</p>
-                  <button className="btn-secondary btn-sm mt-3" onClick={exportWorkspace} disabled={exportingWorkspace}>
-                    {exportingWorkspace ? 'Exporting...' : 'Export all data'}
-                  </button>
-                </div>
-                <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/50 dark:bg-rose-950/20">
-                  <p className="text-sm font-medium text-rose-800 dark:text-rose-300">Logout Current Session</p>
-                  <p className="mt-1 text-xs text-rose-600/80 dark:text-rose-400/80">Use this if you changed sensitive settings and want to sign in again.</p>
-                  <button className="btn-danger btn-sm mt-3" onClick={logout}>Logout</button>
+              <div className="card p-5">
+                <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Danger Zone</h3>
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Export Data</p>
+                    <p className="mt-1 text-xs text-amber-600/80 dark:text-amber-400/80">Download all workspace data as a JSON export.</p>
+                    <button className="btn-secondary btn-sm mt-3" onClick={exportWorkspace} disabled={exportingWorkspace}>
+                      {exportingWorkspace ? 'Exporting...' : 'Export all data'}
+                    </button>
+                  </div>
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/50 dark:bg-rose-950/20">
+                    <p className="text-sm font-medium text-rose-800 dark:text-rose-300">Logout Current Session</p>
+                    <p className="mt-1 text-xs text-rose-600/80 dark:text-rose-400/80">Use this if you changed sensitive settings and want to sign in again.</p>
+                    <button className="btn-danger btn-sm mt-3" onClick={logout}>Logout</button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </TabsContent>
+          </TabsContent>
         )}
 
         <TabsContent value="security" className="pt-6">
@@ -721,38 +716,38 @@ export const SettingsPage: React.FC = () => {
 
             <div className="space-y-4">
               {canManagePasswordPolicy && (
-              <div className="card p-5">
-                <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Organization Password Policy</h3>
-                <SettingRow
-                  label="Strong Passwords"
-                  description="Apply strong password rules only for users in this organization."
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!canManagePasswordPolicy || savingWorkspace) return;
-                      void persistWorkspaceStrongPasswordPolicy(!workspaceSecurity.strongPasswords);
-                    }}
-                    disabled={!canManagePasswordPolicy || savingWorkspace}
-                    aria-label="Toggle strong password policy"
-                    className={cn(
-                      'relative h-6 w-10 rounded-full transition-colors',
-                      workspaceSecurity.strongPasswords ? 'bg-brand-600' : 'bg-surface-200 dark:bg-surface-700',
-                      (!canManagePasswordPolicy || savingWorkspace) && 'cursor-not-allowed opacity-60'
-                    )}
+                <div className="card p-5">
+                  <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Organization Password Policy</h3>
+                  <SettingRow
+                    label="Strong Passwords"
+                    description="Apply strong password rules only for users in this organization."
                   >
-                    <span
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canManagePasswordPolicy || savingWorkspace) return;
+                        void persistWorkspaceStrongPasswordPolicy(!workspaceSecurity.strongPasswords);
+                      }}
+                      disabled={!canManagePasswordPolicy || savingWorkspace}
+                      aria-label="Toggle strong password policy"
                       className={cn(
-                        'absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
-                        workspaceSecurity.strongPasswords ? 'left-5' : 'left-1'
+                        'relative h-6 w-10 rounded-full transition-colors',
+                        workspaceSecurity.strongPasswords ? 'bg-brand-600' : 'bg-surface-200 dark:bg-surface-700',
+                        (!canManagePasswordPolicy || savingWorkspace) && 'cursor-not-allowed opacity-60'
                       )}
-                    />
-                  </button>
-                </SettingRow>
-                <p className="mt-3 text-xs text-surface-400">
-                  When off, users in this organization still need at least 4 characters, but uppercase, number, and special-character requirements are removed.
-                </p>
-              </div>
+                    >
+                      <span
+                        className={cn(
+                          'absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+                          workspaceSecurity.strongPasswords ? 'left-5' : 'left-1'
+                        )}
+                      />
+                    </button>
+                  </SettingRow>
+                  <p className="mt-3 text-xs text-surface-400">
+                    When off, users in this organization still need at least 4 characters, but uppercase, number, and special-character requirements are removed.
+                  </p>
+                </div>
               )}
 
               <div className="card p-5">
@@ -779,7 +774,7 @@ export const SettingsPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="notifications" className="pt-6">
-          <div className="card max-w-2xl p-5">
+          <div className="card p-5">
             <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Notification Preferences</h3>
             <div>
               <p className="section-title mb-3">In-App Notifications</p>
@@ -820,7 +815,7 @@ export const SettingsPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="appearance" className="pt-6">
-          <div className="max-w-2xl space-y-6">
+          <div className="space-y-6">
             <div className="card p-5">
               <h3 className="mb-4 font-display font-semibold text-surface-900 dark:text-white">Theme</h3>
               <div className="grid grid-cols-3 gap-3">

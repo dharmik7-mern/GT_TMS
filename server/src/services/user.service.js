@@ -3,6 +3,7 @@ import { getTenantModels } from '../config/tenantDb.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { assertPasswordAllowed } from './settings.service.js';
 import { sendTemplatedEmailSafe } from './mail.service.js';
+import { getTaskActivityModel } from '../models/TaskActivity.js';
 
 function asDate(value) {
   if (!value) return null;
@@ -534,29 +535,112 @@ export async function setUserPassword({ companyId, actorRole, actorUserId, targe
   return true;
 }
 
-export async function deleteUser({ companyId, actorRole, userId, targetUserId }) {
+export async function getUserPendingTasks({ companyId, targetUserId }) {
+  const { Task, Project } = await getTenantModels(companyId);
+  const tasks = await Task.find({
+    tenantId: companyId,
+    assigneeIds: targetUserId,
+    status: { $ne: 'done' },
+  }).populate('projectId', 'name color').lean();
+
+  return tasks.map(t => ({
+    id: String(t._id),
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    projectId: String(t.projectId?._id || t.projectId),
+    projectName: t.projectId?.name || 'Unknown Project',
+  }));
+}
+
+export async function reassignAndDisable({ companyId, actorRole, userId, targetUserId, mappings }) {
   const tenantId = companyId;
-  const { User, Membership } = await getTenantModels(companyId);
+  const { User, Membership, Task } = await getTenantModels(companyId);
+  const TaskActivity = getTaskActivityModel(tenantId);
+
   if (!['super_admin', 'admin'].includes(actorRole)) {
-    const err = new Error('Only company admins can delete users');
+    const err = new Error('Only company admins can disable users');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
     throw err;
   }
 
   if (String(userId) === String(targetUserId)) {
-    const err = new Error('You cannot delete your own account');
+    const err = new Error('You cannot disable your own account');
     err.statusCode = 400;
-    err.code = 'SELF_DELETE_BLOCKED';
+    err.code = 'SELF_DISABLE_BLOCKED';
     throw err;
   }
 
-  const user = await User.findOneAndDelete({ _id: targetUserId, tenantId });
-  if (!user) return null;
+  const targetUser = await User.findOne({ _id: targetUserId, tenantId });
+  if (!targetUser) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
 
-  await Membership.deleteMany({ tenantId, userId: user._id });
-  await AuthLookup.deleteOne({ email: user.email });
-  return user;
+  // Handle reassignments
+  if (Array.isArray(mappings) && mappings.length > 0) {
+    for (const mapping of mappings) {
+      const { taskId, newAssigneeId } = mapping;
+      if (!taskId || !newAssigneeId) continue;
+
+      const task = await Task.findOne({ _id: taskId, tenantId });
+      if (!task) continue;
+
+      const newUser = await User.findById(newAssigneeId);
+      if (!newUser) continue;
+
+      const oldAssigneeIds = task.assigneeIds.map(id => String(id));
+      const nextAssigneeIds = oldAssigneeIds.filter(id => id !== String(targetUserId));
+      if (!nextAssigneeIds.includes(String(newAssigneeId))) {
+        nextAssigneeIds.push(String(newAssigneeId));
+      }
+
+      task.assigneeIds = nextAssigneeIds;
+      await task.save();
+
+      // Log activity (safe-wrapped to avoid blocking deactivation)
+      try {
+        await TaskActivity.create({
+          tenantId,
+          taskId: task._id,
+          userId,
+          action: 'ASSIGNEE_CHANGED',
+          oldValue: targetUser.name,
+          newValue: newUser.name,
+          message: `Task reassigned from ${targetUser.name} to ${newUser.name} due to user deactivation.`,
+        });
+      } catch (logErr) {
+        console.error('[reassignAndDisable] Logging failed:', logErr.message);
+      }
+    }
+  }
+
+  // Double check if any pending tasks remain
+  const remainingCount = await Task.countDocuments({
+    tenantId,
+    assigneeIds: targetUserId,
+    status: { $ne: 'done' },
+  });
+
+  if (remainingCount > 0) {
+    const err = new Error(`Cannot disable user. ${remainingCount} pending tasks remain unassigned.`);
+    err.statusCode = 400;
+    err.code = 'TASKS_REMAINING';
+    throw err;
+  }
+
+  // Final Disable
+  targetUser.isActive = false;
+  await targetUser.save();
+
+  await Membership.updateMany(
+    { tenantId, userId: targetUserId },
+    { $set: { status: 'disabled' } }
+  );
+
+  return targetUser;
 }
 
 export async function updateMe({ companyId, userId, updates }) {

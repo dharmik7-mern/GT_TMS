@@ -44,7 +44,13 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
-userSchema.index({ tenantId: 1, employeeId: 1 }, { unique: true, sparse: true });
+userSchema.index(
+  { tenantId: 1, employeeId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { employeeId: { $type: 'string' } }
+  }
+);
 
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {

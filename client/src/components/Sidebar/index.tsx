@@ -31,10 +31,10 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
-  { label: 'Report Management', icon: BarChart3, path: '/reports-management', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
-  { 
-    label: 'MIS', 
-    icon: BarChart3, 
+  // { label: 'Report Management', icon: BarChart3, path: '/reports-management', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
+  {
+    label: 'MIS',
+    icon: BarChart3,
     path: '/mis-entry',
     subItems: [
       { label: 'Entry', path: '/mis-entry' },
@@ -42,7 +42,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Reports', path: '/mis-reports', roles: ['super_admin', 'admin', 'manager'] },
     ]
   },
-  { label: 'Activity Logs', icon: Activity, path: '/logs', roles: ['super_admin', 'admin', 'manager', 'team_leader'] },
   // { label: 'Notifications', icon: Bell, path: '/notifications' },
 ];
 
@@ -55,10 +54,10 @@ const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Teams', icon: Users, path: '/teams' },
-  { label: 'Report Management', icon: BarChart3, path: '/reports-management' },
-  { 
-    label: 'MIS', 
-    icon: BarChart3, 
+  // { label: 'Report Management', icon: BarChart3, path: '/reports-management' },
+  {
+    label: 'MIS',
+    icon: BarChart3,
     path: '/mis-entry',
     subItems: [
       { label: 'Entry', path: '/mis-entry' },
@@ -66,7 +65,6 @@ const SUPER_ADMIN_NAV: NavItem[] = [
       { label: 'Reports', path: '/mis-reports' },
     ]
   },
-  { label: 'Activity Logs', icon: Activity, path: '/logs' },
   // { label: 'Notifications', icon: Bell, path: '/notifications' },
 ];
 
@@ -78,10 +76,10 @@ const PLATFORM_ADMIN_NAV: NavItem[] = [
   { label: 'Task Requests', icon: Hash, path: '/task-requests' },
   { label: 'Companies', icon: Building2, path: '/companies' },
   { label: 'Users List', icon: UserCircle, path: '/users' },
-  { label: 'Report Management', icon: Activity, path: '/reports-management' },
-  { 
-    label: 'MIS', 
-    icon: Zap, 
+  // { label: 'Report Management', icon: Activity, path: '/reports-management' },
+  {
+    label: 'MIS',
+    icon: Zap,
     path: '/mis-entry',
     subItems: [
       { label: 'Entry', path: '/mis-entry' },
@@ -90,7 +88,6 @@ const PLATFORM_ADMIN_NAV: NavItem[] = [
     ]
   },
   { label: 'Settings', icon: Settings, path: '/settings' },
-  { label: 'System Logs', icon: Briefcase, path: '/logs' },
   { label: 'Notifications', icon: Bell, path: '/notifications' },
 ];
 
@@ -332,7 +329,7 @@ export const Sidebar: React.FC = () => {
                               {sub.label}
                             </NavLink>
                           </div>
-                      ))}
+                        ))}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -627,7 +624,7 @@ export const Sidebar: React.FC = () => {
                 <p className="text-xs text-surface-400 truncate capitalize">{user.role.replace('_', ' ')}</p>
               </div>
             </div> */}
-            {/* <button
+        {/* <button
               type="button"
               onClick={logout}
               className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-surface-700 dark:text-surface-300 dark:hover:border-rose-900/50 dark:hover:bg-rose-950/20 dark:hover:text-rose-400"
@@ -636,7 +633,7 @@ export const Sidebar: React.FC = () => {
               <LogOut size={14} />
               Logout
             </button> */}
-          {/* </div>
+        {/* </div>
         )} */}
 
         {isCollapsed && user && (

@@ -8,7 +8,7 @@ import { getTenantModels } from '../config/tenantDb.js';
 export async function list(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const { projectId, assigneeId, status, priority, page, limit, labels, tags } = req.query;
+    const { projectId, assigneeId, status, priority, page, limit, labels, tags, reviewStatus } = req.query;
     const result = await TaskService.listTasks({
       companyId,
       workspaceId,
@@ -22,12 +22,36 @@ export async function list(req, res, next) {
       role,
       labels: labels ? (Array.isArray(labels) ? labels : labels.split(',')) : undefined,
       tags: tags ? (Array.isArray(tags) ? tags : tags.split(',')) : undefined,
+      reviewStatus,
     });
     return res.status(200).json({
       success: true,
       data: result.items,
       meta: { total: result.total, page: result.page, limit: result.limit },
     });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function getActivities(req, res, next) {
+  try {
+    const { companyId } = req.auth;
+    const taskId = req.params.id;
+    const result = await TaskService.listTaskActivities({ tenantId: companyId, taskId });
+    return res.status(200).json({ success: true, data: result });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function getTimeTracking(req, res, next) {
+  try {
+    const { companyId } = req.auth;
+    const taskId = req.params.id;
+    const { type } = req.query; // 'project' or 'quick'
+    const result = await TaskService.getTaskTimeTracking({ tenantId: companyId, taskId, type });
+    return res.status(200).json({ success: true, data: result });
   } catch (e) {
     return next(e);
   }
@@ -111,6 +135,11 @@ export async function create(req, res, next) {
     const task = await TaskService.createTask({ companyId, workspaceId, userId, role, data: req.body });
     return res.status(201).json({ success: true, data: task });
   } catch (e) {
+    console.error('[TasksController.create] failed', {
+      code: e?.code,
+      statusCode: e?.statusCode,
+      message: e?.message,
+    });
     return next(e);
   }
 }
@@ -333,11 +362,12 @@ export async function addComment(req, res, next) {
 
 export async function getOverdue(req, res, next) {
   try {
-    const { companyId, sub: userId, role } = req.auth;
-    const result = await TaskService.getOverdueTasks({ 
-      tenantId: companyId, 
-      userId, 
-      role 
+    const { companyId, workspaceId, sub: userId, role } = req.auth;
+    const result = await TaskService.getOverdueTasks({
+      tenantId: companyId,
+      workspaceId,
+      userId,
+      role
     });
     return res.status(200).json({ success: true, ...result });
   } catch (e) {

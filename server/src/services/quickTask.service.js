@@ -353,6 +353,11 @@ export async function createQuickTask({ companyId, workspaceId, userId, data, ro
     reporterId,
     dueDate: data.dueDate ? new Date(data.dueDate) : null,
     isPrivate,
+    repeatSchedule: data.repeatSchedule || "Don't Repeat",
+    isRecurring: data.repeatSchedule && data.repeatSchedule !== "Don't Repeat",
+    recurrenceRule: data.repeatSchedule === "Every Day" ? { frequency: 'daily', interval: 1 } :
+                    data.repeatSchedule === "Every Week" ? { frequency: 'weekly', interval: 1 } :
+                    data.repeatSchedule === "Every Month" ? { frequency: 'monthly', interval: 1 } : null,
     createdBy: reporterId,
     assignedTo: primaryAssigneeId,
   });
@@ -542,6 +547,22 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
     throw err;
   }
 
+  if (updates.repeatSchedule !== undefined) {
+    if (updates.repeatSchedule === "Don't Repeat") {
+      updates.isRecurring = false;
+      updates.recurrenceRule = null;
+    } else if (updates.repeatSchedule === "Every Day") {
+      updates.isRecurring = true;
+      updates.recurrenceRule = { frequency: 'daily', interval: 1 };
+    } else if (updates.repeatSchedule === "Every Week") {
+      updates.isRecurring = true;
+      updates.recurrenceRule = { frequency: 'weekly', interval: 1 };
+    } else if (updates.repeatSchedule === "Every Month") {
+      updates.isRecurring = true;
+      updates.recurrenceRule = { frequency: 'monthly', interval: 1 };
+    }
+  }
+
   const $set = {
     ...updates,
     ...(updates.dueDate !== undefined ? { dueDate: updates.dueDate ? new Date(updates.dueDate) : null } : {}),
@@ -684,6 +705,25 @@ export async function updateQuickTask({ companyId, workspaceId, userId, role, id
   }
 
   const newlyAssigned = afterAssignees.filter((assigneeId) => !beforeAssignees.includes(assigneeId));
+  
+  if (updates.repeatSchedule && updates.repeatSchedule !== existing.repeatSchedule && updates.repeatSchedule !== "Don't Repeat") {
+    const notifyIds = afterAssignees.filter(id => id !== strId(userId));
+    if (notifyIds.length > 0) {
+      await Notification.insertMany(
+        notifyIds.map((assigneeId) => ({
+          tenantId,
+          workspaceId,
+          userId: assigneeId,
+          type: 'task_updated',
+          title: 'Quick task repetition updated',
+          message: `"${quickTask.title}" repetition set to ${updates.repeatSchedule}`,
+          isRead: false,
+          relatedId: String(quickTask._id),
+        }))
+      );
+    }
+  }
+
   if (newlyAssigned.length) {
     await Notification.insertMany(
       newlyAssigned.map((assigneeId) => ({

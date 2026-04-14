@@ -1,130 +1,43 @@
 import mongoose from 'mongoose';
 import { getTenantModels } from '../config/tenantDb.js';
+import { listTasks } from '../services/task.service.js';
 
 export async function getOverview(req, res, next) {
   try {
     const { companyId, workspaceId, sub: userId, role } = req.auth;
-    const { Task, QuickTask, Team, Project } = await getTenantModels(companyId);
+    const { QuickTask, Team, Project } = await getTenantModels(companyId);
 
     if (!companyId || !workspaceId) {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    const baseFilter = {
-      tenantId: new mongoose.Types.ObjectId(companyId),
-      workspaceId: new mongoose.Types.ObjectId(workspaceId),
-      status: 'in_progress'
-    };
+    const { Task } = await getTenantModels(companyId);
 
-    const isAdminOrManager = ['super_admin', 'admin', 'owner', 'workspace_admin', 'system_admin'].includes(role);
-    const uid = new mongoose.Types.ObjectId(userId);
-    let visibilityIds = [uid];
+    // Fetch tasks that are in progress across all projects
+    const tasks = await Task.find({
+      tenantId: companyId,
+      workspaceId,
+      status: 'in_progress',
+      $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }]
+    })
+    .sort({ createdAt: -1 })
+    .populate('assigneeIds', 'name avatar')
+    .populate('projectId', 'name')
+    .limit(10)
+    .lean();
 
-    if (role === 'team_leader') {
-      const ledTeams = await Team.find({
-        workspaceId: new mongoose.Types.ObjectId(workspaceId),
-        $or: [
-          { leaderId: uid },
-          { leaderIds: uid }
-        ]
-      }).select('members').lean();
-
-      ledTeams.forEach(team => {
-        if (team.members && Array.isArray(team.members)) {
-          team.members.forEach(m => {
-            if (m && !visibilityIds.some(vid => String(vid) === String(m))) {
-              visibilityIds.push(new mongoose.Types.ObjectId(m));
-            }
-          });
-        }
-      });
-    }
-
-    // Projects where user is a reporting person
-    const reportingProjects = await Project.find({
-      workspaceId: new mongoose.Types.ObjectId(workspaceId),
-      reportingPersonIds: uid
-    }).select('_id').lean();
-    const reportingProjectIds = reportingProjects.map(p => p._id);
-
-    const filter = { ...baseFilter };
-    if (!isAdminOrManager) {
-      const orConditions = [
-        { assigneeIds: { $in: visibilityIds } },
-        { reporterId: { $in: visibilityIds } },
-        { createdBy: { $in: visibilityIds } }
-      ];
-
-      if (reportingProjectIds.length > 0) {
-        orConditions.push({ projectId: { $in: reportingProjectIds } });
-      }
-      
-      filter.$or = orConditions;
-    }
-
-    const tasks = await Task.find(filter)
-      .populate('assigneeIds', 'name avatar')
-      .populate('reporterId', 'name avatar')
-      .populate('projectId', 'name')
-      .sort({ dueDate: 1 })
-      .lean();
-
-    const qtFilter = { ...filter };
-    if (isAdminOrManager && role === 'manager') {
-      const privacyOr = [
-        { isPrivate: false },
-        { isPrivate: { $exists: false } },
-        { assigneeIds: uid },
-        { createdBy: uid },
-        { reporterId: uid }
-      ];
-      if (qtFilter.$or) {
-        const involvedOr = qtFilter.$or;
-        delete qtFilter.$or;
-        qtFilter.$and = [{ $or: involvedOr }, { $or: privacyOr }];
-      } else {
-        qtFilter.$or = privacyOr;
-      }
-    }
-
-    const quickTasks = await QuickTask.find(qtFilter)
-      .populate('assigneeIds', 'name avatar')
-      .populate('reporterId', 'name avatar')
-      .sort({ dueDate: 1 })
-      .lean();
-
-    const merged = [
-      ...tasks.map(t => ({
-        id: t._id,
-        title: t.title,
-        assignedTo: t.assigneeIds?.[0]?.name || 'Unassigned',
-        assigneeAvatar: t.assigneeIds?.[0]?.avatar || '',
-        projectId: t.projectId?._id || null,
-        projectName: t.projectId?.name || '-',
-        type: 'project',
-        status: t.status,
-        priority: t.priority,
-        dueDate: t.dueDate
-      })),
-      ...quickTasks.map(qt => ({
-        id: qt._id,
-        title: qt.title,
-        assignedTo: qt.assigneeIds?.[0]?.name || 'Unassigned',
-        assigneeAvatar: qt.assigneeIds?.[0]?.avatar || '',
-        projectId: null,
-        projectName: '-',
-        type: 'quick',
-        status: qt.status,
-        priority: qt.priority,
-        dueDate: qt.dueDate
-      }))
-    ];
-
-    merged.sort((a, b) => {
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate) - new Date(b.dueDate);
-    });
+    const merged = tasks.map((t) => ({
+      id: t._id,
+      title: t.title,
+      assignedTo: t.assigneeIds?.[0]?.name || 'Unassigned',
+      assigneeAvatar: t.assigneeIds?.[0]?.avatar || '',
+      projectId: t.projectId?._id || t.projectId || null,
+      projectName: t.projectId?.name || '-',
+      type: 'project',
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.dueDate,
+    }));
 
     return res.status(200).json({ success: true, data: merged.slice(0, 7) });
   } catch (err) {
@@ -177,7 +90,14 @@ export async function getAllTasks(req, res, next) {
     }).select('_id').lean();
     const reportingProjectIds = reportingProjects.map(p => p._id);
 
+    // Filter out archived projects
+    const archivedProjects = await Project.find({ workspaceId: new mongoose.Types.ObjectId(workspaceId), status: 'archived' }).select('_id').lean();
+    const archivedIds = archivedProjects.map(p => p._id);
+
     const taskFilter = { ...baseFilter };
+    if (archivedIds.length > 0) {
+      taskFilter.projectId = { $nin: archivedIds };
+    }
     if (!isAdminOrManager) {
       const orConditions = [
         { assigneeIds: { $in: visibilityIds } },
@@ -193,6 +113,7 @@ export async function getAllTasks(req, res, next) {
     }
 
     const tasks = await Task.find(taskFilter)
+      .select('title status priority dueDate estimatedHours projectId assigneeIds reporterId createdAt')
       .populate('assigneeIds', 'name avatar')
       .populate('reporterId', 'name avatar')
       .populate('projectId', 'name')
@@ -225,12 +146,14 @@ export async function getAllTasks(req, res, next) {
     }
 
     const quickTasks = await QuickTask.find(qtBaseFilter)
+      .select('title status priority dueDate estimatedHours assigneeIds reporterId createdAt')
       .populate('assigneeIds', 'name avatar')
       .populate('reporterId', 'name avatar')
       .sort({ createdAt: -1 })
       .lean();
 
     const personalTasks = await PersonalTask.find({ userId: uid })
+      .select('title status priority dueDate createdAt')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -250,9 +173,6 @@ export async function getAllTasks(req, res, next) {
       priority: t.priority,
       dueDate: t.dueDate,
       estimatedHours: t.estimatedHours ?? undefined,
-      subtasks: t.subtasks || [],
-      attachments: t.attachments || [],
-      description: t.description || '',
     }));
 
     const mappedQuickTasks = quickTasks.map(qt => ({
@@ -271,8 +191,6 @@ export async function getAllTasks(req, res, next) {
       priority: qt.priority,
       dueDate: qt.dueDate,
       estimatedHours: qt.estimatedHours ?? undefined,
-      attachments: qt.attachments || [],
-      description: qt.description || '',
     }));
 
     const mappedPersonalTasks = personalTasks.map(pt => ({

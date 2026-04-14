@@ -84,11 +84,14 @@ app.use(
       if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(new Error(`CORS: origin ${origin} not allowed`));
+      const err = new Error(`CORS: origin ${origin} not allowed`);
+      err.code = 'CORS_NOT_ALLOWED';
+      err.statusCode = 403;
+      return callback(err);
     },
     credentials: true, // ← required for cookies to be sent cross-origin
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-HTTP-Method-Override'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-HTTP-Method-Override', 'Idempotency-Key'],
     exposedHeaders: ['Set-Cookie'],
   })
 );

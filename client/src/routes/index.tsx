@@ -1,5 +1,4 @@
 import React from 'react';
-import Error500Page from '../pages/errors/Error500Page';
 import NotFound404 from '../pages/errors/NotFound404';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
@@ -23,7 +22,7 @@ import ProjectTodoPage from '../pages/projects/ProjectTodoPage';
 import CalendarPage from '../pages/calendar/Calendar';
 import TeamsPage from '../pages/teams/Teams';
 import ReportsPage from '../pages/reports/Reports';
-import ReportManagementPage from '../pages/reports/ReportManagement';
+// import ReportManagementPage from '../pages/reports/ReportManagement';
 import QuickTasksPage from '../pages/quicktasks/QuickTasks';
 import QuickTaskDetailPage from '../pages/quicktasks/QuickTaskDetail';
 import MyTasksPage from '../pages/tasks/MyTasks';
@@ -52,7 +51,6 @@ import {
   RolesPermissions as SARoles,
   Notifications as SABroadcast,
   Settings as SASettings,
-  Logs as SALogs,
   Support as SASupport,
 } from '../pages/super-admin';
 
@@ -121,7 +119,7 @@ export const router = createBrowserRouter([
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'teams', element: <TeamsPage /> },
       { path: 'reports', element: <ReportsPage /> },
-      { path: 'reports-management', element: <ReportManagementPage /> },
+      // { path: 'reports-management', element: <ReportManagementPage /> },
       { path: 'mis-entry', element: <MISEntry /> },
       {
         path: 'mis-manager',
@@ -164,7 +162,6 @@ export const router = createBrowserRouter([
       { path: 'admin/permissions', element: <AdminPermissionsPage /> },
       { path: 'admin/billing', element: <AdminBillingPage /> },
       { path: 'planner', element: <PlannerPage /> },
-
     ],
   },
   {

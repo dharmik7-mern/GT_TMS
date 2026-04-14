@@ -17,6 +17,7 @@ import timelineRoutes from './modules/timeline.routes.js';
 import hrmsIntegrationRoutes from './modules/hrmsIntegration.routes.js';
 import labelsRoutes from './modules/labels.routes.js';
 import personalTasksRoutes from './modules/personalTasks.routes.js';
+import extensionRequestRoutes from './modules/extensionRequest.routes.js';
 import { requireAuth } from '../../middleware/auth.middleware.js';
 import * as TimelineController from '../../controllers/timeline.controller.js';
 
@@ -40,6 +41,7 @@ router.use('/reports', reportsRoutes);
 router.use('/timeline', timelineRoutes);
 router.use('/integrations/hrms', hrmsIntegrationRoutes);
 router.use('/personal-tasks', personalTasksRoutes);
+router.use('/extension-requests', extensionRequestRoutes);
 router.patch('/task/:id', requireAuth, TimelineController.patchTaskTimeline);
 router.post('/dependency', requireAuth, TimelineController.createDependency);
 

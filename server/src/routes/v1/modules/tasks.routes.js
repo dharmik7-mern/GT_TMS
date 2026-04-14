@@ -1,8 +1,11 @@
 import express from 'express';
 import multer from 'multer';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 
 import { requireAuth } from '../../../middleware/auth.middleware.js';
+import { enforceIdempotency } from '../../../middleware/idempotency.middleware.js';
+import { mutationRateLimiter } from '../../../middleware/rate-limit.middleware.js';
 import { validateBody } from '../../../middleware/validate.middleware.js';
 import * as TasksController from '../../../controllers/tasks.controller.js';
 import * as AllTasksController from '../../../controllers/allTasks.controller.js';
@@ -18,19 +21,20 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024, files: 10 },
 });
 
-const statusEnum = z.enum(['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done']);
+const statusEnum = z.enum(['todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done']);
 const taskTypeEnum = z.enum(['operational', 'design', 'important']);
 const timelineTypeEnum = z.enum(['task', 'milestone']);
+const objectId = z.string().refine((v) => mongoose.Types.ObjectId.isValid(v), { message: 'Invalid ObjectId' });
 
 const subtaskInputSchema = z.object({
   title: z.string().trim().min(1).max(300),
   isCompleted: z.boolean().optional(),
   order: z.number().optional(),
-  assigneeId: z.string().optional(),
+  assigneeId: objectId.optional(),
 });
 
 const taskCreateSchema = z.object({
-  projectId: z.string().min(10),
+  projectId: objectId,
   title: z.string().trim().min(2).max(300).refine((value) => !isReservedTaskTitle(value), {
     message: reservedTaskTitleMessage(),
   }),
@@ -38,12 +42,12 @@ const taskCreateSchema = z.object({
   status: statusEnum.optional(),
   taskType: taskTypeEnum.optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
-  assigneeIds: z.array(z.string()).optional(),
+  assigneeIds: z.array(objectId).optional(),
   dueDate: z.string().optional(),
   startDate: z.string().optional(),
   durationDays: z.number().int().min(1).max(3650),
-  phaseId: z.string().optional(),
-  subcategoryId: z.string().optional(),
+  phaseId: objectId.optional(),
+  subcategoryId: objectId.optional(),
   dependencies: z.array(z.string()).optional(),
   type: timelineTypeEnum.optional(),
   estimatedHours: z.number().optional(),
@@ -51,6 +55,7 @@ const taskCreateSchema = z.object({
   labels: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   subtasks: z.array(subtaskInputSchema).optional(),
+  repeatSchedule: z.string().optional(),
 });
 
 const taskUpdateSchema = z
@@ -74,6 +79,9 @@ const taskUpdateSchema = z
     tags: z.array(z.string()).optional(),
     subtasks: z.array(subtaskInputSchema).optional(),
     completionRemark: z.string().trim().max(5000).optional(),
+    reviewRemark: z.string().trim().max(5000).optional(),
+    rating: z.number().min(1).max(5).optional(),
+    repeatSchedule: z.string().optional(),
   })
   .strict();
 
@@ -112,7 +120,7 @@ const patchSubtaskSchema = z.object({
 router.get('/overview', AllTasksController.getOverview);
 router.get('/all', AllTasksController.getAllTasks);
 router.get('/requests', TasksController.listTaskRequests);
-router.post('/requests', validateBody(taskCreateSchema), TasksController.createTaskRequest);
+router.post('/requests', mutationRateLimiter, enforceIdempotency(), validateBody(taskCreateSchema), TasksController.createTaskRequest);
 router.post('/requests/:id/review', validateBody(taskRequestReviewSchema), TasksController.reviewTaskRequest);
 
 // Reassign Requests
@@ -125,8 +133,10 @@ router.get('/reassign-request/status/:taskId', ReassignController.getStatusForTa
 router.get('/overdue', TasksController.getOverdue);
 router.get('/', TasksController.list);
 router.get('/detail/:id', TasksController.getDetail);
+router.get('/:id/activities', TasksController.getActivities);
+router.get('/:id/time-tracking', TasksController.getTimeTracking);
 router.get('/:id', TasksController.getOne);
-router.post('/', validateBody(taskCreateSchema), TasksController.create);
+router.post('/', mutationRateLimiter, enforceIdempotency(), validateBody(taskCreateSchema), TasksController.create);
 router.put('/:id', validateBody(taskUpdateSchema), TasksController.update);
 router.patch('/:id', validateBody(taskUpdateSchema), TasksController.update);
 router.delete('/:id', TasksController.remove);

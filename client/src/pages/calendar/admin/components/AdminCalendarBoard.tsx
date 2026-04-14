@@ -64,13 +64,13 @@ import { BordioCalendar } from './BordioCalendar/BordioCalendar.tsx';
 // ... (existing imports, but remove DayColumnSlot and previous weekDays logic if necessary)
 
 export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQuery }) => {
-    const { 
+    const {
         view, currentDate, tasks, waitingList, updateTask, setSelectedTask, createTask,
-        priorityFilter, statusFilter 
+        priorityFilter, statusFilter
     } = useAdminCalendarStore();
     const { user } = useAuthStore();
     const { users } = useAppStore();
-    
+
     // Inline add state
     const [isAddingInline, setIsAddingInline] = useState(false);
     const [inlineTitle, setInlineTitle] = useState('');
@@ -83,11 +83,11 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
     const handleInlineSave = async () => {
         if (!inlineTitle.trim()) return;
         const totalMins = (parseInt(inlineHrs) || 0) * 60 + (parseInt(inlineMins) || 0);
-        
+
         const sd = inlineDate ? new Date(`${inlineDate}T09:00:00`).toISOString() : undefined;
         let ed = undefined;
         if (inlineDate) {
-            ed = totalMins > 0 
+            ed = totalMins > 0
                 ? new Date(new Date(`${inlineDate}T09:00:00`).getTime() + totalMins * 60000).toISOString()
                 : new Date(`${inlineDate}T10:00:00`).toISOString();
         }
@@ -103,7 +103,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
             priority: inlinePriority,
             tags: [],
         } as any);
-        
+
         if (!saved) {
             emitErrorToast('Failed to create task', 'Server Error');
             return;
@@ -137,7 +137,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
     const filteredTasks = tasks.filter((task) => {
         // 1. Search Query
         const nq = normalizedQuery;
-        const matchesSearch = !nq || 
+        const matchesSearch = !nq ||
             String(task.title || '').toLowerCase().includes(nq) ||
             String(task.description || '').toLowerCase().includes(nq) ||
             String(task.assignedUser || '').toLowerCase().includes(nq) ||
@@ -157,7 +157,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
     const filteredWaitingList = waitingList.filter((task) => {
         // 1. Search Query
         const nq = normalizedQuery;
-        const matchesSearch = !nq || 
+        const matchesSearch = !nq ||
             String(task.title || '').toLowerCase().includes(nq) ||
             String(task.description || '').toLowerCase().includes(nq) ||
             String(task.assignedUser || '').toLowerCase().includes(nq);
@@ -194,11 +194,11 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
         } else if (data.type === 'calendar-column') {
             const dateStr = data.date; // string like 'yyyy-MM-dd'
             const userName = data.user;
-            
+
             const updates: any = {};
             if (dateStr) {
                 updates.startDateTime = new Date(`${dateStr}T09:00:00`).toISOString();
-                
+
                 // Keep same duration if possible, else 1 hour
                 const dur = task.duration || 60;
                 updates.endDateTime = new Date(new Date(`${dateStr}T09:00:00`).getTime() + dur * 60000).toISOString();
@@ -206,7 +206,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
             if (userName) {
                 updates.assignedUser = userName;
             }
-            
+
             if (Object.keys(updates).length > 0) {
                 await updateTask(task._id, updates);
             }
@@ -247,13 +247,13 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                 {/* ── INLINE TASK CREATION CARD ── */}
                 {isAddingInline && (
                     <div className="relative mb-3 flex flex-col gap-3 rounded-[12px] bg-white dark:bg-surface-900 p-3 shadow-lg ring-1 ring-surface-200 dark:ring-surface-800">
-                        <button 
+                        <button
                             className="absolute right-2 top-2 rounded-full p-1 text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-600 transition"
                             onClick={() => setIsAddingInline(false)}
                         >
                             <X size={14} strokeWidth={3} />
                         </button>
-                        
+
                         <input
                             autoFocus
                             type="text"
@@ -267,16 +267,16 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                         <div className="flex items-center gap-2 text-[11px] font-bold text-surface-400 dark:text-surface-500">
                             <span>Estimated time:</span>
                             <div className="flex items-center gap-1">
-                                <input 
-                                    type="text" placeholder="hh" 
-                                    className="w-8 p-0 border-b border-surface-200 dark:border-surface-700 bg-transparent text-center text-surface-900 dark:text-white outline-none focus:border-brand-500 placeholder:text-surface-300" 
-                                    value={inlineHrs} onChange={e => setInlineHrs(e.target.value.replace(/\D/g, ''))} maxLength={2} 
+                                <input
+                                    type="text" placeholder="hh"
+                                    className="w-8 p-0 border-b border-surface-200 dark:border-surface-700 bg-transparent text-center text-surface-900 dark:text-white outline-none focus:border-brand-500 placeholder:text-surface-300"
+                                    value={inlineHrs} onChange={e => setInlineHrs(e.target.value.replace(/\D/g, ''))} maxLength={2}
                                 />
                                 <span>:</span>
-                                <input 
-                                    type="text" placeholder="mm" 
-                                    className="w-8 p-0 border-b border-surface-200 dark:border-surface-700 bg-transparent text-center text-surface-900 dark:text-white outline-none focus:border-brand-500 placeholder:text-surface-300" 
-                                    value={inlineMins} onChange={e => setInlineMins(e.target.value.replace(/\D/g, ''))} maxLength={2} 
+                                <input
+                                    type="text" placeholder="mm"
+                                    className="w-8 p-0 border-b border-surface-200 dark:border-surface-700 bg-transparent text-center text-surface-900 dark:text-white outline-none focus:border-brand-500 placeholder:text-surface-300"
+                                    value={inlineMins} onChange={e => setInlineMins(e.target.value.replace(/\D/g, ''))} maxLength={2}
                                 />
                             </div>
                         </div>
@@ -302,7 +302,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                                 </button>                                 {/* User picker */}
                                 <label title={inlineUser || "Assign User"} className="relative flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full bg-brand-500 text-white shadow-sm border-[1.5px] border-white dark:border-surface-800 hover:brightness-95">
                                     <User size={13} strokeWidth={3} />
-                                    <select 
+                                    <select
                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                                         value={inlineUser}
                                         onChange={e => setInlineUser(e.target.value)}
@@ -316,16 +316,16 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                                 {/* Priority picker */}
                                 <div title="Priority" className={cn(
                                     "relative flex h-[26px] items-center gap-1.5 cursor-pointer rounded-full px-2 border transition-all",
-                                    inlinePriority === 'high'   ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400" :
-                                    inlinePriority === 'medium' ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50 text-amber-600 dark:text-amber-400" :
-                                    inlinePriority === 'low'    ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/50 text-blue-600 dark:text-blue-400" :
-                                    "bg-surface-50 dark:bg-surface-800 border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500"
+                                    inlinePriority === 'high' ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400" :
+                                        inlinePriority === 'medium' ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50 text-amber-600 dark:text-amber-400" :
+                                            inlinePriority === 'low' ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/50 text-blue-600 dark:text-blue-400" :
+                                                "bg-surface-50 dark:bg-surface-800 border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500"
                                 )}>
                                     <Flag size={12} fill={inlinePriority !== 'none' ? 'currentColor' : 'none'} strokeWidth={3} />
                                     <span className="text-[10px] uppercase tracking-wider font-black">
                                         {inlinePriority === 'none' ? 'Prio' : inlinePriority}
                                     </span>
-                                      <select 
+                                    <select
                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                                         value={inlinePriority}
                                         onChange={e => setInlinePriority(e.target.value as any)}
@@ -337,7 +337,7 @@ export const AdminCalendarBoard: React.FC<{ searchQuery?: string }> = ({ searchQ
                                     </select>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={handleInlineSave}
                                 className="rounded-[6px] bg-brand-600 px-3.5 py-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-brand-700"
                             >

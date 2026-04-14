@@ -39,16 +39,27 @@ export function getTodayDateKey(): string {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
-export function isDueDateOverdue(dueDate?: string | Date, status?: string): boolean {
-  if (!dueDate || status === 'done') return false;
-
+export function isTaskOverdue(task: { dueDate?: string | Date | null; status?: string }, currentDate: Date = new Date()): boolean {
+  if (!task.dueDate) return false;
+  
   try {
-    const due = startOfDay(typeof dueDate === 'string' ? parseISO(dueDate) : dueDate);
-    const today = startOfDay(new Date());
-    return isBefore(due, today);
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
+    
+    const due = new Date(task.dueDate);
+    due.setHours(0, 0, 0, 0);
+    
+    const status = (task.status || '').toUpperCase();
+    const terminalStatuses = ['DONE', 'COMPLETED', 'CANCELLED'];
+    
+    return due.getTime() < today.getTime() && !terminalStatuses.includes(status);
   } catch {
     return false;
   }
+}
+
+export function isDueDateOverdue(dueDate?: string | Date | null, status?: string): boolean {
+  return isTaskOverdue({ dueDate, status });
 }
 
 export function getInitials(name: string): string {

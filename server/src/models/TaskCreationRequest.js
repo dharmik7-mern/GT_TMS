@@ -10,7 +10,7 @@ const taskCreationRequestSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 300 },
     description: { type: String, trim: true, maxlength: 10000, default: '' },
     priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
-    status: { type: String, enum: ['backlog', 'todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'], default: 'todo' },
+    status: { type: String, enum: ['todo', 'scheduled', 'in_progress', 'in_review', 'blocked', 'done'], default: 'todo' },
     assigneeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
     requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     requestedToIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }],
@@ -23,6 +23,9 @@ const taskCreationRequestSchema = new mongoose.Schema(
     order: { type: Number, default: 0 },
     tags: { type: [String], default: [] },
     labels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Label', default: [] }],
+    repeatSchedule: { type: String, default: "Don't Repeat" },
+    isRecurring: { type: Boolean, default: false },
+    recurrenceRule: { type: Object, default: null },
     subtasks: [
       {
         _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
@@ -66,6 +69,7 @@ taskCreationRequestSchema.set('toJSON', {
           order: subtask.order ?? 0,
         }))
       : [];
+    ret.repeatSchedule = ret.repeatSchedule || "Don't Repeat";
     delete ret._id;
     delete ret.__v;
     delete ret.tenantId;

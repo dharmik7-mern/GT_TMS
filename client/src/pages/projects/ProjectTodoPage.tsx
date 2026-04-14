@@ -192,22 +192,22 @@ export const ProjectTodoPage: React.FC = () => {
 
   const filteredTasks = useMemo(() => {
     let result = selectedCategoryId === 'all' ? tasks : tasks.filter((task) => task.subcategoryId === selectedCategoryId);
-    
+
     if (selectedLabels.length > 0) {
-      result = result.filter(t => 
+      result = result.filter(t =>
         t.labels?.some(l => {
           const lId = typeof l === 'object' ? (l as any).id || (l as any)._id : l;
           return selectedLabels.includes(String(lId));
         })
       );
     }
-    
+
     if (selectedTags.length > 0) {
-      result = result.filter(t => 
+      result = result.filter(t =>
         t.tags?.some(tag => selectedTags.includes(tag))
       );
     }
-    
+
     return result;
   }, [selectedCategoryId, tasks, selectedLabels, selectedTags]);
 
@@ -617,8 +617,8 @@ export const ProjectTodoPage: React.FC = () => {
           <button type="button" className="btn-ghost btn-md text-surface-500" title="Search">
             <Search size={18} />
           </button>
-          <button 
-            type="button" 
+          <button
+            type="button"
             className={cn(
               "btn-ghost btn-md gap-2 transition-all",
               (selectedLabels.length > 0 || selectedTags.length > 0 || isFilterOpen) && "bg-brand-50 text-brand-700 dark:bg-brand-950/20"
@@ -634,9 +634,9 @@ export const ProjectTodoPage: React.FC = () => {
             )}
           </button>
           {canManageTask && (
-            <button 
-              type="button" 
-              className="btn-ghost btn-md text-surface-500" 
+            <button
+              type="button"
+              className="btn-ghost btn-md text-surface-500"
               title="Manage Labels"
               onClick={() => setIsManageLabelsOpen(true)}
             >
@@ -644,8 +644,8 @@ export const ProjectTodoPage: React.FC = () => {
             </button>
           )}
           {view === 'kanban' && canEdit && (
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => kanbanRef.current?.addProcessStep()}
               className="btn-secondary btn-sm h-9 px-4 gap-2 ml-2"
             >
@@ -658,8 +658,8 @@ export const ProjectTodoPage: React.FC = () => {
 
       <AnimatePresence>
         {isFilterOpen && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }} 
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden mb-6"
@@ -668,7 +668,7 @@ export const ProjectTodoPage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xs font-bold text-surface-400 uppercase tracking-widest">Task Filters</h3>
                 {(selectedLabels.length > 0 || selectedTags.length > 0) && (
-                  <button 
+                  <button
                     onClick={() => { setSelectedLabels([]); setSelectedTags([]); }}
                     className="text-[10px] font-bold text-rose-500 hover:text-rose-600 transition-colors uppercase tracking-wider"
                   >
@@ -690,8 +690,8 @@ export const ProjectTodoPage: React.FC = () => {
                           onClick={() => setSelectedLabels(prev => isSelected ? prev.filter(id => id !== l.id) : [...prev, l.id])}
                           className={cn(
                             "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5",
-                            isSelected 
-                              ? "border-current shadow-sm" 
+                            isSelected
+                              ? "border-current shadow-sm"
                               : "border-surface-100 dark:border-surface-800 text-surface-500 hover:border-surface-200 dark:hover:border-surface-700"
                           )}
                           style={isSelected ? { color: l.color, backgroundColor: `${l.color}15` } : {}}
@@ -718,8 +718,8 @@ export const ProjectTodoPage: React.FC = () => {
                           onClick={() => setSelectedTags(prev => isSelected ? prev.filter(t => t !== tag) : [...prev, tag])}
                           className={cn(
                             "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5",
-                            isSelected 
-                              ? "bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-950/20 dark:border-brand-800 dark:text-brand-300" 
+                            isSelected
+                              ? "bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-950/20 dark:border-brand-800 dark:text-brand-300"
                               : "border-surface-100 dark:border-surface-800 text-surface-500 hover:border-surface-200 dark:hover:border-surface-700"
                           )}
                         >
@@ -816,9 +816,9 @@ export const ProjectTodoPage: React.FC = () => {
         title="New Task"
         onCreatePhase={handleCreatePhase}
       />
-      <LabelManagementModal 
-        open={isManageLabelsOpen} 
-        onClose={() => setIsManageLabelsOpen(false)} 
+      <LabelManagementModal
+        open={isManageLabelsOpen}
+        onClose={() => setIsManageLabelsOpen(false)}
       />
     </div>
   );

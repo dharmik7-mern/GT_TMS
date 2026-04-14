@@ -4,10 +4,168 @@ import { sendTemplatedEmailSafe } from './mail.service.js';
 import { syncProjectStats } from './project.service.js';
 import { hasWorkspacePermission } from './permission.service.js';
 import { assertAllowedTaskTitle, normalizeTaskTitle } from '../utils/taskTitleValidation.js';
+import { getTaskActivityModel } from '../models/TaskActivity.js';
 import { uploadIncomingFiles } from './storage.service.js';
+import { isTaskOverdue, getOverdueQueryFilter } from '../utils/task.utils.js';
 
 function strId(x) {
-  return x ? String(x) : '';
+  if (!x) return '';
+  if (typeof x === 'object') {
+    return String(x._id || x.id || x);
+  }
+  return String(x);
+}
+
+async function logTaskActivity({ tenantId, taskId, userId, action, oldValue, newValue, message }) {
+  try {
+    const TaskActivity = await getTaskActivityModel(tenantId);
+    await TaskActivity.create({
+      tenantId,
+      taskId,
+      userId,
+      action,
+      oldValue: oldValue ? String(oldValue) : null,
+      newValue: newValue ? String(newValue) : null,
+      message,
+    });
+  } catch (err) {
+    console.error('[logTaskActivity] Error:', err);
+  }
+}
+
+async function updateTaskStatusHistory({ tenantId, taskId, userId, fromStatus, toStatus, type = 'project' }) {
+  try {
+    const { Task, QuickTask } = await getTenantModels(tenantId);
+    const Model = type === 'quick' ? QuickTask : Task;
+    const task = await Model.findById(taskId);
+    if (!task) return;
+
+    const now = new Date();
+    const history = task.statusHistory || [];
+
+    // Close previous status if exists
+    if (history.length > 0) {
+      const lastEntry = history[history.length - 1];
+      if (!lastEntry.endTime) {
+        lastEntry.endTime = now;
+        lastEntry.duration = Math.max(0, Math.floor((now.getTime() - new Date(lastEntry.startTime).getTime()) / 1000));
+      }
+    }
+
+    // Add new status entry
+    history.push({
+      status: toStatus,
+      startTime: now,
+      endTime: null
+    });
+
+    task.statusHistory = history;
+    await task.save();
+
+    // 2. Implement Step 2: timeLogs
+    const timeLogs = task.timeLogs || [];
+    // Case 2: Exiting previous status - close open logs
+    for (const log of timeLogs) {
+      if (!log.endTime) {
+        log.endTime = now;
+        log.duration = Math.max(0, Math.floor((now.getTime() - new Date(log.startTime).getTime()) / 1000));
+      }
+    }
+
+    // Case 1: Entering a status (unless already completed)
+    if (toStatus !== 'done') {
+      timeLogs.push({
+        status: toStatus,
+        startTime: now,
+        endTime: null,
+        duration: 0,
+        userId: userId
+      });
+    }
+
+    task.timeLogs = timeLogs;
+
+    // 3. Step 5: Calculation Logic
+    let total = 0;
+    let inProgress = 0;
+    for (const log of timeLogs) {
+      const start = new Date(log.startTime).getTime();
+      const end = log.endTime ? new Date(log.endTime).getTime() : now.getTime();
+      const dur = Math.max(0, Math.floor((end - start) / 1000));
+
+      total += dur;
+      if (log.status?.toLowerCase() === 'in_progress') {
+        inProgress += dur;
+      }
+    }
+
+    task.timeAnalytics = {
+      totalTimeSpent: total,
+      inProgressTime: inProgress
+    };
+
+    await task.save();
+
+    // Also log to TaskActivity
+    await logTaskActivity({
+      tenantId,
+      taskId,
+      userId,
+      action: 'STATUS_CHANGED',
+      oldValue: fromStatus,
+      newValue: toStatus,
+      message: `Changed status from ${fromStatus} to ${toStatus}`
+    });
+  } catch (err) {
+    console.error('[updateTaskStatusHistory] Error:', err);
+  }
+}
+
+export function calculateTimeSpent(statusHistory) {
+  if (!Array.isArray(statusHistory)) return { totalTimeSpent: 0, timeSpentByStatus: {}, statusHistory: [] };
+
+  const timeSpentByStatus = {};
+  let totalTimeSpent = 0;
+  const now = new Date();
+
+  const historyPoints = statusHistory.map(entry => {
+    const start = new Date(entry.startTime);
+    const end = entry.endTime ? new Date(entry.endTime) : now;
+    const duration = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+
+    timeSpentByStatus[entry.status] = (timeSpentByStatus[entry.status] || 0) + duration;
+    totalTimeSpent += duration;
+
+    return {
+      status: entry.status,
+      changedAt: entry.startTime,
+      duration
+    };
+  });
+
+  return {
+    totalTimeSpent,
+    timeSpentByStatus,
+    statusHistory: historyPoints
+  };
+}
+
+export async function listTaskActivities({ tenantId, taskId }) {
+  const TaskActivity = await getTaskActivityModel(tenantId);
+  return TaskActivity.find({ tenantId, taskId }).sort({ createdAt: -1 }).limit(100);
+}
+
+export async function getTaskTimeTracking({ tenantId, taskId, type }) {
+  let task;
+  const { QuickTask, Task } = await getTenantModels(tenantId);
+  if (type === 'quick') {
+    task = await QuickTask.findById(taskId);
+  } else {
+    task = await Task.findById(taskId);
+  }
+
+  if (!task) return null;
+  return calculateTimeSpent(task.statusHistory);
 }
 
 function isAdminRole(role) {
@@ -161,6 +319,14 @@ function buildCompletionState({ existingReview, existingStatus, nextStatus, upda
     review.completionRemark = updates.completionRemark || '';
   }
 
+  if (updates.reviewRemark !== undefined) {
+    review.reviewRemark = updates.reviewRemark || '';
+  }
+
+  if (updates.rating !== undefined) {
+    review.rating = updates.rating || null;
+  }
+
   const movedToDone = existingStatus !== 'done' && nextStatus === 'done';
   const movedAwayFromDone = existingStatus === 'done' && nextStatus !== 'done';
 
@@ -172,6 +338,15 @@ function buildCompletionState({ existingReview, existingStatus, nextStatus, upda
     review.reviewRemark = '';
     review.reviewedAt = null;
     review.reviewedBy = null;
+  }
+
+  // If moving to in_review specifically with a remark
+  if (nextStatus === 'in_review') {
+    review.reviewStatus = 'pending';
+    if (!review.completedAt) {
+      review.completedAt = new Date();
+      review.completedBy = userId;
+    }
   }
 
   if (movedAwayFromDone) {
@@ -298,10 +473,53 @@ function canReviewProjectTask({ role, userId, task, reviewerIds }) {
 }
 
 function mapTaskWithActivity(task, activityHistory) {
-  const json = typeof task?.toJSON === 'function' ? task.toJSON() : task;
+  const json = typeof task?.toJSON === 'function' ? task.toJSON() : typeof task === 'object' ? task : {};
+
+  let totalTime = 0;
+  const timeByUserMap = new Map();
+  const timeByStageMap = new Map();
+
+  const timeLogs = Array.isArray(json.timeLogs) ? json.timeLogs : [];
+  const statusHistory = Array.isArray(json.statusHistory) ? json.statusHistory : [];
+
+  // fallback if timeLogs are missing
+  if (timeLogs.length === 0 && statusHistory.length > 0) {
+    const now = new Date().getTime();
+    statusHistory.forEach((entry) => {
+      const start = new Date(entry.startTime).getTime();
+      const end = entry.endTime ? new Date(entry.endTime).getTime() : now;
+      const duration = Math.max(0, Math.floor((end - start) / 1000));
+      totalTime += duration;
+      timeByStageMap.set(entry.status, (timeByStageMap.get(entry.status) || 0) + duration);
+    });
+  } else {
+    const now = new Date().getTime();
+    timeLogs.forEach((log) => {
+      const start = new Date(log.startTime).getTime();
+      const end = log.endTime ? new Date(log.endTime).getTime() : now;
+      const duration = Math.max(0, Math.floor((end - start) / 1000));
+      totalTime += duration;
+
+      if (log.status) {
+        timeByStageMap.set(log.status, (timeByStageMap.get(log.status) || 0) + duration);
+      }
+
+      if (log.userId) {
+        const uId = strId(log.userId);
+        timeByUserMap.set(uId, (timeByUserMap.get(uId) || 0) + duration);
+      }
+    });
+  }
+
+  const timeByUser = Array.from(timeByUserMap.entries()).map(([userId, time]) => ({ userId, time }));
+  const timeByStage = Array.from(timeByStageMap.entries()).map(([stage, time]) => ({ stage, time }));
+
   return {
     ...json,
     activityHistory: Array.isArray(activityHistory) ? activityHistory : [],
+    totalTime,
+    timeByUser,
+    timeByStage
   };
 }
 
@@ -330,6 +548,16 @@ async function attachTaskActivity({ companyId, workspaceId, tasks }) {
 
 export async function assertProjectAccess({ tenantId, workspaceId, userId, role, projectId }) {
   if (!projectId) return true; // Allow access to workspace-level tasks that don't belong to a project
+
+  const { Project } = await getTenantModels(tenantId);
+  const project = await Project.findOne({ _id: projectId, tenantId, workspaceId }).select('_id').lean();
+  if (!project) {
+    const err = new Error('Project not found');
+    err.statusCode = 404;
+    err.code = 'PROJECT_NOT_FOUND';
+    throw err;
+  }
+
   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
   if (allowed === null) return true;
   return allowed.some((id) => strId(id) === strId(projectId));
@@ -348,37 +576,80 @@ export async function listTasks({
   role,
   labels,
   tags,
+  reviewStatus,
 }) {
   const tenantId = companyId;
   const { Task } = await getTenantModels(companyId);
-  const filter = {
+  const filter = await buildTaskVisibilityFilter({
     tenantId,
     workspaceId,
-    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+    projectId,
+    userId,
+    role,
+    labels,
+    tags,
+    assigneeId,
+    status,
+    priority,
+    reviewStatus,
+  });
+
+  const skip = (page - 1) * limit;
+  const [items, total] = await Promise.all([
+    Task.find(filter)
+      .sort({ updatedAt: -1, projectId: 1, status: 1, order: 1 })
+      .populate('labels')
+      .populate('assigneeIds', 'name avatar color')
+      .skip(skip)
+      .limit(limit),
+    Task.countDocuments(filter),
+  ]);
+  return { items: await attachTaskActivity({ companyId, workspaceId, tasks: items }), total, page, limit };
+}
+
+export async function buildTaskVisibilityFilter({
+  tenantId,
+  workspaceId,
+  projectId,
+  userId,
+  role,
+  labels,
+  tags,
+  assigneeId,
+  status,
+  priority,
+  reviewStatus,
+}) {
+  const base = {
+    tenantId,
   };
 
+  if (workspaceId && (projectId || !isAdminRole(role))) {
+    base.workspaceId = workspaceId;
+  }
+
+  Object.assign(base, {
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+  });
+
   if (labels && Array.isArray(labels)) {
-    const validLabels = labels.filter(l => l && typeof l === 'string' && l.trim().length > 0);
-    if (validLabels.length > 0) {
-      filter.labels = { $in: validLabels };
-    }
+    const validLabels = labels.filter((l) => l && typeof l === 'string' && l.trim().length > 0);
+    if (validLabels.length > 0) base.labels = { $in: validLabels };
   }
   if (tags && Array.isArray(tags)) {
-    const validTags = tags.filter(t => t && typeof t === 'string' && t.trim().length > 0);
-    if (validTags.length > 0) {
-      filter.tags = { $in: validTags };
-    }
+    const validTags = tags.filter((t) => t && typeof t === 'string' && t.trim().length > 0);
+    if (validTags.length > 0) base.tags = { $in: validTags };
   }
 
   const allowed = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
   if (allowed !== null) {
     if (projectId) {
-      filter.projectId = projectId;
+      base.projectId = projectId;
       if (!allowed.some((id) => strId(id) === strId(projectId))) {
-        Object.assign(filter, buildDirectTaskAccessFilter(userId));
+        Object.assign(base, buildDirectTaskAccessFilter(userId));
       }
     } else {
-      filter.$and = [
+      base.$and = [
         { $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }] },
         {
           $or: [
@@ -387,26 +658,60 @@ export async function listTasks({
           ],
         },
       ];
-      delete filter.$or;
+      delete base.$or;
     }
   } else if (projectId) {
-    filter.projectId = projectId;
+    base.projectId = projectId;
   }
 
-  if (assigneeId) filter.assigneeIds = assigneeId;
-  if (status) filter.status = status;
-  if (priority) filter.priority = priority;
+  if (assigneeId) base.assigneeIds = assigneeId;
+  if (status) {
+    if (status === 'overdue') {
+      const { dueDate, status: filteredStatus } = getOverdueQueryFilter(new Date());
+      base.dueDate = dueDate;
+      base.status = filteredStatus;
+    } else if (typeof status === 'string' && status.includes(',')) {
+      base.status = { $in: status.split(',').filter(Boolean) };
+    } else {
+      base.status = status;
+    }
+  }
+  if (priority) base.priority = priority;
 
-  const skip = (page - 1) * limit;
-  const [items, total] = await Promise.all([
-    Task.find(filter).sort({ projectId: 1, status: 1, order: 1 }).populate('labels').skip(skip).limit(limit),
-    Task.countDocuments(filter),
-  ]);
-  return { items: await attachTaskActivity({ companyId, workspaceId, tasks: items }), total, page, limit };
+  if (reviewStatus) {
+    base['completionReview.reviewStatus'] = reviewStatus;
+  }
+
+  // GLOBAL ARCHIVE FILTER: Exclude tasks from archived projects unless a specific projectId is requested
+  if (!projectId) {
+    const { Project } = await getTenantModels(tenantId);
+    const archivedProjects = await Project.find({ tenantId, workspaceId, status: 'archived' }).select('_id').lean();
+    if (archivedProjects.length > 0) {
+      const archivedIds = archivedProjects.map(p => p._id);
+      if (base.$and) {
+        base.$and.push({ projectId: { $nin: archivedIds } });
+      } else {
+        base.projectId = { $nin: archivedIds };
+      }
+    }
+  }
+
+  return base;
 }
 
 export async function createTask({ companyId, workspaceId, userId, role, data }) {
   const tenantId = companyId;
+  const { Task, Project, ActivityLog, Notification } = await getTenantModels(companyId);
+
+  // Validate project existence early
+  const project = await Project.findOne({ _id: data.projectId, tenantId, workspaceId }).select('name').lean();
+  if (!project) {
+    const err = new Error('Project not found');
+    err.statusCode = 404;
+    err.code = 'PROJECT_NOT_FOUND';
+    throw err;
+  }
+
   const ok = await assertProjectAccess({ tenantId, workspaceId, userId, role, projectId: data.projectId });
   if (!ok) {
     const err = new Error('Forbidden: no access to this project');
@@ -415,12 +720,18 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     throw err;
   }
 
-  const { Task, Project, ActivityLog, Notification } = await getTenantModels(companyId);
-  const project = await Project.findOne({ _id: data.projectId, tenantId, workspaceId }).select('name').lean();
   const normalizedTitle = normalizeTaskTitle(data.title);
   assertAllowedTaskTitle(normalizedTitle);
   const { startDate, dueDate, durationDays } = resolveTaskSchedule(data);
   const normalizedAssigneeIds = Array.isArray(data.assigneeIds) ? data.assigneeIds : [];
+
+  // Enforce: at least one assignee required
+  if (normalizedAssigneeIds.length === 0) {
+    const err = new Error('At least one assignee is required to create a task.');
+    err.statusCode = 400;
+    err.code = 'ASSIGNEE_REQUIRED';
+    throw err;
+  }
 
   const recentMatchingTasks = await Task.find({
     tenantId,
@@ -471,6 +782,11 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     order: data.order ?? 0,
     tags: Array.isArray(data.tags) ? data.tags : [],
     labels: Array.isArray(data.labels) ? data.labels : [],
+    repeatSchedule: data.repeatSchedule || "Don't Repeat",
+    isRecurring: data.repeatSchedule && data.repeatSchedule !== "Don't Repeat",
+    recurrenceRule: data.repeatSchedule === "Every Day" ? { frequency: 'daily', interval: 1 } :
+                    data.repeatSchedule === "Every Week" ? { frequency: 'weekly', interval: 1 } :
+                    data.repeatSchedule === "Every Month" ? { frequency: 'monthly', interval: 1 } : null,
     subtasks: Array.isArray(data.subtasks)
       ? data.subtasks.map((s, i) => ({
         title: s.title,
@@ -487,11 +803,27 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
     userId,
     type: 'task_created',
     description: `Created task "${task.title}"`,
-    entityType: 'task',
+    entityType: 'TASK',
     entityId: task._id,
     metadata: { projectId: task.projectId },
   });
 
+  // Log initial status
+  await updateTaskStatusHistory({
+    tenantId,
+    taskId: task._id,
+    userId,
+    fromStatus: null,
+    toStatus: task.status,
+    type: 'project'
+  });
+  await logTaskActivity({
+    tenantId,
+    taskId: task._id,
+    userId,
+    action: 'CREATED',
+    message: `Created task "${task.title}" with status "${task.status}"`
+  });
   if (task.assigneeIds?.length) {
     await Notification.insertMany(
       task.assigneeIds.map((assignee) => ({
@@ -599,6 +931,11 @@ export async function createTaskCreationRequest({ companyId, workspaceId, userId
     estimatedHours: data.estimatedHours ?? null,
     order: data.order ?? 0,
     labels: data.labels || [],
+    repeatSchedule: data.repeatSchedule || "Don't Repeat",
+    isRecurring: data.repeatSchedule && data.repeatSchedule !== "Don't Repeat",
+    recurrenceRule: data.repeatSchedule === "Every Day" ? { frequency: 'daily', interval: 1 } :
+                    data.repeatSchedule === "Every Week" ? { frequency: 'weekly', interval: 1 } :
+                    data.repeatSchedule === "Every Month" ? { frequency: 'monthly', interval: 1 } : null,
     subtasks: Array.isArray(data.subtasks)
       ? data.subtasks.map((subtask, index) => ({
         title: subtask.title,
@@ -696,6 +1033,7 @@ export async function reviewTaskCreationRequest({
         order: request.order,
         tags: request.tags || [],
         labels: request.labels || [],
+        repeatSchedule: request.repeatSchedule,
         subtasks: Array.isArray(request.subtasks)
           ? request.subtasks.map((subtask) => ({
             title: subtask.title,
@@ -772,9 +1110,23 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
   if (projectTask) {
     const t = typeof projectTask.toJSON === 'function' ? projectTask.toJSON() : projectTask;
     const reporterObj = projectTask?.reporterId;
-    t.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
-    t.reporterName = reporterObj?.name || t.reporterName;
-    t.assigneeIds = Array.isArray(t.assigneeIds) ? t.assigneeIds.map((a) => String(a?._id || a)) : [];
+
+    // If it's an object (populated), extract ID and Name
+    const reporterId = typeof reporterObj === 'object' ? (reporterObj?._id || reporterObj?.id) : reporterObj;
+    t.reporterId = reporterId ? String(reporterId) : (t.reporterId || '');
+    t.reporterName = (typeof reporterObj === 'object' ? reporterObj?.name : null) || t.reporterName || 'System';
+    t.reporterAvatar = (typeof reporterObj === 'object' ? reporterObj?.avatar : null) || t.reporterAvatar;
+
+    // Handle assigneeIds mapping
+    if (Array.isArray(t.assigneeIds)) {
+      t.assigneeIds = t.assigneeIds.map(a => {
+        if (typeof a === 'object') return String(a._id || a.id || a);
+        return String(a);
+      }).filter(Boolean);
+    } else {
+      t.assigneeIds = [];
+    }
+
     t.type = 'project';
     return t;
   }
@@ -792,10 +1144,20 @@ export async function getAnyTaskById({ companyId, workspaceId, userId, role, tas
     const qtDoc = typeof quickTask.toJSON === 'function' ? quickTask.toJSON() : quickTask;
     qtDoc.type = 'quick';
     const reporterObj = quickTask.reporterId;
-    qtDoc.reporterName = reporterObj?.name || qtDoc.reporterName;
-    qtDoc.reporterId = reporterObj?._id ? String(reporterObj._id) : String(reporterObj || '');
-    qtDoc.assigneeIds = Array.isArray(qtDoc.assigneeIds) ? qtDoc.assigneeIds.map((a) => String(a?._id || a)) : [];
-    if (quickTask.assigneeIds?.length) {
+
+    const rId = typeof reporterObj === 'object' ? (reporterObj?._id || reporterObj?.id) : reporterObj;
+    qtDoc.reporterId = rId ? String(rId) : (qtDoc.reporterId || '');
+    qtDoc.reporterName = (typeof reporterObj === 'object' ? reporterObj?.name : null) || qtDoc.reporterName || 'System';
+    qtDoc.reporterAvatar = (typeof reporterObj === 'object' ? reporterObj?.avatar : null) || qtDoc.reporterAvatar;
+
+    if (Array.isArray(qtDoc.assigneeIds)) {
+      qtDoc.assigneeIds = qtDoc.assigneeIds.map(a => {
+        if (typeof a === 'object') return String(a._id || a.id || a);
+        return String(a);
+      }).filter(Boolean);
+    }
+
+    if (quickTask.assigneeIds?.length && typeof quickTask.assigneeIds[0] === 'object') {
       qtDoc.assigneeNames = quickTask.assigneeIds.map((u) => u?.name).filter(Boolean);
     }
     return qtDoc;
@@ -838,11 +1200,27 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     throw err;
   }
 
-  // Status change restriction
+  // Status change restriction & Workflow enforcement
   if (updates.status && updates.status !== existing.status) {
     const uid = strId(userId);
     const isAssignee = (existing.assigneeIds || []).some(id => strId(id) === uid);
-    if (!isAdminRole(role) && !isAssignee) {
+
+    // User Requirement: 
+    // If an assignee (non-manager) tries to move to 'done', force it to 'in_review'
+    // and they MUST provide a remark.
+    const isManagerOrAdmin = isAdminRole(role) || ['manager', 'team_leader'].includes(role);
+
+    if (updates.status === 'done' && !isManagerOrAdmin) {
+      updates.status = 'in_review';
+      if (!updates.completionRemark && !existing.completionReview?.completionRemark) {
+        const err = new Error('You must provide completion notes describing what you did.');
+        err.statusCode = 400;
+        err.code = 'COMPLETION_REMARK_REQUIRED';
+        throw err;
+      }
+    }
+
+    if (!isManagerOrAdmin && !isAssignee) {
       const project = await Project.findOne({ _id: existing.projectId, tenantId }).lean();
       const isReportingPerson = (project?.reportingPersonIds || []).some(id => strId(id) === uid);
       if (!isReportingPerson) {
@@ -854,10 +1232,27 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
     }
   }
 
-  const { subtasks, dueDate, startDate, endDate, completionRemark, ...rest } = updates;
+  const { subtasks, dueDate, startDate, endDate, completionRemark, reviewRemark, rating, ...rest } = updates;
   const beforeAssigneeIds = mapIdList(existing.assigneeIds);
   const nextStatus = rest.status ?? existing.status;
   const previousStatus = existing.status;
+
+  if (updates.repeatSchedule !== undefined) {
+    if (updates.repeatSchedule === "Don't Repeat") {
+      rest.isRecurring = false;
+      rest.recurrenceRule = null;
+    } else if (updates.repeatSchedule === "Every Day") {
+      rest.isRecurring = true;
+      rest.recurrenceRule = { frequency: 'daily', interval: 1 };
+    } else if (updates.repeatSchedule === "Every Week") {
+      rest.isRecurring = true;
+      rest.recurrenceRule = { frequency: 'weekly', interval: 1 };
+    } else if (updates.repeatSchedule === "Every Month") {
+      rest.isRecurring = true;
+      rest.recurrenceRule = { frequency: 'monthly', interval: 1 };
+    }
+  }
+
   const $set = { ...rest };
   delete $set.type;
   if (dueDate !== undefined) $set.dueDate = dueDate ? new Date(dueDate) : null;
@@ -872,12 +1267,24 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   if (rest.assigneeIds !== undefined) {
     $set.assigneeIds = Array.isArray(rest.assigneeIds) ? rest.assigneeIds : [];
   }
-  if (completionRemark !== undefined || rest.status !== undefined) {
+  if (rest.assigneeIds !== undefined && strId(beforeAssigneeIds) !== strId($set.assigneeIds)) {
+    await logTaskActivity({
+      tenantId,
+      taskId,
+      userId,
+      action: 'ASSIGNED',
+      oldValue: beforeAssigneeIds.join(', '),
+      newValue: $set.assigneeIds.join(', '),
+      message: `Updated assignees to ${$set.assigneeIds.length} people`
+    });
+  }
+
+  if (completionRemark !== undefined || reviewRemark !== undefined || rating !== undefined || rest.status !== undefined) {
     $set.completionReview = buildCompletionState({
       existingReview: existing.completionReview,
       existingStatus: existing.status,
       nextStatus,
-      updates: { completionRemark },
+      updates: { completionRemark, reviewRemark, rating },
       userId,
     });
   }
@@ -885,9 +1292,27 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   const task = await Task.findOneAndUpdate({ _id: taskId, tenantId }, { $set }, { new: true });
   if (!task) return null;
 
-  const changedFields = Object.keys(updates || {});
-  const specializedOnlyFields = new Set(['status', 'assigneeIds']);
-  const hasGenericTaskChanges = changedFields.some((field) => !specializedOnlyFields.has(field));
+  const specializedOnlyFields = new Set(['status', 'assigneeIds', 'type', 'completionRemark']);
+  const actualGenericChanges = [];
+  for (const field of Object.keys(updates || {})) {
+    if (specializedOnlyFields.has(field)) continue;
+
+    let isChanged = false;
+    const oldVal = existing[field];
+    const newVal = updates[field];
+
+    if (oldVal instanceof Date || newVal instanceof Date) {
+      isChanged = new Date(oldVal || 0).getTime() !== new Date(newVal || 0).getTime();
+    } else if (Array.isArray(oldVal) || Array.isArray(newVal)) {
+      isChanged = JSON.stringify(oldVal || []) !== JSON.stringify(newVal || []);
+    } else {
+      isChanged = String(oldVal || '') !== String(newVal || '');
+    }
+
+    if (isChanged) actualGenericChanges.push(field);
+  }
+
+  const hasGenericTaskChanges = actualGenericChanges.length > 0;
   const activityEntries = [];
 
   if (hasGenericTaskChanges) {
@@ -896,14 +1321,22 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
       workspaceId,
       userId,
       type: 'task_updated',
-      description: `Updated task "${task.title}"`,
+      description: `Updated task details: ${actualGenericChanges.join(', ')}`,
       entityType: 'task',
       entityId: task._id,
-      metadata: { projectId: task.projectId, changedFields },
+      metadata: { projectId: task.projectId, changedFields: actualGenericChanges },
     });
   }
 
   if (previousStatus !== task.status) {
+    await updateTaskStatusHistory({
+      tenantId,
+      taskId: task._id,
+      userId,
+      fromStatus: previousStatus,
+      toStatus: task.status,
+      type: 'project'
+    });
     activityEntries.push({
       tenantId,
       workspaceId,
@@ -935,6 +1368,25 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   }
 
   const newlyAssignedIds = afterAssigneeIds.filter((assigneeId) => !beforeAssigneeIds.includes(assigneeId));
+  
+  if (updates.repeatSchedule && updates.repeatSchedule !== existing.repeatSchedule && updates.repeatSchedule !== "Don't Repeat") {
+    const notifyIds = afterAssigneeIds.filter(id => id !== strId(userId));
+    if (notifyIds.length > 0) {
+      await Notification.insertMany(
+        notifyIds.map((assigneeId) => ({
+          tenantId,
+          workspaceId,
+          userId: assigneeId,
+          type: 'task_updated',
+          title: 'Task repetition updated',
+          message: `"${task.title}" repetition set to ${updates.repeatSchedule}`,
+          isRead: false,
+          relatedId: String(task._id),
+        }))
+      );
+    }
+  }
+
   if (newlyAssignedIds.length) {
     await Notification.insertMany(
       newlyAssignedIds.map((assignee) => ({
@@ -1012,8 +1464,8 @@ export async function reviewTaskCompletion({ companyId, workspaceId, userId, rol
     throw err;
   }
 
-  if (task.status !== 'done') {
-    const err = new Error('Only completed tasks can be reviewed');
+  if (task.status !== 'done' && task.status !== 'in_review') {
+    const err = new Error('Only completed or in-review tasks can be reviewed');
     err.statusCode = 400;
     err.code = 'INVALID_STATE';
     throw err;
@@ -1037,8 +1489,10 @@ export async function reviewTaskCompletion({ companyId, workspaceId, userId, rol
     reviewedBy: userId,
   };
 
-  if (action === 'changes_requested') {
-    task.status = 'in_review';
+  if (action === 'approve') {
+    task.status = 'done';
+  } else if (action === 'changes_requested') {
+    task.status = 'in_progress'; // Send back to in_progress for changes
   }
 
   await task.save();
@@ -1145,6 +1599,27 @@ export async function addSubtask({ companyId, workspaceId, userId, role, taskId,
   task.subtasks.push({ title, isCompleted: Boolean(isCompleted), order, assigneeId: subAssignee });
   await task.save();
 
+  await logTaskActivity({
+    tenantId,
+    taskId: task._id,
+    userId,
+    action: 'SUBTASK_ADDED',
+    newValue: title,
+    message: `added subtask: "${title}"`
+  });
+
+  const { ActivityLog: ActivityLogModel } = await getTenantModels(tenantId);
+  await ActivityLogModel.create({
+    tenantId,
+    workspaceId,
+    userId,
+    type: 'subtask_added',
+    description: `Added subtask "${title}" to "${task.title}"`,
+    entityType: 'TASK',
+    entityId: task._id,
+    metadata: { projectId: task.projectId, subtaskTitle: title },
+  });
+
   if (subAssignee) {
     await createSubtaskNotification({
       tenantId,
@@ -1187,6 +1662,20 @@ export async function updateSubtask({ companyId, workspaceId, userId, role, task
   const sub = task.subtasks.id(subtaskId);
   if (!sub) return null;
   const prevAssignee = sub.assigneeId ? String(sub.assigneeId) : null;
+  if (updates.isCompleted !== undefined && updates.isCompleted !== sub.isCompleted) {
+    const { ActivityLog: ActivityLogModel } = await getTenantModels(tenantId);
+    await ActivityLogModel.create({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'subtask_status_changed',
+      description: `Marked subtask "${sub.title}" as ${updates.isCompleted ? 'completed' : 'uncompleted'} in task "${task.title}"`,
+      entityType: 'TASK',
+      entityId: taskId,
+      metadata: { projectId: task.projectId, subtaskTitle: sub.title, isCompleted: updates.isCompleted },
+    });
+  }
+
   if (updates.title !== undefined) sub.title = updates.title;
   if (updates.isCompleted !== undefined) sub.isCompleted = Boolean(updates.isCompleted);
   if (updates.order !== undefined) sub.order = updates.order;
@@ -1204,6 +1693,20 @@ export async function updateSubtask({ companyId, workspaceId, userId, role, task
       taskTitle: task.title,
       subtaskTitle: sub.title,
       taskId,
+    });
+  }
+
+  const { ActivityLog: ActivityLogModel } = await getTenantModels(tenantId);
+  if (newAssignee && newAssignee !== prevAssignee) {
+    await ActivityLogModel.create({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'subtask_assignee_changed',
+      description: `Changed assignee for subtask "${sub.title}" in task "${task.title}"`,
+      entityType: 'TASK',
+      entityId: taskId,
+      metadata: { projectId: task.projectId, subtaskTitle: sub.title },
     });
   }
 
@@ -1260,23 +1763,55 @@ export async function addTaskAttachments({ companyId, workspaceId, userId, role,
     throw err;
   }
 
-  const attachments = (files || []).map((f) => ({
-    name: f.originalname,
-    url: `${requestBaseUrl}/uploads/${f.filename}`,
-    size: f.size,
-    type: f.mimetype,
+  const uploadedFiles = await uploadIncomingFiles({
+    files,
+    requestBaseUrl,
+    category: 'task-attachments',
+    entityId: taskId,
+  });
+
+  const attachments = uploadedFiles.map((u, i) => ({
+    name: u.name || files[i].originalname,
+    url: u.url,
+    size: files[i].size,
+    type: u.type,
     uploadedBy: userId,
+    storageProvider: u.storageProvider,
+    objectKey: u.objectKey,
   }));
 
   if (!attachments.length) return task;
 
-  await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { attachments } });
+  await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { attachments: { $each: attachments } } });
+
+  for (const attachment of attachments) {
+    await logTaskActivity({
+      tenantId,
+      taskId: taskId,
+      userId,
+      action: 'ATTACHMENT_ADDED',
+      newValue: attachment.name,
+      message: `added attachment: "${attachment.name}"`
+    });
+  }
+
+  const { ActivityLog: ActivityLogModel } = await getTenantModels(tenantId);
+  await ActivityLogModel.create({
+    tenantId,
+    workspaceId,
+    userId,
+    type: 'attachment_added',
+    description: `Added ${attachments.length} attachment(s) to "${task.title}"`,
+    entityType: 'TASK',
+    entityId: taskId,
+    metadata: { projectId: task.projectId, count: attachments.length },
+  });
   return Task.findOne({ _id: taskId, tenantId, workspaceId });
 }
 
 export async function addTaskComment({ companyId, workspaceId, userId, role, taskId, content }) {
   const tenantId = companyId;
-  const { Task } = await getTenantModels(companyId);
+  const { Task, Label, User } = await getTenantModels(companyId);
 
   const task = await Task.findOne({
     _id: taskId,
@@ -1298,58 +1833,168 @@ export async function addTaskComment({ companyId, workspaceId, userId, role, tas
     updatedAt: new Date(),
   };
 
-  await Task.updateOne({ _id: taskId, tenantId, workspaceId }, { $push: { comments: comment } });
-  return Task.findOne({ _id: taskId, tenantId, workspaceId });
-}
-
-export async function getOverdueTasks({ tenantId, userId, role }) {
-  const { Task, QuickTask, Project } = await getTenantModels(tenantId);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0); // Align with frontend (only tasks due BEFORE today)
-
-  // 1. Get active project IDs (exclude archived)
-  const activeProjects = await Project.find({
-    tenantId,
-    status: { $ne: 'archived' }
-  }).select('_id').lean();
-  const activeProjectIds = activeProjects.map(p => p._id);
-
-  const query = {
-    tenantId,
-    dueDate: { $lt: now },
-    status: { $ne: 'done' }
-  };
-
-  if (!isAdminRole(role) && role !== 'manager') {
-    query.assigneeIds = userId;
+  // 1. Ensure "Comment" label exists and add it
+  let commentLabel = await Label.findOne({ tenantId, workspaceId, name: 'Comment' });
+  if (!commentLabel) {
+    try {
+      commentLabel = await Label.create({
+        tenantId,
+        workspaceId,
+        name: 'Comment',
+        color: '#3b82f6',
+      });
+    } catch (e) {
+      // If concurrent creation failed due to unique index, find it
+      commentLabel = await Label.findOne({ tenantId, workspaceId, name: 'Comment' });
+    }
   }
 
-  // Fetch both regular tasks (active projects or no project) and quick tasks
-  const [tasks, quickTasks] = await Promise.all([
-    Task.find({
-      ...query,
+  const update = {
+    $push: { comments: comment },
+  };
+
+  if (commentLabel && (!task.labels || !task.labels.some(l => String(l) === String(commentLabel._id)))) {
+    update.$addToSet = { labels: commentLabel._id };
+  }
+
+  await Task.updateOne({ _id: taskId, tenantId }, update);
+
+  await logTaskActivity({
+    tenantId,
+    taskId: taskId,
+    userId,
+    action: 'COMMENT_ADDED',
+    message: `added a comment`
+  });
+
+  const { ActivityLog: ActivityLogModel } = await getTenantModels(tenantId);
+  await ActivityLogModel.create({
+    tenantId,
+    workspaceId: task.workspaceId,
+    userId,
+    type: 'COMMENT_ADDED',
+    description: `Commented on "${task.title}": ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`,
+    entityType: 'TASK',
+    entityId: taskId,
+    metadata: { projectId: task.projectId },
+  });
+
+  // 2. Notifications
+  const sender = await User.findById(userId).select('name').lean();
+  const recipients = new Set();
+  if (task.reporterId && String(task.reporterId) !== String(userId)) recipients.add(String(task.reporterId));
+  (task.assigneeIds || []).forEach(aid => {
+    if (aid && String(aid) !== String(userId)) recipients.add(String(aid));
+  });
+
+  if (recipients.size > 0) {
+    await notifyUsers({
+      tenantId,
+      workspaceId: task.workspaceId,
+      userIds: Array.from(recipients),
+      type: 'comment_added',
+      title: 'New comment on task',
+      message: `${sender?.name || 'Someone'} commented on "${task.title}": ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+      relatedId: taskId,
+    });
+  }
+
+  return Task.findOne({ _id: taskId, tenantId })
+    .populate('assigneeIds', 'name avatar color fontColor')
+    .populate('reporterId', 'name avatar color fontColor')
+    .populate('projectId', 'name')
+    .populate('labels')
+    .populate('subtasks.assigneeId', 'name avatar color fontColor');
+}
+
+export async function getOverdueTasks({ tenantId, workspaceId, userId, role }) {
+  const { Task, QuickTask, Project } = await getTenantModels(tenantId);
+  const now = new Date();
+
+  const allowedProjects = await getAccessibleProjectIds({ tenantId, workspaceId, userId, role });
+
+  // 1. Project Tasks Filter
+  const taskFilter = {
+    tenantId,
+    workspaceId,
+    ...getOverdueQueryFilter(now),
+    $or: [{ parentTaskId: null }, { parentTaskId: { $exists: false } }],
+  };
+
+  // Exclude tasks from archived projects
+  const archivedProjects = await Project.find({ tenantId, workspaceId, status: 'archived' }).select('_id').lean();
+  if (archivedProjects.length > 0) {
+    const archivedIds = archivedProjects.map(p => p._id);
+    if (taskFilter.$and) {
+      taskFilter.$and.push({ projectId: { $nin: archivedIds } });
+    } else {
+      taskFilter.$and = [{ projectId: { $nin: archivedIds } }];
+    }
+  }
+
+  if (allowedProjects !== null) {
+    const projectAccessFilter = {
       $or: [
-        { projectId: { $in: activeProjectIds } },
-        { projectId: { $exists: false } },
-        { projectId: null }
-      ]
-    }).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean(),
-    QuickTask.find(query).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean()
+        ...(allowedProjects.length ? [{ projectId: { $in: allowedProjects } }] : []),
+        buildDirectTaskAccessFilter(userId),
+      ],
+    };
+    if (taskFilter.$and) {
+      taskFilter.$and.push(projectAccessFilter);
+    } else {
+      taskFilter.$and = [projectAccessFilter];
+    }
+  }
+
+  // 2. Quick Tasks Filter
+  const quickTaskFilter = {
+    tenantId,
+    workspaceId,
+    ...getOverdueQueryFilter(now),
+  };
+
+  if (!isAdminRole(role)) {
+    if (['manager', 'team_leader'].includes(role)) {
+      // Managers see all public, and their own private
+      quickTaskFilter.$or = [
+        { isPrivate: false },
+        { reporterId: userId },
+        { createdBy: userId },
+        { assigneeIds: userId }
+      ];
+    } else {
+      // Others only see where they are involved
+      quickTaskFilter.$or = [
+        { reporterId: userId },
+        { createdBy: userId },
+        { assigneeIds: userId }
+      ];
+    }
+  }
+
+  // Fetch both types of tasks
+  const [tasks, qTasks] = await Promise.all([
+    Task.find(taskFilter).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean(),
+    QuickTask.find(quickTaskFilter).populate('assigneeIds', 'name').sort({ dueDate: 1 }).lean()
   ]);
 
-  const allTasks = [...tasks, ...quickTasks];
+  const allFilteredTasks = [...tasks, ...qTasks];
 
-  const formattedTasks = allTasks.map(t => ({
-    id: String(t._id),
-    title: t.title,
-    dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split('T')[0] : null,
-    assignedToName: t.assigneeIds && t.assigneeIds.length > 0
-      ? t.assigneeIds.map(u => u.name).join(', ')
-      : 'Unassigned'
-  })).sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
+  const formattedTasks = allFilteredTasks
+    .map((t) => ({
+      id: String(t._id),
+      title: t.title,
+      dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split('T')[0] : null,
+      assignedToName:
+        t.assigneeIds && t.assigneeIds.length > 0
+          ? t.assigneeIds.map((u) => u.name).join(', ')
+          : 'Unassigned',
+      type: tasks.some(pt => String(pt._id) === String(t._id)) ? 'project' : 'quick'
+    }))
+    .sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
 
   return {
     count: formattedTasks.length,
-    tasks: formattedTasks
+    tasks: formattedTasks,
   };
 }

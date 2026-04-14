@@ -338,7 +338,7 @@ export const PremiumGanttTimeline: React.FC<PremiumGanttTimelineProps> = ({
           style={{ width: SIDEBAR_WIDTH + days.length * DAY_WIDTH, height: 'auto' }}
         >
           {/* SVG Connection Layer */}
-          <svg className="absolute inset-0 z-20 pointer-events-none overflow-visible">
+          <svg className="absolute inset-0 z-[5] pointer-events-none overflow-visible">
             <defs>
               <marker id="gantt-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />

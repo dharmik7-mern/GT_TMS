@@ -99,8 +99,8 @@ export const CompaniesPage: React.FC = () => {
   const filtered = companies.filter(c => {
     const name = c.name || '';
     const email = c.email || '';
-    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || 
-                      email.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) ||
+      email.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchSearch && matchStatus;
   });

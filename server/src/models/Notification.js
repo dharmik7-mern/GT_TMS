@@ -29,6 +29,10 @@ const notificationTypes = [
   'quick_task_comment_added',
   'quick_task_attachments_added',
   'daily_work_report_generated',
+  'task_overdue',
+  'extension_request_created',
+  'extension_request_approved',
+  'extension_request_rejected',
 ];
 
 const notificationSchema = new mongoose.Schema(

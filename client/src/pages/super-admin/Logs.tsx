@@ -62,12 +62,12 @@ const LOG_SUMMARY_CARDS: Array<{
   value: 'all' | 'create' | 'update' | 'delete' | 'info';
   color: string;
 }> = [
-  { label: 'Visible Logs', value: 'all', color: 'text-surface-700' },
-  { label: 'Created', value: 'create', color: 'text-emerald-600' },
-  { label: 'Updated', value: 'update', color: 'text-brand-600' },
-  { label: 'Deleted', value: 'delete', color: 'text-rose-600' },
-  { label: 'Info', value: 'info', color: 'text-surface-500' },
-];
+    { label: 'Visible Logs', value: 'all', color: 'text-surface-700' },
+    { label: 'Created', value: 'create', color: 'text-emerald-600' },
+    { label: 'Updated', value: 'update', color: 'text-brand-600' },
+    { label: 'Deleted', value: 'delete', color: 'text-rose-600' },
+    { label: 'Info', value: 'info', color: 'text-surface-500' },
+  ];
 
 function normalizeType(type: string) {
   const v = String(type || '').toLowerCase();
@@ -239,33 +239,34 @@ export const LogsPage: React.FC = () => {
         {LOG_SUMMARY_CARDS.map((item) => {
           const count =
             item.value === 'all' ? summary.total :
-            item.value === 'create' ? summary.create :
-            item.value === 'update' ? summary.update :
-            item.value === 'delete' ? summary.delete :
-            summary.info;
+              item.value === 'create' ? summary.create :
+                item.value === 'update' ? summary.update :
+                  item.value === 'delete' ? summary.delete :
+                    summary.info;
           const isActive = typeFilter === item.value;
 
           return (
-          <button
-            key={item.label}
-            type="button"
-            onClick={() => setTypeFilter(item.value)}
-            className={cn(
-              'card p-4 text-left transition-all border',
-              isActive
-                ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
-                : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
-            )}
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">{item.label}</p>
-            <div className="mt-2 flex items-end justify-between gap-3">
-              <p className={cn('text-2xl font-semibold', item.color)}>{count}</p>
-              <span className={cn('text-xs font-medium', isActive ? 'text-brand-600 dark:text-brand-300' : 'text-surface-400')}>
-                {isActive ? 'Showing' : 'View'}
-              </span>
-            </div>
-          </button>
-        )})}
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => setTypeFilter(item.value)}
+              className={cn(
+                'card p-4 text-left transition-all border',
+                isActive
+                  ? 'border-brand-500 ring-2 ring-brand-200 dark:ring-brand-900/40 shadow-card-hover'
+                  : 'border-surface-200 dark:border-surface-800 hover:border-surface-300 dark:hover:border-surface-700'
+              )}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">{item.label}</p>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <p className={cn('text-2xl font-semibold', item.color)}>{count}</p>
+                <span className={cn('text-xs font-medium', isActive ? 'text-brand-600 dark:text-brand-300' : 'text-surface-400')}>
+                  {isActive ? 'Showing' : 'View'}
+                </span>
+              </div>
+            </button>
+          )
+        })}
       </div>
 
       <div className="card p-4 sm:p-5">
@@ -429,7 +430,7 @@ export const LogsPage: React.FC = () => {
               <div className="rounded-2xl border border-surface-100 p-4 dark:border-surface-800">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-surface-400">Metadata</p>
                 <pre className="mt-3 max-h-[280px] overflow-auto rounded-xl bg-[#0f172a] p-3 text-xs leading-6 text-slate-100">
-{JSON.stringify(selectedLog.metadata || {}, null, 2)}
+                  {JSON.stringify(selectedLog.metadata || {}, null, 2)}
                 </pre>
               </div>
             </div>

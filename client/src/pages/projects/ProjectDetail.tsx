@@ -3,8 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, List, BarChart3, Settings2, Plus, ListTodo,
-  ArrowLeft, Edit3, Calendar, Flag,
-  Users
+  ArrowLeft, Edit3, Calendar, Flag, Users, ChevronDown, Clock, Activity
 } from 'lucide-react';
 import { cn, formatDate, getProgressColor } from '../../utils/helpers';
 import { useAppStore } from '../../context/appStore';
@@ -12,14 +11,17 @@ import { useAuthStore } from '../../context/authStore';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from '../../app/constants';
 import { KanbanBoard, type KanbanBoardHandle } from '../../components/KanbanBoard';
 import { TaskModal } from '../../components/TaskModal';
+import { TaskCompletionModal } from '../../components/TaskModal/TaskCompletionModal';
 import { TaskCard } from '../../components/TaskCard';
 import { UserAvatar, AvatarGroup } from '../../components/UserAvatar';
 import { ProgressBar, EmptyState, Tabs, TabsContent } from '../../components/ui';
-import type { Task, TaskStatus, TimelinePhase, TaskCreationRequest, Priority } from '../../app/types';
+import type { Task, TaskStatus, TimelinePhase, TaskCreationRequest, Priority, ProjectSdlcPhase } from '../../app/types';
 import { projectsService, tasksService, timelineService } from '../../services/api';
 import { emitErrorToast, emitSuccessToast } from '../../context/toastBus';
 import { ProjectTimelineModule } from '../../components/ProjectTimelineModule';
+import { Modal } from '../../components/Modal';
 import { ProjectTaskCreateModal, type ProjectTaskCreateValues } from '../../components/ProjectTaskCreateModal';
+import { HighDensityTaskList } from '../../components/HighDensityTaskList';
 
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,13 +40,20 @@ export const ProjectDetailPage: React.FC = () => {
   const [timelinePhases, setTimelinePhases] = useState<TimelinePhase[]>([]);
   const [taskRequests, setTaskRequests] = useState<TaskCreationRequest[]>([]);
   const [loadingTaskRequests, setLoadingTaskRequests] = useState(false);
+  const [isRequestsCollapsed, setIsRequestsCollapsed] = useState(false);
+  const [isSdlcEditorOpen, setIsSdlcEditorOpen] = useState(false);
+  const [editingSdlcPlan, setEditingSdlcPlan] = useState<ProjectSdlcPhase[]>([]);
+  const [isSavingSdlc, setIsSavingSdlc] = useState(false);
+  const [completionModal, setCompletionModal] = useState<{ open: boolean; taskId: string; title: string } | null>(null);
   const notificationTaskId = searchParams.get('taskId');
-  const notificationTab = searchParams.get('tab') === 'activity' ? 'activity' : 'details';
 
   const project = projects.find(p => p.id === id);
   const workspacePermissions = workspaces[0]?.settings?.permissions || {};
   const canEditOtherProjects = Boolean(workspacePermissions?.editOtherProjects?.[user?.role || 'team_member']);
-  const projectTasks = tasks.filter(t => t.projectId === id);
+  const projectTasks = tasks.filter(t => {
+    const pid = typeof t.projectId === 'string' ? t.projectId : (t.projectId as any)?._id || (t.projectId as any)?.id;
+    return String(pid) === String(id);
+  });
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const members = users.filter(u => project?.members.includes(u.id) && !['super_admin', 'admin'].includes(u.role));
   const canCreateTask = user?.role !== 'team_member' || (project?.reportingPersonIds || []).includes(user?.id);
@@ -54,6 +63,7 @@ export const ProjectDetailPage: React.FC = () => {
     user?.id &&
     ((project?.reportingPersonIds || []).includes(user.id) || ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || ''))
   );
+  const isAdmin = ['super_admin', 'admin', 'manager', 'team_leader'].includes(user?.role || '');
   const reportingPersons = users.filter(u => project?.reportingPersonIds?.includes(u.id));
   const categories = project?.subcategories || [];
   const filteredProjectTasks = selectedCategoryId === 'all'
@@ -88,6 +98,35 @@ export const ProjectDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (!project?.id) return;
+    const fetchProjectTasks = async () => {
+      try {
+        const res = await tasksService.getAll(project.id, undefined, undefined, 1, 1000);
+        const items: any[] = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+        if (items.length > 0) {
+          // Normalize: backend populates assigneeIds & projectId as objects — extract string IDs
+          const normalized = items.map((t: any) => ({
+            ...t,
+            id: t.id || t._id,
+            projectId: typeof t.projectId === 'object' && t.projectId !== null
+              ? String(t.projectId._id || t.projectId.id || t.projectId)
+              : String(t.projectId || project.id),
+            assigneeIds: Array.isArray(t.assigneeIds)
+              ? t.assigneeIds.map((a: any) =>
+                  typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)
+                ).filter(Boolean)
+              : [],
+          }));
+          useAppStore.getState().mergeTasks(normalized);
+        }
+      } catch (err) {
+        console.error('[ProjectDetail] Failed to fetch project tasks:', err);
+      }
+    };
+    void fetchProjectTasks();
+  }, [project?.id]);
+
+  useEffect(() => {
+    if (!project?.id) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -104,6 +143,61 @@ export const ProjectDetailPage: React.FC = () => {
       cancelled = true;
     };
   }, [project?.id]);
+
+
+  // Re-fetch this project's tasks and merge into store (call after task creation/approval)
+  const refreshProjectTasks = async () => {
+    if (!project?.id) return;
+    try {
+      const res = await tasksService.getAll(project.id, undefined, undefined, 1, 1000);
+      const items: any[] = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+      if (items.length > 0) {
+        const normalized = items.map((t: any) => ({
+          ...t,
+          id: t.id || t._id,
+          projectId: typeof t.projectId === 'object' && t.projectId !== null
+            ? String(t.projectId._id || t.projectId.id || t.projectId)
+            : String(t.projectId || project.id),
+          assigneeIds: Array.isArray(t.assigneeIds)
+            ? t.assigneeIds.map((a: any) =>
+                typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)
+              ).filter(Boolean)
+            : [],
+        }));
+        useAppStore.getState().mergeTasks(normalized);
+      }
+    } catch (err) {
+      console.error('[ProjectDetail] Failed to refresh project tasks:', err);
+    }
+  };
+
+  const handleSdlcUpdate = async () => {
+    if (!project) return;
+    try {
+      setIsSavingSdlc(true);
+      await projectsService.update(project.id, { sdlcPlan: editingSdlcPlan });
+      emitSuccessToast('Delivery plan updated successfully', 'Project');
+      setIsSdlcEditorOpen(false);
+    } catch (error: any) {
+      emitErrorToast(error?.response?.data?.message || 'Failed to update delivery plan', 'Project');
+    } finally {
+      setIsSavingSdlc(false);
+    }
+  };
+
+  const handleAddSdlcPhase = () => {
+    setEditingSdlcPlan([...editingSdlcPlan, { name: '', durationDays: 1 }]);
+  };
+
+  const handleRemoveSdlcPhase = (index: number) => {
+    setEditingSdlcPlan(editingSdlcPlan.filter((_, i) => i !== index));
+  };
+
+  const updateSdlcPhase = (index: number, field: keyof ProjectSdlcPhase, value: any) => {
+    const next = [...editingSdlcPlan];
+    next[index] = { ...next[index], [field]: value };
+    setEditingSdlcPlan(next);
+  };
 
   if (!project) {
     return (
@@ -225,6 +319,22 @@ export const ProjectDetailPage: React.FC = () => {
           request.id === requestId ? result.request : request
         )));
       }
+      // If a task was created from the approved request, add it to the store immediately
+      if (action === 'approve' && result?.createdTask) {
+        const ct: any = result.createdTask;
+        useAppStore.getState().mergeTasks([{
+          ...ct,
+          id: ct.id || ct._id,
+          projectId: project.id,
+          assigneeIds: Array.isArray(ct.assigneeIds)
+            ? ct.assigneeIds.map((a: any) =>
+                typeof a === 'object' && a !== null ? String(a._id || a.id || a) : String(a)
+              ).filter(Boolean)
+            : [],
+        }]);
+      }
+      // Always re-fetch this project's tasks to guarantee board sync
+      await refreshProjectTasks();
       await bootstrap();
       emitSuccessToast(
         action === 'approve' ? 'Task request approved and created.' : 'Task request rejected.',
@@ -257,12 +367,41 @@ export const ProjectDetailPage: React.FC = () => {
 
   const handleMoveTaskRemote = async (taskId: string, status: TaskStatus) => {
     try {
+      const task = projectTasks.find(t => t.id === taskId);
+      
+      // If user is moving to 'done' and is NOT a manager, intercept with popup
+      if (status === 'done' && !isAdmin && task) {
+        setCompletionModal({ open: true, taskId, title: task.title });
+        return;
+      }
+
       await tasksService.update(taskId, { status });
       await bootstrap(); 
     } catch (error: any) {
       if (error?.config?.suppressErrorToast) return;
       const message = error?.response?.data?.error?.message || error?.response?.data?.message || 'Movement failed';
       emitErrorToast(message, 'Board sync error');
+    }
+  };
+
+  const handleCompletionSubmit = async (remark: string, files: File[]) => {
+    if (!completionModal) return;
+    try {
+      const response = await tasksService.update(completionModal.taskId, { 
+        status: 'in_review', 
+        completionRemark: remark 
+      });
+      
+      if (files.length > 0) {
+        await tasksService.uploadAttachments(completionModal.taskId, files);
+      }
+
+      await bootstrap();
+      emitSuccessToast('Task submitted for review.', 'Review Pending');
+    } catch (error: any) {
+       const message = error?.response?.data?.error?.message || error?.response?.data?.message || 'Submission failed';
+       emitErrorToast(message, 'Review Request');
+       throw error;
     }
   };
 
@@ -273,7 +412,7 @@ export const ProjectDetailPage: React.FC = () => {
 
   const TAB_ITEMS = [
     { value: 'kanban', label: 'Board', icon: <LayoutDashboard size={14} /> },
-    { value: 'list', label: 'List', icon: <List size={14} /> },
+    { value: 'list', label: 'Activity', icon: <Activity size={14} /> },
     { value: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
     { value: 'overview', label: 'Overview', icon: <BarChart3 size={14} /> },
     { value: 'team', label: 'Team', icon: <Users size={14} /> },
@@ -365,7 +504,7 @@ export const ProjectDetailPage: React.FC = () => {
               key === 'done' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50'
             )}>
               <span className="w-1 h-1 rounded-full" style={{ backgroundColor: cfg.color }} />
-              {cfg.label.split(' ')[0]}
+              {cfg.label}
               <span className="ml-0.5 opacity-60">{statusCounts[key]}</span>
             </div>
           ))}
@@ -436,31 +575,22 @@ export const ProjectDetailPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="list" className="pt-4">
-            <div className="space-y-2">
-            {filteredProjectTasks.length === 0 ? (
-                <EmptyState
-                  icon={<List size={24} />}
-                  title={selectedCategoryId === 'all' ? 'No tasks yet' : 'No tasks in this category'}
-                  description={canCreateTask ? "Create your first task to get started" : canRequestTask ? "Request a task from the reporting person for this project." : "Tasks will appear here once created by a manager."}
-                  action={canCreateTask || canRequestTask ? <button onClick={() => handleAddTask()} className="btn-primary btn-md"><Plus size={14} /> {canCreateTask ? 'Add Task' : 'Request Task'}</button> : null}
-                />
-              ) : (
-              filteredProjectTasks.map(task => (
-                  <div key={task.id} className="group">
-                    <TaskCard task={task} compact onClick={() => openTask(task)} />
-                  </div>
-                ))
-            )}
+          <div className="space-y-2">
+            <HighDensityTaskList
+               projectId={project.id}
+               categoryId={selectedCategoryId}
+               onOpenTask={openTask}
+            />
           </div>
         </TabsContent>
-
-        <TabsContent value="timeline" className="pt-2">
+        <TabsContent value="timeline" className="pt-4">
           <ProjectTimelineModule projectId={project.id} />
         </TabsContent>
 
+
         <TabsContent value="overview" className="pt-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="card p-5 md:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="card p-4 md:col-span-3">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="font-display font-semibold text-surface-900 dark:text-white">Task Requests</h3>
@@ -469,61 +599,70 @@ export const ProjectDetailPage: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setIsRequestsCollapsed(!isRequestsCollapsed)} 
+                      className="p-1 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors text-surface-400 hover:text-surface-600 dark:hover:text-surface-300"
+                      title={isRequestsCollapsed ? 'Expand' : 'Collapse'}
+                    >
+                      <ChevronDown size={18} className={cn("transition-transform duration-200", isRequestsCollapsed && "-rotate-90")} />
+                    </button>
                     <Link to={`/projects/${project.id}/requests`} className="text-xs font-medium text-brand-600 dark:text-brand-400">
                       Open full page
                     </Link>
                     {loadingTaskRequests ? <span className="text-xs text-surface-400">Loading...</span> : null}
                   </div>
                 </div>
-              <div className="space-y-3">
-                {taskRequests.length === 0 ? (
-                  <p className="text-sm text-surface-400">No task requests found for this project.</p>
-                ) : (
-                  taskRequests.slice(0, 8).map((request) => {
-                    const requester = users.find((member) => member.id === request.requestedBy);
-                    const assignees = users.filter((member) => request.assigneeIds.includes(member.id));
-                    return (
-                      <div key={request.id} className="rounded-2xl border border-surface-100 dark:border-surface-800 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">{request.title}</p>
-                            <p className="mt-1 text-xs text-surface-400">
-                              Requested by {requester?.name || 'Unknown user'} on {formatDate(request.createdAt)}
-                            </p>
-                            {request.description ? (
-                              <p className="mt-2 text-sm text-surface-600 dark:text-surface-300">{request.description}</p>
-                            ) : null}
-                            <p className="mt-2 text-xs text-surface-500">
-                              Assignees: {assignees.length ? assignees.map((member) => member.name).join(', ') : 'Not assigned yet'}
-                            </p>
-                            {request.reviewNote ? <p className="mt-2 text-xs text-surface-500">Note: {request.reviewNote}</p> : null}
+              {!isRequestsCollapsed && (
+                <div className="space-y-3">
+                  {taskRequests.length === 0 ? (
+                    <p className="text-sm text-surface-400">No task requests found for this project.</p>
+                  ) : (
+                    taskRequests.slice(0, 8).map((request) => {
+                      const requester = users.find((member) => member.id === request.requestedBy);
+                      const assignees = users.filter((member) => request.assigneeIds.includes(member.id));
+                      return (
+                        <div key={request.id} className="rounded-2xl border border-surface-100 dark:border-surface-800 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-surface-900 dark:text-surface-100">{request.title}</p>
+                              <p className="mt-1 text-xs text-surface-400">
+                                Requested by {requester?.name || 'Unknown user'} on {formatDate(request.createdAt)}
+                              </p>
+                              {request.description ? (
+                                <p className="mt-2 text-sm text-surface-600 dark:text-surface-300">{request.description}</p>
+                              ) : null}
+                              <p className="mt-2 text-xs text-surface-500">
+                                Assignees: {assignees.length ? assignees.map((member) => member.name).join(', ') : 'Not assigned yet'}
+                              </p>
+                              {request.reviewNote ? <p className="mt-2 text-xs text-surface-500">Note: {request.reviewNote}</p> : null}
+                            </div>
+                            <span className={cn(
+                              'badge text-[10px]',
+                              request.requestStatus === 'approved' && 'badge-green',
+                              request.requestStatus === 'rejected' && 'badge-rose',
+                              request.requestStatus === 'pending' && 'badge-amber'
+                            )}>
+                              {request.requestStatus}
+                            </span>
                           </div>
-                          <span className={cn(
-                            'badge text-[10px]',
-                            request.requestStatus === 'approved' && 'badge-green',
-                            request.requestStatus === 'rejected' && 'badge-rose',
-                            request.requestStatus === 'pending' && 'badge-amber'
-                          )}>
-                            {request.requestStatus}
-                          </span>
+                          {canReviewTaskRequests && request.requestStatus === 'pending' ? (
+                            <div className="mt-3 flex gap-2">
+                              <button onClick={() => { void handleReviewTaskRequest(request.id, 'approve'); }} className="btn-primary btn-sm">
+                                Approve
+                              </button>
+                              <button onClick={() => { void handleReviewTaskRequest(request.id, 'reject'); }} className="btn-secondary btn-sm">
+                                Reject
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
-                        {canReviewTaskRequests && request.requestStatus === 'pending' ? (
-                          <div className="mt-3 flex gap-2">
-                            <button onClick={() => { void handleReviewTaskRequest(request.id, 'approve'); }} className="btn-primary btn-sm">
-                              Approve
-                            </button>
-                            <button onClick={() => { void handleReviewTaskRequest(request.id, 'reject'); }} className="btn-secondary btn-sm">
-                              Reject
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
-            <div className="card p-5">
+            <div className="card p-4">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Task Distribution</h3>
               <div className="space-y-3">
                   {(Object.entries(STATUS_CONFIG) as [TaskStatus, typeof STATUS_CONFIG.todo][]).map(([key, cfg]) => {
@@ -548,7 +687,7 @@ export const ProjectDetailPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="card p-5">
+            <div className="card p-4">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Team Members</h3>
               <div className="space-y-3">
                 {members.map(member => {
@@ -574,7 +713,7 @@ export const ProjectDetailPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="card p-5">
+            <div className="card p-4">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Reporting Persons</h3>
               <div className="space-y-3">
                 {reportingPersons.length > 0 ? reportingPersons.map(person => (
@@ -591,7 +730,7 @@ export const ProjectDetailPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="card p-5">
+            <div className="card p-4">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Priority Breakdown</h3>
               <div className="space-y-3">
                 {(Object.entries(PRIORITY_CONFIG) as [Priority, typeof PRIORITY_CONFIG.low][]).map(([key, cfg]) => {
@@ -619,11 +758,25 @@ export const ProjectDetailPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="card p-5">
-              <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Delivery Planning</h3>
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-surface-900 dark:text-white">Delivery Planning</h3>
+                {user?.role !== 'team_member' && (
+                  <button 
+                    onClick={() => {
+                      setEditingSdlcPlan(project.sdlcPlan || []);
+                      setIsSdlcEditorOpen(true);
+                    }}
+                    className="p-1.5 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors text-surface-400 hover:text-brand-600"
+                    title="Configure Delivery Plan"
+                  >
+                    <Settings2 size={16} />
+                  </button>
+                )}
+              </div>
               {project.sdlcPlan && project.sdlcPlan.length > 0 ? (
                 <div className="space-y-3">
-                  {project.sdlcPlan.map((phase) => (
+                  {project.sdlcPlan.map((phase, idx) => (
                     <div key={`${phase.name}-${phase.durationDays}`} className="flex items-center justify-between gap-3 rounded-xl bg-surface-50 dark:bg-surface-800/60 px-4 py-3 border border-transparent dark:border-surface-700/50">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-surface-800 dark:text-surface-200">{phase.name}</p>
@@ -644,7 +797,7 @@ export const ProjectDetailPage: React.FC = () => {
               )}
             </div>
 
-            <div className="card p-5">
+            <div className="card p-4">
               <h3 className="font-display font-semibold text-surface-900 dark:text-white mb-4">Recent Activity</h3>
               <div className="space-y-2.5">
                 {projectTasks.slice(0, 6).map(task => (
@@ -662,7 +815,7 @@ export const ProjectDetailPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="team" className="pt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             {members.map(member => {
               const memberTasks = projectTasks.filter(t => t.assigneeIds.includes(member.id));
               const doneTasks = memberTasks.filter(t => t.status === 'done').length;
@@ -671,85 +824,43 @@ export const ProjectDetailPage: React.FC = () => {
               const progress = memberTasks.length > 0 ? (doneTasks / memberTasks.length) * 100 : 0;
               
               return (
-                <div key={member.id} className="card p-5 flex flex-col h-full bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <UserAvatar name={member.name} avatar={member.avatar} color={member.color} size="md" />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-display font-bold text-surface-900 dark:text-white">{member.name}</h4>
-                          {isReportingPerson && (
-                            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-purple-50 text-purple-700 border border-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800">
-                              Lead
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-surface-500">{member.jobTitle || 'Team Member'}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-display font-bold text-surface-900 dark:text-white">{Math.round(progress)}%</p>
-                      <p className="text-[10px] text-surface-400 font-bold uppercase tracking-tight">Completion</p>
+                <div key={member.id} className="card p-3 flex flex-col items-center text-center bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+                  <div className="relative mb-3">
+                    <UserAvatar name={member.name} avatar={member.avatar} color={member.color} size="lg" />
+                    <div className="absolute -bottom-1 -right-1 bg-white dark:bg-surface-800 rounded-full px-1.5 py-0.5 shadow-sm border border-surface-100 dark:border-surface-700">
+                      <p className="text-[9px] font-black text-brand-600 dark:text-brand-400">{Math.round(progress)}%</p>
                     </div>
                   </div>
-
-                  <div className="mb-5">
-                    <div className="flex items-center justify-between text-[11px] mb-1.5">
-                      <span className="text-surface-500 font-medium">Monthly Workload</span>
-                      <span className="text-surface-700 dark:text-surface-300 font-bold">{doneTasks} / {memberTasks.length} Tasks</span>
-                    </div>
-                    <div className="h-1.5 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progress}%` }}
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: member.color || '#3b82f6' }}
-                      />
-                    </div>
+                  
+                  <div className="w-full mb-3">
+                    <h4 className="font-display font-bold text-sm text-surface-900 dark:text-white truncate">{member.name}</h4>
+                    <p className="text-[10px] text-surface-400 truncate mt-0.5 font-medium">{member.jobTitle || 'Team Member'}</p>
                   </div>
 
-                  <div className="flex-1">
-                    <h5 className="text-[10px] font-bold text-surface-400 uppercase tracking-wider mb-3">Active Tasks ({activeTasks.length})</h5>
-                    {activeTasks.length > 0 ? (
-                      <div className="space-y-2">
-                        {activeTasks.slice(0, 3).map(task => (
-                          <div key={task.id} className="group p-2.5 rounded-xl bg-surface-50 dark:bg-surface-800/40 border border-transparent hover:border-surface-200 dark:hover:border-surface-700 transition-all cursor-pointer" onClick={() => openTask(task)}>
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                              <p className="text-xs font-semibold text-surface-800 dark:text-surface-200 truncate flex-1">{task.title}</p>
-                              <span className={cn(
-                                "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase",
-                                (STATUS_CONFIG[task.status] || STATUS_CONFIG.todo).bg,
-                                (STATUS_CONFIG[task.status] || STATUS_CONFIG.todo).text
-                              )}>
-                                {(STATUS_CONFIG[task.status] || STATUS_CONFIG.todo).label.split(' ')[0]}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-surface-400 font-medium flex items-center gap-1">
-                                <Calendar size={10} />
-                                {task.dueDate ? formatDate(task.dueDate) : 'No date'}
-                              </span>
-                              <span className="text-[10px] text-surface-400 font-medium px-1.5 py-0.5 rounded-md bg-white dark:bg-surface-900 border border-surface-100 dark:border-surface-800 shadow-sm">
-                                {task.priority.toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                        {activeTasks.length > 3 && (
-                          <p className="text-[11px] text-surface-400 text-center font-medium pt-1">
-                            + {activeTasks.length - 3} more tasks
-                          </p>
-                        )}
-                      </div>
-                    ) : memberTasks.length > 0 ? (
-                      <div className="text-center py-5 rounded-xl border border-dashed border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/20 dark:bg-emerald-900/10">
-                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">All assigned tasks completed</p>
-                      </div>
-                    ) : (
-                      <div className="text-center py-5 rounded-xl border border-dashed border-surface-200 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-800/20">
-                        <p className="text-[11px] text-surface-400 font-medium">No tasks assigned yet</p>
-                      </div>
-                    )}
+                  <div className="w-full space-y-2.5">
+                    <div className="flex flex-col gap-1">
+                       <div className="flex justify-between items-center text-[9px] font-bold text-surface-400 uppercase tracking-tighter">
+                         <span>Workload</span>
+                         <span className="text-surface-600 dark:text-surface-300">{doneTasks}/{memberTasks.length}</span>
+                       </div>
+                       <div className="h-1 w-full bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
+                         <div className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: member.color || '#3b82f6' }} />
+                       </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-surface-50 dark:border-surface-800/50">
+                       <p className="text-[9px] font-bold text-surface-400 uppercase tracking-tighter text-left mb-1.5 flex justify-between">
+                         <span>Active Tasks</span>
+                         <span className="text-brand-500">{activeTasks.length}</span>
+                       </p>
+                       <div className="flex flex-wrap gap-1 justify-start">
+                         {activeTasks.slice(0, 3).map(task => (
+                           <div key={task.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: (STATUS_CONFIG[task.status] || STATUS_CONFIG.todo).color }} title={task.title} />
+                         ))}
+                         {activeTasks.length > 3 && <span className="text-[8px] text-surface-400">+{activeTasks.length - 3}</span>}
+                         {activeTasks.length === 0 && <span className="text-[9px] text-surface-300 italic">Idle</span>}
+                       </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -762,14 +873,12 @@ export const ProjectDetailPage: React.FC = () => {
       <TaskModal
         task={selectedTask}
         open={showTaskModal}
-        initialTab={notificationTab}
         onClose={() => {
           setShowTaskModal(false);
           setSelectedTaskId(null);
           if (notificationTaskId) {
             const nextParams = new URLSearchParams(searchParams);
             nextParams.delete('taskId');
-            nextParams.delete('tab');
             setSearchParams(nextParams, { replace: true });
           }
         }}
@@ -787,6 +896,82 @@ export const ProjectDetailPage: React.FC = () => {
         title={canCreateTask ? 'New Task' : 'Request Task'}
         onCreatePhase={handleCreatePhase}
       />
+
+      {completionModal && (
+        <TaskCompletionModal
+          open={completionModal.open}
+          onClose={() => setCompletionModal(null)}
+          onSubmit={handleCompletionSubmit}
+          taskTitle={completionModal.title}
+        />
+      )}
+
+      <Modal
+        open={isSdlcEditorOpen}
+        onClose={() => setIsSdlcEditorOpen(false)}
+        title="Customize Delivery Plan"
+        description="Define the phases and duration for this project's lifecycle."
+        size="lg"
+      >
+        <div className="p-6">
+          <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+            {editingSdlcPlan.map((phase, idx) => (
+              <div key={idx} className="flex items-end gap-3 p-4 rounded-2xl bg-surface-50 dark:bg-surface-900/50 border border-surface-100 dark:border-surface-800">
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest ml-1">Phase Name</label>
+                  <input 
+                    type="text" 
+                    value={phase.name} 
+                    onChange={(e) => updateSdlcPhase(idx, 'name', e.target.value)}
+                    placeholder="e.g. Design, Testing..."
+                    className="w-full h-10 rounded-xl border border-surface-200 bg-white px-3 text-sm focus:ring-2 focus:ring-brand-500/20 dark:border-surface-800 dark:bg-surface-950"
+                  />
+                </div>
+                <div className="w-32 space-y-1.5">
+                  <label className="text-[10px] font-bold text-surface-400 uppercase tracking-widest ml-1">Duration (days)</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    value={phase.durationDays} 
+                    onChange={(e) => updateSdlcPhase(idx, 'durationDays', parseInt(e.target.value) || 0)}
+                    className="w-full h-10 rounded-xl border border-surface-200 bg-white px-3 text-sm focus:ring-2 focus:ring-brand-500/20 dark:border-surface-800 dark:bg-surface-950"
+                  />
+                </div>
+                <button 
+                  onClick={() => handleRemoveSdlcPhase(idx)}
+                  className="h-10 w-10 flex flex-shrink-0 items-center justify-center rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                >
+                  <Plus size={18} className="rotate-45" />
+                </button>
+              </div>
+            ))}
+
+            <button 
+              onClick={handleAddSdlcPhase}
+              className="w-full py-3 border-2 border-dashed border-surface-200 dark:border-surface-800 rounded-2xl text-surface-400 hover:text-brand-600 hover:border-brand-300 dark:hover:border-surface-700 transition-all flex items-center justify-center gap-2 group"
+            >
+              <Plus size={18} className="group-hover:scale-110 transition-transform" />
+              <span className="text-sm font-semibold">Add New Phase</span>
+            </button>
+          </div>
+
+          <div className="mt-8 flex items-center justify-end gap-3">
+            <button 
+              onClick={() => setIsSdlcEditorOpen(false)}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSdlcUpdate}
+              disabled={isSavingSdlc}
+              className="btn-primary"
+            >
+              {isSavingSdlc ? 'Saving Changes...' : 'Save Plan'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
