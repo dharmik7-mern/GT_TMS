@@ -411,7 +411,7 @@ export interface Task {
   phaseId?: string;
   subcategoryId?: string;
   dependencies?: string[];
-  type?: 'task' | 'milestone';
+  type?: 'task' | 'milestone' | 'quick' | 'project' | 'personal';
   /** Embedded checklist items (GW-style subtask bar) */
   subtasks?: TaskSubtask[];
   subtaskCompleted?: number;
