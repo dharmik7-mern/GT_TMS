@@ -47,12 +47,11 @@ export const tasksService = {
   update: (id: string, data: unknown) => api.put(`/tasks/${id}`, data),
   delete: (id: string) => api.delete(`/tasks/${id}`),
   getOverview: () => api.get('/tasks/overview'),
-  getRequests: (params?: any) => api.get('/tasks/requests', { params }),
+  getRequests: (params?: unknown) => api.get('/tasks/requests', { params }),
   createRequest: (data: unknown) => api.post('/tasks/requests', data),
   getCompletionReviews: (projectId?: string, page: number = 1, limit: number = 500) => 
     api.get('/tasks', { params: { projectId, page, limit, status: 'in_review' } }),
-  getOverdue: (config?: unknown) => api.get('/tasks/overdue', config as any),
-  getRequests: (params?: unknown) => api.get('/tasks/requests', { params }),
+  getOverdue: (params?: unknown) => api.get('/tasks/overdue', { params }),
   reviewRequest: (id: string, data: unknown) => api.post(`/tasks/requests/${id}/review`, data),
 };
 
@@ -168,12 +167,6 @@ export const extensionRequestsService = {
   create: (data: unknown) => api.post('/extension-requests', data),
   approve: (id: string, note?: string) => api.put(`/extension-requests/${id}/approve`, { note }),
   reject: (id: string, note?: string) => api.put(`/extension-requests/${id}/reject`, { note }),
-};
-
-export const extensionRequestsService = {
-  getAll: () => api.get('/tasks/extension-requests'),
-  create: (data: unknown) => api.post('/tasks/extension-requests', data),
-  review: (id: string, data: unknown) => api.post(`/tasks/extension-requests/${id}/review`, data),
 };
 
 export const authService = {
