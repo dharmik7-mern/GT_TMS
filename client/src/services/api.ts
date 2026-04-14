@@ -52,7 +52,6 @@ export const tasksService = {
   getCompletionReviews: (projectId?: string, page: number = 1, limit: number = 500) =>
     api.get('/tasks', { params: { projectId, page, limit, status: 'in_review' } }),
   getOverdue: (config?: unknown) => api.get('/tasks/overdue', config as any),
-  getRequests: (params?: unknown) => api.get('/tasks/requests', { params }),
   reviewRequest: (id: string, data: unknown) => api.post(`/tasks/requests/${id}/review`, data),
 };
 
@@ -173,12 +172,7 @@ export const extensionRequestsService = {
   create: (data: unknown) => api.post('/extension-requests', data),
   approve: (id: string, note?: string) => api.put(`/extension-requests/${id}/approve`, { note }),
   reject: (id: string, note?: string) => api.put(`/extension-requests/${id}/reject`, { note }),
-};
-
-export const extensionRequestsService = {
-  getAll: () => api.get('/tasks/extension-requests'),
-  create: (data: unknown) => api.post('/tasks/extension-requests', data),
-  review: (id: string, data: unknown) => api.post(`/tasks/extension-requests/${id}/review`, data),
+  review: (id: string, data: unknown) => api.post(`/extension-requests/${id}/review`, data),
 };
 
 export const authService = {
