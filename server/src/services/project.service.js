@@ -542,6 +542,29 @@ export async function createProject({ companyId, workspaceId, userId, role, data
       userId: String(userId),
       message: error?.message,
     });
+  }
+
+  // #region agent log
+  fileAgentLog({ sessionId: 'e243b9', runId: 'pre-fix', hypothesisId: 'H3', location: 'server/src/services/project.service.js:createProject', message: 'Project created in DB', data: { tenantId: String(tenantId), workspaceId: String(workspaceId), ownerId: String(userId), projectId: String(project?._id), membersCount: Array.isArray(project?.members) ? project.members.length : undefined }, timestamp: Date.now() });
+  // #endregion
+
+  try {
+    await ActivityLog.create({
+      tenantId,
+      workspaceId,
+      userId,
+      type: 'project_created',
+      description: `Created project "${project.name}"`,
+      entityType: 'project',
+      entityId: project._id,
+      metadata: { projectId: project._id },
+    });
+  } catch (error) {
+    logger.error('project_activity_log_failed', {
+      projectId: String(project._id),
+      userId: String(userId),
+      message: error?.message,
+    });
     // Activity logging is best-effort only. Project creation should still succeed.
   }
 

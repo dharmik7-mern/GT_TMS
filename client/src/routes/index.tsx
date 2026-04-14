@@ -143,6 +143,7 @@ export const router = createBrowserRouter([
       { path: 'users', element: <SAUsers /> },
       { path: 'roles-permissions', element: <SARoles /> },
       { path: 'settings', element: <SettingsRoute /> },
+<<<<<<< HEAD
       {
         path: 'logs',
         element: (
@@ -151,6 +152,8 @@ export const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
+=======
+>>>>>>> main
       { path: 'support', element: <SASupport /> },
       { path: 'broadcast-notifications', element: <SABroadcast /> },
       { path: 'profile', element: <UserSettingsPage /> },
@@ -165,6 +168,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
+<<<<<<< HEAD
     path: '/unauthorized',
     element: <UnauthorizedPage />,
   },
@@ -177,6 +181,8 @@ export const router = createBrowserRouter([
     element: <Error500Page />,
   },
   {
+=======
+>>>>>>> main
     path: '*',
     element: <NotFound404 />,
   },

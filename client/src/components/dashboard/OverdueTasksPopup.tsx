@@ -32,7 +32,12 @@ export const OverdueTasksPopup: React.FC = () => {
 
     const fetchOverdue = async () => {
       try {
+<<<<<<< HEAD
         const res = await tasksService.getOverdue({ suppressErrorToast: true });
+=======
+        const res = await tasksService.getOverdue();
+        console.log('[OverduePopup] Fetched tasks:', res.data?.count);
+>>>>>>> main
         if (res.data?.success && res.data.count > 0) {
           setTasks(res.data.tasks || []);
           setShow(true);
