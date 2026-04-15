@@ -15,7 +15,10 @@ const ROLE_ALIASES = new Map([
 ]);
 
 export function normalizeRole(rawRole) {
-  const value = String(rawRole || '').trim().toLowerCase();
+  const value = String(rawRole || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, '_');
   const mapped = ROLE_ALIASES.get(value) || value;
   if (PMS_ROLES.has(mapped)) return mapped;
   return 'team_member';

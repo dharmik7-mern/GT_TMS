@@ -53,6 +53,14 @@ export const tasksService = {
     api.get('/tasks', { params: { projectId, page, limit, status: 'in_review' } }),
   getOverdue: (config?: unknown) => api.get('/tasks/overdue', config as any),
   reviewRequest: (id: string, data: unknown) => api.post(`/tasks/requests/${id}/review`, data),
+  uploadAttachments: (id: string, files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    return api.post(`/tasks/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  addComment: (id: string, data: unknown) => api.post(`/tasks/${id}/comments`, data),
 };
 
 export const teamsService = {

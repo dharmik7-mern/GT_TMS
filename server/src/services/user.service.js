@@ -531,16 +531,56 @@ export async function updateUser({ companyId, workspaceId, actorRole, userId, ta
     updates: JSON.stringify(updates)
   });
 
-  if (!['super_admin', 'admin', 'company_admin'].includes(actorRole)) {
+  const allowedEditorRoles = ['super_admin', 'admin', 'company_admin', 'manager', 'team_leader'];
+  if (!allowedEditorRoles.includes(actorRole)) {
     console.warn('[UserService.updateUser] Access denied for role:', actorRole);
-    const err = new Error('Only company admins can update users');
+    const err = new Error('Only workspace admins, managers, and team leaders can update users');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
     throw err;
   }
 
-  const user = await User.findOne({ _id: targetUserId, tenantId });
-  if (!user) return null;
+  let user = await User.findOne({ _id: targetUserId, tenantId });
+  if (!user) {
+    console.log('[UserService.updateUser] User not found in TMS, attempting HRMS fallback for ID:', targetUserId);
+    const hrmsUser = await getUser({ companyId, id: targetUserId });
+    if (hrmsUser) {
+      console.log('[UserService.updateUser] Provisioning HRMS user into TMS:', hrmsUser.email);
+      const workspace = await Workspace.findOne({ tenantId }).sort({ createdAt: 1 });
+      const defaultWorkspaceId = workspaceId || workspace?._id;
+
+      if (!defaultWorkspaceId) {
+        const err = new Error('Cannot provision user: No workspace found');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Provision local user with HRMS profile
+      user = await User.create({
+        _id: targetUserId,
+        tenantId,
+        name: hrmsUser.name,
+        email: hrmsUser.email,
+        role: updates.role || hrmsUser.role || 'team_member',
+        department: hrmsUser.department || '',
+        jobTitle: hrmsUser.jobTitle || '',
+        isActive: true,
+        color: '#3366ff',
+      });
+
+      // Ensure membership exists
+      await Membership.updateOne(
+        { tenantId, workspaceId: defaultWorkspaceId, userId: user._id },
+        { $setOnInsert: { role: user.role, status: 'active' } },
+        { upsert: true }
+      );
+    }
+  }
+
+  if (!user) {
+    console.warn('[UserService.updateUser] User not found after fallbacks:', targetUserId);
+    return null;
+  }
 
   if (String(user._id) === String(userId) && updates.role && updates.role !== user.role) {
     const err = new Error('You cannot change your own role');
@@ -552,7 +592,7 @@ export async function updateUser({ companyId, workspaceId, actorRole, userId, ta
   const isAdmin = ['super_admin', 'admin', 'company_admin'].includes(actorRole);
   const allowedRoles = isAdmin
     ? ['super_admin', 'admin', 'company_admin', 'manager', 'team_leader', 'team_member']
-    : ['admin', 'manager', 'team_leader', 'team_member'];
+    : ['manager', 'team_leader', 'team_member'];
 
   if (updates.role && !allowedRoles.includes(updates.role)) {
     const err = new Error('You are not allowed to assign this role');

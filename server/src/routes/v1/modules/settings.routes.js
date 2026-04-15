@@ -5,7 +5,7 @@ import * as SettingsController from '../../../controllers/settings.controller.js
 const router = express.Router();
 
 router.use(requireAuth);
-router.use(requireRole(['super_admin', 'admin']));
+router.use(requireRole(['super_admin', 'admin', 'company_admin']));
 
 router.get('/system', SettingsController.getSystem);
 router.put('/system', SettingsController.updateSystem);
