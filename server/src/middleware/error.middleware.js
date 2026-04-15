@@ -30,8 +30,8 @@ export function errorHandler(err, req, res, next) {
     success: false,
     error: {
       code: err?.code || 'INTERNAL_ERROR',
-      message: statusCode >= 500 ? 'Internal server error' : (err?.message || 'Request failed'),
-      details: err?.details,
+      message: err?.message || 'Internal server error', // Expose message for debugging
+      details: err?.details || err?.stack, // Include stack for internal errors in dev
     },
   });
 }

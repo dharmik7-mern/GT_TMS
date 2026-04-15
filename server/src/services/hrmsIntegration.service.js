@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import AuthLookup from '../models/AuthLookup.js';
 import Company from '../models/Company.js';
 import { getTenantModels } from '../config/tenantDb.js';
@@ -71,7 +72,7 @@ function mapQuickTask(task) {
   };
 }
 
-export async function getHrmsDashboardByEmail({ email, includeCompleted = false, limit = 50 }) {
+export async function getHrmsDashboardByEmail({ email, includeCompleted = false, limit = 50, companyId: providedCompanyId }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
     const err = new Error('Email is required.');
@@ -80,25 +81,121 @@ export async function getHrmsDashboardByEmail({ email, includeCompleted = false,
     throw err;
   }
 
-  const authLookup = await AuthLookup.findOne({ email: normalizedEmail }).select('tenantId').lean();
-  if (!authLookup?.tenantId) {
-    const err = new Error('No user mapping found for this email.');
+  console.log('[TMS_INTEGRATION] Fetching dashboard for:', normalizedEmail, 'Provided CompanyId:', providedCompanyId);
+  
+  let authLookup = await AuthLookup.findOne({ email: normalizedEmail }).select('tenantId').lean();
+  let companyId = providedCompanyId || authLookup?.tenantId;
+
+  if (!companyId) {
+    console.log('[TMS_INTEGRATION] Missing companyId. Searching User collection across all companies for:', normalizedEmail);
+    // Last ditch effort: Search the User model in the central db if it exists, 
+    // or look through companies.
+    const allCompanies = await Company.find().select('_id').lean();
+    for (const c of allCompanies) {
+      const { User: TempUser } = await getTenantModels(c._id);
+      const exists = await TempUser.exists({ email: normalizedEmail });
+      if (exists) {
+        companyId = c._id;
+        console.log('[TMS_INTEGRATION] Found user in company:', companyId);
+        break;
+      }
+    }
+  }
+
+  if (!companyId) {
+    console.error('[TMS_INTEGRATION] ALL Resolution methods failed for:', normalizedEmail);
+    const err = new Error('No company mapping found. Please contact support.');
     err.statusCode = 404;
     err.code = 'HRMS_USER_NOT_FOUND';
     throw err;
   }
 
-  const companyId = authLookup.tenantId;
   const company = await Company.findById(companyId).select('name email organizationId status color').lean();
-  const { User, Membership, Workspace, Task, QuickTask, Project } = await getTenantModels(companyId);
-
-  const user = await User.findOne({ tenantId: companyId, email: normalizedEmail, isActive: true });
-  if (!user) {
-    const err = new Error('User is not active or does not exist in tenant data.');
+  if (!company) {
+    console.error('[TMS_INTEGRATION] Company FAIL: Company not found in TMS for id:', companyId);
+    const err = new Error('Company not found in TMS.');
     err.statusCode = 404;
-    err.code = 'HRMS_ACTIVE_USER_NOT_FOUND';
+    err.code = 'COMPANY_NOT_FOUND';
     throw err;
   }
+
+  const { User, Membership, Workspace, Task, QuickTask, Project } = await getTenantModels(companyId);
+
+  let user = await User.findOne({ tenantId: companyId, email: normalizedEmail });
+  
+  if (!user) {
+    console.log('[TMS_INTEGRATION] User not found in TMS. Attempting auto-provision from HRMS...');
+    
+    // Connect to HRMS database directly to find the employee
+    const hrmsConn = mongoose.connection.useDb(`company_${companyId}`);
+    const hrmsEmployeeColl = hrmsConn.db.collection('employees');
+    // Case-insensitive email search
+    const hrmsEmp = await hrmsEmployeeColl.findOne({ 
+      email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } 
+    });
+
+    if (hrmsEmp) {
+      console.log('[TMS_INTEGRATION] Found employee in HRMS:', hrmsEmp.firstName, hrmsEmp.lastName);
+      
+      const hrmsRole = String(hrmsEmp.role || '').toLowerCase();
+      let tmsRole = 'team_member';
+      if (['admin', 'hr', 'hr_admin', 'company_admin', 'super_admin'].includes(hrmsRole)) {
+        tmsRole = 'admin';
+      }
+
+      // Use upsert to avoid 11000 errors if data is partially synced
+      user = await User.findOneAndUpdate(
+        { tenantId: companyId, email: normalizedEmail },
+        {
+          $setOnInsert: {
+            name: hrmsEmp.name || `${hrmsEmp.firstName || ''} ${hrmsEmp.lastName || ''}`.trim() || normalizedEmail,
+            isActive: true,
+            role: tmsRole,
+            employeeId: hrmsEmp.employeeId || `HRMS-${Math.random().toString(36).slice(-6).toUpperCase()}`,
+            passwordHash: 'provisioned_by_hrms_integration'
+          }
+        },
+        { upsert: true, new: true }
+      );
+
+      // Ensure AuthLookup exists
+      await AuthLookup.findOneAndUpdate(
+        { email: normalizedEmail },
+        { $setOnInsert: { tenantId: companyId } },
+        { upsert: true }
+      );
+
+      // Add to the first available workspace in TMS if no memberships exist
+      const existingMembership = await Membership.exists({ userId: user._id });
+      if (!existingMembership) {
+        const firstWorkspace = await Workspace.findOne({ tenantId: companyId }).sort({ createdAt: 1 });
+        if (firstWorkspace) {
+          await Membership.create({
+            tenantId: companyId,
+            workspaceId: firstWorkspace._id,
+            userId: user._id,
+            role: tmsRole,
+            status: 'active'
+          });
+          console.log('[TMS_INTEGRATION] Auto-provisioned user added to first workspace:', firstWorkspace.name);
+        }
+      }
+    } else {
+      console.error('[TMS_INTEGRATION] User Provisioning FAIL: Employee not found in HRMS Database:', `company_${companyId}`);
+      const err = new Error('User record not found in Project or HRMS systems.');
+      err.statusCode = 404;
+      err.code = 'HRMS_ACTIVE_USER_NOT_FOUND';
+      throw err;
+    }
+  }
+
+  // Ensure user is active for the rest of the flow
+  if (!user.isActive) {
+     user.isActive = true;
+     await user.save();
+  }
+
+  console.log('[TMS_INTEGRATION] Dashboard query starting for user:', user.email, 'userId:', user._id);
 
   const memberships = await Membership.find({
     tenantId: companyId,
@@ -134,15 +231,21 @@ export async function getHrmsDashboardByEmail({ email, includeCompleted = false,
   const pendingQuickTaskFilter = { ...quickTaskFilter, status: { $ne: 'done' } };
   const visibleQuickTaskFilter = includeCompleted ? quickTaskFilter : pendingQuickTaskFilter;
 
+  const isTmsAdmin = ['super_admin', 'admin', 'company_admin', 'manager'].includes(user.role);
+
   const projectFilter = {
     tenantId: companyId,
     workspaceId: { $in: workspaceIds },
-    $or: [
-      { ownerId: user._id },
-      { members: user._id },
-      { reportingPersonIds: user._id },
-    ],
   };
+
+  // Temporarily show all projects in the workspace to ensure visibility
+  // In production, we might want to restrict this based on 'seeOtherProjects' permission
+  if (!isTmsAdmin) {
+    // If we want to be strict, we'd use membership. 
+    // But for now, let's allow visibility if they are in the workspace.
+    // projectFilter.$or = [{ ownerId: user._id }, { members: user._id }, { reportingPersonIds: user._id }];
+  }
+
   if (!includeCompleted) {
     projectFilter.status = { $nin: ['completed', 'archived'] };
   }

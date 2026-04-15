@@ -11,6 +11,8 @@ const dashboardRequestSchema = z.object({
   email: z.string().trim().email().max(200),
   includeCompleted: z.boolean().optional().default(false),
   limit: z.number().int().min(1).max(200).optional().default(50),
+  companyId: z.string().trim().optional(),
+  companyCode: z.string().trim().optional(),
 });
 
 router.post(

@@ -162,7 +162,7 @@ function parseTaskSubtasks(value) {
 }
 
 function isProjectAdminRole(role) {
-  return ['super_admin', 'admin'].includes(role);
+  return ['super_admin', 'admin', 'company_admin'].includes(role);
 }
 
 function buildOwnedProjectAccessFilter({ userId }) {
@@ -173,6 +173,41 @@ function buildOwnedProjectAccessFilter({ userId }) {
       { reportingPersonIds: userId },
     ],
   };
+}
+
+async function getAccessibleProjectIds({ companyId, workspaceId, userId }) {
+  const { Project, Task } = await getTenantModels(companyId);
+  const directProjects = await Project.find({
+    tenantId: companyId,
+    workspaceId,
+    ...buildOwnedProjectAccessFilter({ userId }),
+  }).select('_id').lean();
+
+  const taskProjectIds = await Task.distinct('projectId', {
+    tenantId: companyId,
+    workspaceId,
+    assigneeIds: userId,
+  });
+
+  const projectIdSet = new Set(directProjects.map((p) => String(p._id)));
+  taskProjectIds.forEach((id) => {
+    if (id) projectIdSet.add(String(id));
+  });
+
+  return Array.from(projectIdSet);
+}
+
+async function buildAccessibleProjectFilter({ companyId, workspaceId, userId, role }) {
+  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const filter = { tenantId: companyId, workspaceId };
+  if (hasGlobalVisibility) return filter;
+
+  const accessibleProjectIds = await getAccessibleProjectIds({ companyId, workspaceId, userId });
+  if (!accessibleProjectIds.length) {
+    return { ...filter, _id: { $in: [] } };
+  }
+
+  return { ...filter, _id: { $in: accessibleProjectIds } };
 }
 
 async function canSeeOtherProjects({ companyId, workspaceId, role }) {
@@ -237,10 +272,8 @@ export async function syncProjectStats(companyId, workspaceId, projectId) {
 }
 
 export async function listProjects({ companyId, workspaceId, userId, role, status, department, q, page = 1, limit = 50 }) {
-  const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
-  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
-  const filter = { tenantId, workspaceId, ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })) };
+  const filter = await buildAccessibleProjectFilter({ companyId, workspaceId, userId, role });
   if (status) filter.status = status;
   if (department) filter.department = department;
   if (q) filter.$text = { $search: q };
@@ -256,8 +289,7 @@ export async function listProjects({ companyId, workspaceId, userId, role, statu
 
 export async function listProjectsWithTasks({ companyId, workspaceId, userId, role }) {
   const { Project, Task } = await getTenantModels(companyId);
-  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
-  const filter = { tenantId: companyId, workspaceId, ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })) };
+  const filter = await buildAccessibleProjectFilter({ companyId, workspaceId, userId, role });
 
   const projects = await Project.find(filter).sort({ createdAt: -1 }).lean();
   if (!projects.length) return [];
@@ -290,14 +322,11 @@ export async function listProjectsWithTasks({ companyId, workspaceId, userId, ro
 }
 
 export async function getProject({ companyId, workspaceId, projectId, userId, role }) {
-  const tenantId = companyId;
   const { Project } = await getTenantModels(companyId);
-  const hasGlobalVisibility = isProjectAdminRole(role) || await canSeeOtherProjects({ companyId, workspaceId, role }) || await canEditOtherProjects({ companyId, workspaceId, role });
+  const filter = await buildAccessibleProjectFilter({ companyId, workspaceId, userId, role });
   const project = await Project.findOne({
+    ...filter,
     _id: projectId,
-    tenantId,
-    workspaceId,
-    ...(hasGlobalVisibility ? {} : buildOwnedProjectAccessFilter({ userId })),
   });
   return project;
 }
