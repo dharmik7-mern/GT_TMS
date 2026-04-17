@@ -69,7 +69,14 @@ export async function listUsers({ companyId, actorRole }) {
 
   // 1. HRMS Global Users
   hrmsGlobalUsers.forEach((u) => {
-    userMap.set(u.email.toLowerCase(), { ...u, id: String(u._id) });
+    const email = (u.email || '').toLowerCase();
+    if (!email) return;
+    userMap.set(email, {
+      ...u,
+      id: String(u._id),
+      baseUserId: String(u._id),
+      email,
+    });
   });
 
   // 2. HRMS Tenant Employees (often have richer profile info like names, IDs)
@@ -79,7 +86,9 @@ export async function listUsers({ companyId, actorRole }) {
     const existing = userMap.get(email);
     userMap.set(email, {
       ...(existing || {}),
-      id: String(e._id),
+      // keep `id` stable for the app: prefer TMS user id when available (set later)
+      id: existing?.id || String(e._id),
+      hrmsEmployeeId: String(e._id),
       name: e.name || `${e.firstName || ''} ${e.lastName || ''}`.trim() || email,
       email,
       employeeId: e.employeeId,
@@ -97,7 +106,11 @@ export async function listUsers({ companyId, actorRole }) {
     userMap.set(email, {
       ...(existing || {}),
       ...u,
+      // IMPORTANT: In the app, assignments MUST use the TMS `User` id.
+      // Keep HRMS id as a separate field so we can still display richer HRMS profile info.
       id: String(u._id),
+      tenantUserId: String(u._id),
+      hrmsEmployeeId: existing?.hrmsEmployeeId,
     });
   });
 

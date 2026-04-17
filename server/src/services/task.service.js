@@ -280,6 +280,91 @@ function mapIdList(values) {
   return Array.isArray(values) ? values.map((value) => strId(value)).filter(Boolean) : [];
 }
 
+async function normalizeAssigneeIdsToTenantUsers({ tenantId, assigneeIds }) {
+  const raw = Array.from(new Set(mapIdList(assigneeIds))).filter(Boolean);
+  if (raw.length === 0) return [];
+
+  const { User } = await getTenantModels(tenantId);
+  const existingUsers = await User.find({ tenantId, _id: { $in: raw } }).select('_id').lean();
+  const existingIdSet = new Set(existingUsers.map((u) => String(u._id)));
+
+  const missing = raw.filter((id) => !existingIdSet.has(String(id)));
+  if (missing.length === 0) return raw;
+
+  // Map missing ids using HRMS employees: employee _id -> email -> tenant user id.
+  let hrmsEmployees = [];
+  try {
+    const hrmsConn = mongoose.connection.useDb(`company_${tenantId}`);
+    const coll = hrmsConn.db.collection('employees');
+    const objectIds = missing
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    if (objectIds.length) {
+      hrmsEmployees = await coll
+        .find(
+          { _id: { $in: objectIds } },
+          { projection: { _id: 1, email: 1, name: 1, firstName: 1, lastName: 1, role: 1, department: 1 } }
+        )
+        .toArray();
+    }
+  } catch {
+    hrmsEmployees = [];
+  }
+
+  const emailByMissingId = new Map();
+  for (const e of hrmsEmployees) {
+    const email = String(e?.email || '').trim().toLowerCase();
+    if (!email) continue;
+    emailByMissingId.set(String(e._id), email);
+  }
+
+  const mapped = [];
+  for (const id of raw) {
+    if (existingIdSet.has(id)) {
+      mapped.push(id);
+      continue;
+    }
+
+    const email = emailByMissingId.get(id);
+    if (!email) {
+      mapped.push(id);
+      continue;
+    }
+
+    // eslint-disable-next-line no-await-in-loop
+    let tenantUser = await User.findOne({ tenantId, email }).select('_id').lean();
+    if (!tenantUser) {
+      const emp = hrmsEmployees.find((e) => String(e._id) === String(id));
+      const hrmsRole = String(emp?.role || '').toLowerCase();
+      const tmsRole = ['admin', 'hr', 'hr_admin', 'company_admin', 'super_admin'].includes(hrmsRole) ? 'admin' : 'team_member';
+      const name = emp?.name || `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || email;
+      try {
+        // Provision a tenant user with the HRMS id (keeps ids consistent for assignments).
+        // eslint-disable-next-line no-await-in-loop
+        tenantUser = await User.create({
+          _id: new mongoose.Types.ObjectId(id),
+          tenantId,
+          name,
+          email,
+          role: tmsRole,
+          department: emp?.department || '',
+          jobTitle: '',
+          isActive: true,
+          color: '#3366ff',
+          passwordHash: 'provisioned_by_task_assignment',
+        });
+      } catch {
+        // eslint-disable-next-line no-await-in-loop
+        tenantUser = await User.findOne({ tenantId, email }).select('_id').lean();
+      }
+    }
+
+    mapped.push(String(tenantUser?._id || id));
+  }
+
+  return Array.from(new Set(mapped)).filter(Boolean);
+}
+
 function defaultCompletionReview() {
   return {
     completedAt: null,
@@ -604,6 +689,16 @@ export async function listTasks({
       .limit(limit),
     Task.countDocuments(filter),
   ]);
+
+  // Legacy-safety: if tasks store non-tenant ids, normalize to tenant user ids
+  for (const task of items) {
+    // eslint-disable-next-line no-await-in-loop
+    const normalized = await normalizeAssigneeIdsToTenantUsers({ tenantId, assigneeIds: task.assigneeIds });
+    if (Array.isArray(normalized) && normalized.length) {
+      task.assigneeIds = normalized;
+    }
+  }
+
   return { items: await attachTaskActivity({ companyId, workspaceId, tasks: items }), total, page, limit };
 }
 
@@ -723,7 +818,10 @@ export async function createTask({ companyId, workspaceId, userId, role, data })
   const normalizedTitle = normalizeTaskTitle(data.title);
   assertAllowedTaskTitle(normalizedTitle);
   const { startDate, dueDate, durationDays } = resolveTaskSchedule(data);
-  const normalizedAssigneeIds = Array.isArray(data.assigneeIds) ? data.assigneeIds : [];
+  const normalizedAssigneeIds = await normalizeAssigneeIdsToTenantUsers({
+    tenantId,
+    assigneeIds: Array.isArray(data.assigneeIds) ? data.assigneeIds : [],
+  });
 
   // Enforce: at least one assignee required
   if (normalizedAssigneeIds.length === 0) {
@@ -1508,7 +1606,10 @@ export async function updateTask({ companyId, workspaceId, userId, role, taskId,
   if (rest.tags !== undefined) $set.tags = Array.isArray(rest.tags) ? rest.tags : [];
   if (rest.labels !== undefined) $set.labels = Array.isArray(rest.labels) ? rest.labels : [];
   if (rest.assigneeIds !== undefined) {
-    $set.assigneeIds = Array.isArray(rest.assigneeIds) ? rest.assigneeIds : [];
+    $set.assigneeIds = await normalizeAssigneeIdsToTenantUsers({
+      tenantId,
+      assigneeIds: Array.isArray(rest.assigneeIds) ? rest.assigneeIds : [],
+    });
   }
   if (rest.assigneeIds !== undefined && strId(beforeAssigneeIds) !== strId($set.assigneeIds)) {
     await logTaskActivity({

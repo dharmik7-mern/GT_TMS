@@ -9,6 +9,7 @@ import { UserAvatar } from '../UserAvatar';
 import { NotificationPanel } from '../NotificationPanel';
 import { MessageCircle } from 'lucide-react';
 import { useAdminChatStore } from '../../pages/calendar/admin/store/useAdminChatStore.ts';
+import { tasksService } from '../../services/api';
 
 const BREADCRUMB_MAP: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -307,7 +308,19 @@ export const Topbar: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={logout}
+                    onClick={async () => {
+                      try {
+                        const res = await tasksService.getOverdue({ suppressErrorToast: true });
+                        const count = Number(res?.data?.count || 0);
+                        if (count > 0) {
+                          const ok = window.confirm(`You have ${count} overdue task${count === 1 ? '' : 's'}. Please update them.\n\nDo you still want to logout?`);
+                          if (!ok) return;
+                        }
+                      } catch {
+                        // ignore
+                      }
+                      logout();
+                    }}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/20"
                   >
                     <LogOut size={15} />
