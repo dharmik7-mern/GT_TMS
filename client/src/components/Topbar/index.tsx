@@ -313,8 +313,10 @@ export const Topbar: React.FC = () => {
                         const res = await tasksService.getOverdue({ suppressErrorToast: true });
                         const count = Number(res?.data?.count || 0);
                         if (count > 0) {
-                          const ok = window.confirm(`You have ${count} overdue task${count === 1 ? '' : 's'}. Please update them.\n\nDo you still want to logout?`);
-                          if (!ok) return;
+                          window.alert(`You have ${count} overdue task${count === 1 ? '' : 's'}. Please update them before logout.`);
+                          setProfileOpen(false);
+                          navigate('/tasks?filter=overdue');
+                          return;
                         }
                       } catch {
                         // ignore
